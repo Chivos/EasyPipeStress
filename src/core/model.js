@@ -3,6 +3,7 @@
 
 import { DEFAULT_MATERIALS } from './materials.js';
 import { DEFAULT_SECTIONS } from './sections.js';
+import { DEFAULT_PARAMS as RCCM_C_PARAMS } from '../codes/rccm-c.js';
 
 export const MODEL_VERSION = 1;
 
@@ -73,7 +74,7 @@ export function emptyModel() {
     nodeCoords: [{ node: '10', x: 0, y: 0, z: 0 }],
     components: [],
     loadCases: defaultLoadCases(),
-    code: { id: 'rccm-c', params: { cycles: 7000, b2Method: 'indices', pressureCorrection: false, thickness: true } },
+    code: { id: 'rccm-c', params: { ...RCCM_C_PARAMS } },
   };
 }
 

@@ -59,7 +59,7 @@ export function buildScene(state) {
     const per = new Float64Array(mesh.elements.length);
     for (const r of result.check.rows) {
       if (arg !== 'max' && r.eq !== arg) continue;
-      const v = r.coveredBy11 ? 0 : r.ratio;
+      const v = r.coveredBy ? 0 : r.ratio;
       if (v > per[r.ie]) per[r.ie] = v;
     }
     scene.elementColors = Array.from(per, ratioColor);
@@ -123,7 +123,7 @@ export function renderResultsPanel(app) {
                 h('td', {}, g.node),
                 h('td', { class: 'num' }, fmt(g.stress, g.unit === 'mm' ? 2 : 1)),
                 h('td', { class: 'num' }, fmt(g.allow, g.unit === 'mm' ? 2 : 1)),
-                h('td', { class: 'num' }, h('span', { class: 'pill', style: { background: ratioColor(g.effRatio) } }, fmt(g.effRatio, 2)), g.coveredBy11 ? h('small', {}, ' via (11)') : null),
+                h('td', { class: 'num' }, h('span', { class: 'pill', style: { background: ratioColor(g.effRatio) } }, fmt(g.effRatio, 2)), g.coveredBy ? h('small', {}, ` via (${g.coveredBy})`) : null),
               ),
             ),
           ),
@@ -270,7 +270,7 @@ function codeTable(app, r, nodeOk, internalChk) {
   if (!r.check) return h('p', { class: 'muted pad' }, 'Aucun code sélectionné.');
   const f = app.state.filter;
   const eqs = [...new Set(r.check.rows.map((x) => x.eq))];
-  const rows = r.check.rows.filter((x) => (f.eq === 'all' || x.eq === f.eq) && nodeOk(x.node) && (!f.failOnly || (x.ratio > 1 && !x.coveredBy11)));
+  const rows = r.check.rows.filter((x) => (f.eq === 'all' || x.eq === f.eq) && nodeOk(x.node) && (!f.failOnly || (x.ratio > 1 && !x.coveredBy)));
   if (f.sort) rows.sort((a, b) => b.ratio - a.ratio);
   return h(
     'div',
@@ -286,9 +286,9 @@ function codeTable(app, r, nodeOk, internalChk) {
     ),
     simpleTable(
       ['Critère', 'Cas', 'Nœud', 'Élément', 'Composant', 'σ (MPa)', 'Admissible', 'Taux', 'Détail'],
-      rows.slice(0, 3000).map((x) => [x.eqLabel, x.case, x.node, x.elem, x.comp, fmt(x.stress, x.unit === 'mm' ? 2 : 1) + (x.unit === 'mm' ? ' mm' : ''), fmt(x.allow, x.unit === 'mm' ? 2 : 1), { ratio: x.ratio, covered: x.coveredBy11 }, detailText(x)]),
+      rows.slice(0, 3000).map((x) => [x.eqLabel, x.case, x.node, x.elem, x.comp, fmt(x.stress, x.unit === 'mm' ? 2 : 1) + (x.unit === 'mm' ? ' mm' : ''), fmt(x.allow, x.unit === 'mm' ? 2 : 1), { ratio: x.ratio, covered: x.coveredBy }, detailText(x)]),
       (row) => app.select(row[2]),
-      (cell) => (cell && typeof cell === 'object' && 'ratio' in cell ? h('span', { class: 'pill', style: { background: ratioColor(cell.covered ? 0 : cell.ratio) } }, fmt(cell.ratio, 2), cell.covered ? ' (11 ok)' : '') : cell),
+      (cell) => (cell && typeof cell === 'object' && 'ratio' in cell ? h('span', { class: 'pill', style: { background: ratioColor(cell.covered ? 0 : cell.ratio) } }, fmt(cell.ratio, 2), cell.covered ? ` (${cell.covered} ok)` : '') : cell),
     ),
   );
 }

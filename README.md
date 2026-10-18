@@ -4,7 +4,8 @@ Application web d'**analyse de flexibilité des tuyauteries** qui fonctionne
 entièrement dans le navigateur : modélisation 3D, calcul par éléments finis de
 poutres, chargements poids propre, pression, dilatation thermique et séisme
 (spectral ou statique), puis dépouillement selon le **RCC-M, sous-section C
-(classe 2), §C 3600**.
+(classe 2), §C 3650** : équations (6) poids propre + pression, (7) dilatation,
+(8) = (6) + (7) et (10) séisme.
 
 Aucune installation ni serveur de calcul : c'est une page statique (modules
 JavaScript natifs, sans dépendance ni étape de compilation), publiée sur
@@ -23,7 +24,8 @@ exportables/importables en JSON.
 3. **Chargements** : poids (fluide, calorifuge), pression, dilatation, séisme
    (niveau B/C/D, spectres par direction, CQC/SRSS, masse manquante,
    100-40-40/SRSS, ou statique équivalente).
-4. **Code** : paramètres du RCC-M C (nombre de cycles, indices B₁/B₂,
+4. **Code** : paramètres du RCC-M C (nombre de cycles, coefficients des
+   admissibles par équation et par niveau, indices 0,75i ou B₁/B₂,
    correction de pression des coudes, épaisseur minimale).
 5. **Calculer** (Ctrl + Entrée) : synthèse du dépouillement, taux de travail en
    couleur sur la vue, déformées, modes propres animés, tableaux de
