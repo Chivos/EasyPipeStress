@@ -436,7 +436,7 @@ export function renderCode(app) {
       code ? fieldForm(code.params, m.code.params, (k, v) => app.update((mm) => (mm.code.params[k] = v)), { model: m, focusPrefix: 'code' }) : null,
     ),
     section(
-      'Équations vérifiées (RCC-M C 3600)',
+      'Équations vérifiées (RCC-M C 3650)',
       h(
         'table',
         { class: 'eqs' },
@@ -444,14 +444,14 @@ export function renderCode(app) {
           'tbody',
           {},
           eqRow('C 3641', 'Épaisseur minimale', 'eₘ = P·Dₑ / [2(S/I + 0,4P)] + c ≤ eₙ(1 − tol)'),
-          eqRow('(8)', 'Charges permanentes (niveau 0)', 'B₁·P·Dₑ/(2eₙ) + B₂·M_A/Z ≤ 1,5 S'),
-          eqRow('(9)', 'Permanentes + occasionnelles (séisme)', 'B₁·P_max·Dₑ/(2eₙ) + B₂·(M_A+M_B)/Z ≤ B : min(1,8S ; 1,5Sy) — C : min(2,25S ; 1,8Sy) — D : min(3S ; 2Sy)'),
-          eqRow('(10)', 'Dilatation thermique', 'S_E = i·M_C/Z ≤ S_A = f(1,25 S_c + 0,25 S_h)'),
-          eqRow('(11)', 'Si (10) non satisfaite', 'P_max·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ S_h + S_A'),
+          eqRow('(6)', 'Poids propre + pression', 'S_L = P·Dₑ/(4eₙ) + 0,75i·M_A/Z ≤ k₆·S_h   (0,75i ≥ 1)'),
+          eqRow('(7)', 'Dilatation thermique', 'S_E = i·M_C/Z ≤ S_A = f(1,25 S_c + 0,25 S_h) [+ (S_h − S_L) en option]'),
+          eqRow('(8)', '(6) + (7), si (7) non satisfaite', 'P_max·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ S_h + S_A'),
+          eqRow('(10)', 'Séisme (permanentes + occasionnelles)', 'P_max·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ k·S_h  (B : 1,2 — C : 1,8 — D : 2,4 par défaut, plafond k·Sy optionnel)'),
         ),
       ),
-      help('Coudes : h = eₙR/r², k = 1,65/h, i = 0,9/h^⅔, B₁ = −0,1 + 0,4h (0…0,5), B₂ = 1,30/h^⅔ (≥ 1). Tube droit : B₁ = 0,5, B₂ = 1, i = 1.'),
-      help('Ces formules sont celles de la sous-section C (alignée sur ASME III NC-3600). Vérifier la cohérence avec l’édition du RCC-M et les éventuelles fiches de modification applicables au projet.'),
+      help('Option « indices B₁, B₂ » : P·Dₑ/(4eₙ) devient B₁·P·Dₑ/(2eₙ) et 0,75i devient B₂ (coude : B₁ = −0,1 + 0,4h, B₂ = 1,30/h^⅔ ≥ 1). Coudes : h = eₙR/r², k = 1,65/h, i = 0,9/h^⅔ (≥ 1).'),
+      help('Les coefficients des admissibles (k₆, niveaux B/C/D, plafonds Sy) sont modifiables ci-dessus : les caler sur l’édition du RCC-M et les fiches de modification applicables au projet.'),
     ),
   );
 }

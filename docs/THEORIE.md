@@ -109,17 +109,20 @@ M moment résultant √(Mx² + My² + Mz²) à chaque extrémité d'élément, S
 admissible de base (à la température de calcul), Sy limite d'élasticité, Sc et Sh
 valeurs de S à froid et à chaud.
 
-| Réf. | Critère | Formule |
+| Réf. | Critère | Formule (formulation par défaut « 0,75 i ») |
 |---|---|---|
 | C 3641 | Épaisseur minimale | eₘ = P·Dₑ / [2(S/I + 0,4·P)] + c ≤ eₙ·(1 − tol) ; I = (4R/Dₑ − 1)/(4R/Dₑ − 2) à l'intrados des coudes |
-| (8) | Charges permanentes | B₁·P·Dₑ/(2eₙ) + B₂·M_A/Z ≤ 1,5·S |
-| (9) | Charges occasionnelles | B₁·P_max·Dₑ/(2eₙ) + B₂·(M_A + M_B)/Z ≤ niveau B : min(1,8S ; 1,5Sy), C : min(2,25S ; 1,8Sy), D : min(3,0S ; 2,0Sy) |
-| (10) | Dilatation | S_E = i·M_C/Z ≤ S_A = f·(1,25·Sc + 0,25·Sh) |
-| (11) | Si (10) non satisfaite | P_max·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ Sh + S_A |
+| (6) | Poids propre + pression | S_L = P·Dₑ/(4eₙ) + 0,75i·M_A/Z ≤ k₆·Sh (k₆ = 1,0 par défaut) |
+| (7) | Dilatation thermique | S_E = i·M_C/Z ≤ S_A = f·(1,25·Sc + 0,25·Sh) [+ (Sh − S_L), option] |
+| (8) | (6) + (7), si (7) non satisfaite | P_max·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ Sh + S_A |
+| (10) | Séisme | P_max·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ k·Sh, k = 1,2 (B), 1,8 (C), 2,4 (D) par défaut, plafond optionnel k'·Sy |
 
-Indices de contraintes primaires (C 3680 / NB-3683) : tube droit B₁ = 0,5,
-B₂ = 1,0 ; coude B₁ = −0,1 + 0,4h (borné à [0 ; 0,5]), B₂ = 1,30/h^(2/3) ≥ 1. Une
-option permet d'utiliser la formulation historique B₁ = 0,5, B₂ = 0,75i ≥ 1.
+0,75i est pris au moins égal à 1. Une option remplace P·Dₑ/(4eₙ) par
+B₁·P·Dₑ/(2eₙ) et 0,75i par B₂ (indices C 3680 / NB-3683 : tube droit B₁ = 0,5,
+B₂ = 1,0 ; coude B₁ = −0,1 + 0,4h borné à [0 ; 0,5], B₂ = 1,30/h^(2/3) ≥ 1).
+
+Tous les coefficients d'admissible (k₆, k par niveau, plafonds Sy) sont des
+paramètres de l'onglet *Code*, à caler sur l'édition applicable.
 
 Facteur de réduction f selon le nombre de cycles équivalents N : 1,0 (N ≤ 7 000),
 0,9 (≤ 14 000), 0,8 (≤ 22 000), 0,7 (≤ 45 000), 0,6 (≤ 100 000), 0,5 au-delà.
@@ -128,11 +131,11 @@ M_A est le moment résultant du poids propre, M_B celui du séisme (enveloppe),
 M_C celui de l'étendue de dilatation (état froid → état chaud, déplacements
 imposés compris). La somme M_A + M_B des moments résultants est conservative.
 
-> **Avertissement.** Les équations ci-dessus correspondent à la structure des
-> règles C 3600 alignées sur ASME III NC-3600. L'utilisateur doit vérifier leur
-> conformité à l'édition du RCC-M et aux fiches de modification applicables à son
-> projet, et remplacer les propriétés matériaux indicatives par celles de
-> l'Annexe Z I.
+> **Avertissement.** La numérotation et la structure suivent les règles C 3650 ;
+> les coefficients par défaut sont ceux de la formulation historique de la
+> classe 2. L'utilisateur doit vérifier leur conformité à l'édition du RCC-M et
+> aux fiches de modification applicables à son projet, et remplacer les
+> propriétés matériaux indicatives par celles de l'Annexe Z I.
 
 ## 5. Validation
 

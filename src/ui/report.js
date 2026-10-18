@@ -68,7 +68,7 @@ export function buildReport(state, snapshot) {
     }
     if (r.check) {
       parts.push('<h3>Dépouillement — critères déterminants</h3>');
-      parts.push(table(['Critère', 'Cas', 'Nœud', 'Composant', 'σ', 'Admissible', 'Taux'], r.check.summary.governing.map((g) => [g.eqLabel, g.case, g.node, g.comp, fmt(g.stress, 1), fmt(g.allow, 1), `${fmt(g.effRatio, 2)}${g.coveredBy11 ? ' (via éq. 11)' : ''}`])));
+      parts.push(table(['Critère', 'Cas', 'Nœud', 'Composant', 'σ', 'Admissible', 'Taux'], r.check.summary.governing.map((g) => [g.eqLabel, g.case, g.node, g.comp, fmt(g.stress, 1), fmt(g.allow, 1), `${fmt(g.effRatio, 2)}${g.coveredBy ? ` (via éq. ${g.coveredBy})` : ''}`])));
       parts.push(`<ul>${r.check.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>`);
       parts.push('<h3>Dépouillement — détail aux nœuds (hors nœuds internes)</h3>');
       const rows = r.check.rows.filter((x) => r.mesh.nodes[r.mesh.nodeIndex.get(x.node)]?.kind !== 'internal');

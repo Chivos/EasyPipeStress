@@ -111,11 +111,14 @@ test('Système en L entre ancrages : équilibre global des réactions thermiques
 
 test('Coude : facteurs k = 1,65/h et i = 0,9/h^(2/3)', () => {
   const sec = pipeSection({ od: 168.3, t: 7.11 });
-  const f = componentFactors({ kind: 'bend', sec, bend: { radius: 228.6 } });
+  const f = componentFactors({ kind: 'bend', sec, bend: { radius: 228.6 }, params: { b2Method: 'indices' } });
+  const g = componentFactors({ kind: 'bend', sec, bend: { radius: 228.6 }, params: { b2Method: '0.75i' } });
   const h = (7.11 * 228.6) / sec.rm ** 2;
   near(f.k, 1.65 / h, 1e-12, 'k');
   near(f.i, 0.9 / h ** (2 / 3), 1e-12, 'i');
   near(f.B2, 1.3 / h ** (2 / 3), 1e-12, 'B2');
+  near(g.B2, 0.75 * g.i, 1e-12, 'B2 = 0,75 i');
+  assert.equal(g.B1, 0.5);
   assert.equal(rangeReductionFactor(7000), 1);
   assert.equal(rangeReductionFactor(20000), 0.8);
   assert.equal(rangeReductionFactor(1e6), 0.5);
@@ -185,4 +188,27 @@ test('Mécanisme détecté', () => {
   m.components = ensureIds({ components: [pipe('1', '2', 1000, 0, 0), sup('1', 'rest')] }).components;
   m.loadCases = [{ id: 'W', type: 'weight', enabled: true }];
   assert.throws(() => runAnalysis(m), /instable/);
+});
+
+test('RCC-M C : équations (6), (7), (8), (10) sur une console', () => {
+  const m = setup({ density: 0, maxLen: 500 });
+  m.code.params = { ...m.code.params, b2Method: '0.75i', thickness: false };
+  m.components = ensureIds({ components: [pipe('1', '2', 2000, 0, 0, { P1: 5, Pd: 5, T1: 150, Td: 150 }), sup('1', 'anchor'), { type: 'mass', node: '2', mass: 1000 }] }).components;
+  m.loadCases = [
+    { id: 'W', type: 'weight', enabled: true },
+    { id: 'T1', type: 'thermal', enabled: true },
+    { id: 'S1', type: 'seismic', enabled: true, level: 'D', method: 'static', directional: 'SRSS', staticAcc: { Z: 1 } },
+  ];
+  const r = runAnalysis(m);
+  const eqs = new Set(r.check.rows.map((x) => x.eq));
+  for (const q of ['6', '7', '10']) assert.ok(eqs.has(q), `éq. (${q}) présente`);
+  assert.ok(!eqs.has('9') && !eqs.has('11'));
+  const sp = pipeSection(m.sections[0]);
+  const MA = 9806.65 * 2000;
+  const row6 = r.check.rows.find((x) => x.eq === '6' && x.node === '1');
+  near(row6.stress, (5 * 168.3) / (4 * 7.11) + MA / sp.Z, 1e-3, 'éq. (6)');
+  near(row6.allow, 100, 1e-12, 'admissible (6) = Sh');
+  const row10 = r.check.rows.find((x) => x.eq === '10' && x.node === '1');
+  near(row10.stress, (5 * 168.3) / (4 * 7.11) + (2 * MA) / sp.Z, 1e-3, 'éq. (10)');
+  near(row10.allow, 2.4 * 100, 1e-12, 'admissible niveau D');
 });
