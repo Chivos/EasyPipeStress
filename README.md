@@ -1,0 +1,118 @@
+# EasyPipeStress
+
+Application web d'**analyse de flexibilité des tuyauteries** qui fonctionne
+entièrement dans le navigateur : modélisation 3D, calcul par éléments finis de
+poutres, chargements poids propre, pression, dilatation thermique et séisme
+(spectral ou statique), puis dépouillement selon le **RCC-M, sous-section C
+(classe 2), §C 3600**.
+
+Aucune installation ni serveur de calcul : c'est une page statique (modules
+JavaScript natifs, sans dépendance ni étape de compilation), publiée sur
+GitHub Pages. Les études sont enregistrées dans le navigateur et
+exportables/importables en JSON.
+
+## Utilisation
+
+1. **Géométrie** : ajout rapide de tubes par DX/DY/DZ depuis un nœud (cliquer un
+   nœud dans la vue pour en partir) ; un coude est inséré automatiquement au
+   changement de direction. Tableaux éditables des tubes (section, matériau,
+   températures et pressions de service et de calcul) et des coudes (rayon,
+   épaisseur).
+2. **Supports & masses** : ancrages, appuis, guides, butées, ressorts, blocages
+   personnalisés, déplacements imposés de piquage ; masses ponctuelles.
+3. **Chargements** : poids (fluide, calorifuge), pression, dilatation, séisme
+   (niveau B/C/D, spectres par direction, CQC/SRSS, masse manquante,
+   100-40-40/SRSS, ou statique équivalente).
+4. **Code** : paramètres du RCC-M C (nombre de cycles, indices B₁/B₂,
+   correction de pression des coudes, épaisseur minimale).
+5. **Calculer** (Ctrl + Entrée) : synthèse du dépouillement, taux de travail en
+   couleur sur la vue, déformées, modes propres animés, tableaux de
+   déplacements, d'efforts sur supports et d'efforts internes, **note de calcul**
+   imprimable.
+
+Le bouton **Exemple** charge une ligne DN150 inox entre deux piquages.
+
+## Lancer en local
+
+```bash
+python3 -m http.server 8000     # puis ouvrir http://localhost:8000
+npm test                        # tests de validation (Node ≥ 20)
+```
+
+## Publication sur GitHub Pages
+
+Le workflow `.github/workflows/pages.yml` exécute les tests puis publie le site
+à chaque push sur `main`. Réglage à faire une seule fois : *Settings → Pages →
+Build and deployment → Source : « GitHub Actions »*.
+
+## Architecture
+
+```
+index.html, css/            interface
+src/
+  core/      registry.js    registre générique d'extensions
+             model.js       modèle utilisateur (JSON), exemple, coordonnées
+             mesher.js      modèle → maillage de calcul (phases line/corner/point)
+             linalg.js      Cholesky profil, valeurs propres symétriques
+             materials.js   tables matériaux fonction de T
+             sections.js    caractéristiques des tubes
+  components/               composants modélisables (registre)
+             pipe.js  bend.js  mass.js  support.js
+  fem/       beam3d.js      élément de poutre 3D Timoshenko
+             system.js      assemblage, statique, réponses, analyse modale
+             spectral.js    spectres, CQC/SRSS, combinaisons directionnelles
+  loads/                    types de chargement (registre)
+             weight.js  pressure.js  thermal.js  seismic.js
+  codes/                    codes de vérification (registre)
+             rccm-c.js
+  analysis.js               orchestration (utilisable hors navigateur)
+  ui/                       vue 3D canvas, panneaux, résultats, note de calcul
+tests/                      validation analytique et non-régression
+docs/THEORIE.md             formulation et références bibliographiques
+```
+
+Le cœur de calcul (`core`, `fem`, `loads`, `codes`, `analysis.js`) ne dépend pas
+du navigateur : il est testé sous Node et pourrait être exécuté dans un Web
+Worker ou côté serveur.
+
+### Étendre l'application
+
+Les trois axes d'évolution sont des **registres** : on ajoute un module et on
+l'enregistre, sans toucher au reste. L'interface de saisie est générée à partir
+des descripteurs `fields`.
+
+- **Nouveau composant** (té, réduction, bride, robinet rigide, compensateur…) :
+  créer `src/components/xxx.js` exportant `{ id, label, phase, fields, create,
+  mesh }` puis `components.register(xxx)` dans `src/components/index.js`.
+  - `phase: 'line'` : `mesh()` appelle `ctx.addSegment({...})` ;
+  - `phase: 'corner'` : modifie le tracé autour d'un sommet (`ctx.segmentsAt`,
+    `ctx.replaceEnd`, `ctx.addSegment`) ;
+  - `phase: 'point'` : `ctx.addSpring`, `ctx.addPointMass`, `ctx.addSupport`.
+- **Nouveau chargement** (vent, coup de bélier, épreuve hydraulique…) :
+  `src/loads/xxx.js` exportant `{ id, label, fields, create, run(ctx, lc) }` ;
+  `run` utilise `ctx.sys.solveStatic(...)` ou `ctx.sys.modal(...)` et renvoie
+  `{ signed, u, elemForces, supportLoads, info }`.
+- **Nouveau code** (RCC-M B/D, EN 13480-3, B31.3…) : `src/codes/xxx.js`
+  exportant `{ id, label, params, componentFactors, check }`. `componentFactors`
+  fournit k, i, B₁, B₂ au mailleur ; `check({ model, mesh, cases })` renvoie les
+  lignes de vérification et la synthèse.
+
+Unités internes : mm, N, MPa, tonne, s (cohérentes). Saisies en kg et kg/m³.
+
+## Validation
+
+`npm test` compare le solveur à des solutions analytiques (console, effort
+thermique bridé, dilatation libre, fréquence propre, oscillateur sous spectre
+plat, masse manquante, coefficients CQC, facteurs de coude) et vérifie les
+équilibres globaux sur l'exemple. Voir [docs/THEORIE.md](docs/THEORIE.md).
+
+## Avertissement
+
+Outil d'aide à l'analyse. Les propriétés matériaux fournies sont **indicatives** ;
+les formules du dépouillement doivent être confrontées à l'édition du RCC-M
+applicable. Les résultats doivent être vérifiés par un ingénieur qualifié avant
+toute utilisation pour la justification d'un matériel.
+
+## Licence
+
+MIT.

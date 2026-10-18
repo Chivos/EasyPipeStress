@@ -1,0 +1,188 @@
+// Cas de validation analytiques (référence : théorie des poutres, Timoshenko ;
+// Blevins, « Formulas for Natural Frequency and Mode Shape »).
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { emptyModel, ensureIds } from '../src/core/model.js';
+import { runAnalysis } from '../src/analysis.js';
+import { pipeSection } from '../src/core/sections.js';
+import { componentFactors, rangeReductionFactor } from '../src/codes/rccm-c.js';
+import { symmetricEigen, ProfileCholesky } from '../src/core/linalg.js';
+import { spectrumAt, cqcRho } from '../src/fem/spectral.js';
+
+const near = (a, b, rel, msg) => assert.ok(Math.abs(a - b) <= rel * Math.abs(b), `${msg}: ${a} vs ${b}`);
+
+/** Matériau à propriétés constantes. */
+function setup({ density = 0, alpha = 12, E = 200000, shear = false, maxLen = 100 } = {}) {
+  const m = emptyModel();
+  m.settings.shear = shear;
+  m.settings.meshMaxLength = maxLen;
+  m.materials = [{ id: 'M', name: 'test', density, nu: 0.3, table: [{ T: 20, E, alpha, S: 100, Sy: 200 }, { T: 400, E, alpha, S: 100, Sy: 200 }] }];
+  m.sections = [{ id: 'S', od: 168.3, t: 7.11, millTol: 0, corrosion: 0, fluidDensity: 0, insulThk: 0, insulDensity: 0 }];
+  m.loadCases = [];
+  return m;
+}
+const pipe = (n1, n2, dx, dy, dz, extra = {}) => ({ type: 'pipe', n1, n2, dx, dy, dz, section: 'S', material: 'M', T1: 20, P1: 0, Td: 20, Pd: 0, ...extra });
+const sup = (node, kind, extra = {}) => ({ type: 'support', node, kind, stiffness: '', dofs: '', imposed: '', label: '', ...extra });
+const nodeDisp = (r, caseId, label) => {
+  const c = r.cases.find((x) => x.id === caseId);
+  const i = r.mesh.nodeIndex.get(label) * 6;
+  return Array.from(c.u.slice(i, i + 6));
+};
+
+test('Cholesky profil : résolution d’un système SPD', () => {
+  const A = new Float64Array([4, 1, 0, 1, 3, 1, 0, 1, 2]);
+  const ch = new ProfileCholesky(Float64Array.from(A), 3);
+  const x = ch.solve([1, 2, 3]);
+  for (let i = 0; i < 3; i++) {
+    let s = 0;
+    for (let j = 0; j < 3; j++) s += A[i * 3 + j] * x[j];
+    near(s, [1, 2, 3][i], 1e-12, 'résidu');
+  }
+});
+
+test('Valeurs propres symétriques (tred2/tql2)', () => {
+  const { values, vectors } = symmetricEigen([[2, -1, 0], [-1, 2, -1], [0, -1, 2]]);
+  const exact = [2 - Math.SQRT2, 2, 2 + Math.SQRT2];
+  values.forEach((v, k) => near(v, exact[k], 1e-12, `λ${k}`));
+  near(Math.abs(vectors[1][0]), Math.SQRT1_2, 1e-10, 'vecteur propre');
+});
+
+test('Console sous charge ponctuelle : flèche PL³/3EI (+ cisaillement)', () => {
+  for (const shear of [false, true]) {
+    const m = setup({ shear, maxLen: 500 });
+    m.components = ensureIds({ components: [pipe('1', '2', 3000, 0, 0), sup('1', 'anchor'), { type: 'mass', node: '2', mass: 1000, label: '' }] }).components;
+    m.loadCases = [{ id: 'W', type: 'weight', enabled: true }];
+    const r = runAnalysis(m);
+    const sp = pipeSection(m.sections[0]);
+    const P = 1 * 9806.65; // 1 t
+    const G = 200000 / 2.6;
+    const exact = (P * 3000 ** 3) / (3 * 200000 * sp.I) + (shear ? (P * 3000) / (G * sp.As) : 0);
+    near(-nodeDisp(r, 'W', '2')[2], exact, 1e-3, `flèche (cisaillement ${shear})`);
+    const reac = r.cases[0].supportLoads;
+    near(-reac[2], P, 1e-6, 'réaction verticale');
+    near(Math.abs(reac[4]), P * 3000, 1e-6, 'moment d’encastrement');
+  }
+});
+
+test('Console sous poids propre réparti : flèche wL⁴/8EI', () => {
+  const m = setup({ density: 7850, maxLen: 250 });
+  m.components = ensureIds({ components: [pipe('1', '2', 0, 4000, 0), sup('1', 'anchor')] }).components;
+  m.loadCases = [{ id: 'W', type: 'weight', enabled: true }];
+  const r = runAnalysis(m);
+  const sp = pipeSection(m.sections[0]);
+  const w = 7850e-12 * sp.A * 9806.65;
+  near(-nodeDisp(r, 'W', '2')[2], (w * 4000 ** 4) / (8 * 200000 * sp.I), 1e-4, 'flèche'); // ancrage par pénalité
+});
+
+test('Tube bridé entre deux ancrages : effort thermique EAαΔT', () => {
+  const m = setup({ alpha: 12 });
+  m.components = ensureIds({ components: [pipe('1', '2', 5000, 0, 0, { T1: 220 }), sup('1', 'anchor'), sup('2', 'anchor')] }).components;
+  m.loadCases = [{ id: 'T1', type: 'thermal', enabled: true }];
+  const r = runAnalysis(m);
+  const sp = pipeSection(m.sections[0]);
+  const N = 200000 * sp.A * 12e-6 * 200;
+  const s = r.cases[0].supportLoads;
+  near(Math.abs(s[0]), N, 1e-4, 'effort axial ancrage 1'); // ancrages par pénalité
+  near(s[0] + s[6], 0, 1e-6 * N, 'équilibre');
+});
+
+test('Dilatation libre : déplacement αΔT·L et efforts nuls', () => {
+  const m = setup({ alpha: 12 });
+  m.components = ensureIds({ components: [pipe('1', '2', 3000, 0, 0, { T1: 120 }), pipe('2', '3', 0, 2000, 0, { T1: 120 }), sup('1', 'anchor')] }).components;
+  m.loadCases = [{ id: 'T1', type: 'thermal', enabled: true }];
+  const r = runAnalysis(m);
+  const u = nodeDisp(r, 'T1', '3');
+  near(u[0], 12e-6 * 100 * 3000, 1e-6, 'ux');
+  near(u[1], 12e-6 * 100 * 2000, 1e-6, 'uy');
+  assert.ok(Math.max(...Array.from(r.cases[0].supportLoads).map(Math.abs)) < 1e-3);
+});
+
+test('Système en L entre ancrages : équilibre global des réactions thermiques', () => {
+  const m = setup({ alpha: 16 });
+  m.components = ensureIds({
+    components: [pipe('1', '2', 4000, 0, 0, { T1: 300 }), pipe('2', '3', 0, 3000, 0, { T1: 300 }), { type: 'bend', node: '2', radius: 229 }, sup('1', 'anchor'), sup('3', 'anchor')],
+  }).components;
+  m.loadCases = [{ id: 'T1', type: 'thermal', enabled: true }];
+  const r = runAnalysis(m);
+  const s = r.cases[0].supportLoads;
+  for (let d = 0; d < 3; d++) assert.ok(Math.abs(s[d] + s[6 + d]) < 1e-6 * (Math.abs(s[d]) + 1), `ΣF${d}`);
+  assert.ok(Math.abs(s[0]) > 100, 'effort non trivial');
+});
+
+test('Coude : facteurs k = 1,65/h et i = 0,9/h^(2/3)', () => {
+  const sec = pipeSection({ od: 168.3, t: 7.11 });
+  const f = componentFactors({ kind: 'bend', sec, bend: { radius: 228.6 } });
+  const h = (7.11 * 228.6) / sec.rm ** 2;
+  near(f.k, 1.65 / h, 1e-12, 'k');
+  near(f.i, 0.9 / h ** (2 / 3), 1e-12, 'i');
+  near(f.B2, 1.3 / h ** (2 / 3), 1e-12, 'B2');
+  assert.equal(rangeReductionFactor(7000), 1);
+  assert.equal(rangeReductionFactor(20000), 0.8);
+  assert.equal(rangeReductionFactor(1e6), 0.5);
+});
+
+test('Coude 90° en console : la flexibilité du coude augmente la flèche', () => {
+  const run = (b2Method) => {
+    const m = setup({ maxLen: 200 });
+    m.code.params.b2Method = b2Method;
+    m.components = ensureIds({ components: [pipe('1', '2', 2000, 0, 0), pipe('2', '3', 0, 2000, 0), { type: 'bend', node: '2', radius: 229 }, sup('1', 'anchor'), { type: 'mass', node: '3', mass: 500 }] }).components;
+    m.loadCases = [{ id: 'W', type: 'weight', enabled: true }];
+    return runAnalysis(m);
+  };
+  const r = run('indices');
+  const bendEl = r.mesh.elements.find((e) => e.kind === 'bend');
+  assert.ok(bendEl.factors.k > 5, 'k du coude DN150 grand rayon ≈ 6,6');
+  assert.ok(r.mesh.nodeIndex.has('2A') && r.mesh.nodeIndex.has('2M') && r.mesh.nodeIndex.has('2B'));
+  const dz = -nodeDisp(r, 'W', '3')[2];
+  assert.ok(dz > 0);
+});
+
+test('Fréquence propre d’une console : f₁ = 1,875²/(2π)·√(EI/mL⁴)', () => {
+  const m = setup({ density: 7850, maxLen: 100 });
+  m.components = ensureIds({ components: [pipe('1', '2', 3000, 0, 0), sup('1', 'anchor')] }).components;
+  m.loadCases = [{ id: 'S', type: 'seismic', enabled: true, method: 'spectral', cutoff: 1000, maxModes: 6, modal: 'SRSS', directional: 'SRSS', missingMass: false, damping: 5, spectra: { Z: { factor: 1, points: [[0.1, 1], [100, 1]] } } }];
+  const r = runAnalysis(m);
+  const sp = pipeSection(m.sections[0]);
+  const mL = 7850e-12 * sp.A;
+  const f1 = (1.875104 ** 2 / (2 * Math.PI)) * Math.sqrt((200000 * sp.I) / (mL * 3000 ** 4));
+  near(r.modal.modes[0].freq, f1, 5e-3, 'f1');
+  near(r.modal.modes[1].freq, f1, 5e-3, 'f1 (plan perpendiculaire)');
+});
+
+test('Spectre plat sur oscillateur simple : moment de base m·Sa·L', () => {
+  const m = setup({ density: 0, maxLen: 500 });
+  m.components = ensureIds({ components: [pipe('1', '2', 0, 0, 2000), sup('1', 'anchor'), { type: 'mass', node: '2', mass: 1000 }] }).components;
+  for (const missingMass of [false, true]) {
+    m.loadCases = [{ id: 'S', type: 'seismic', enabled: true, method: 'spectral', cutoff: 1000, maxModes: 10, modal: 'CQC', directional: 'SRSS', missingMass, damping: 5, spectra: { X: { factor: 1, points: [[0.1, 0.5], [100, 0.5]] } } }];
+    const r = runAnalysis(m);
+    const s = r.cases[0].supportLoads;
+    near(s[0], 0.5 * 9806.65, 1e-4, 'effort tranchant');
+    near(s[4], 0.5 * 9806.65 * 2000, 1e-4, 'moment');
+  }
+});
+
+test('Masse manquante : modes tronqués → réponse rigide retrouvée', () => {
+  const m = setup({ density: 7850, maxLen: 200 });
+  m.components = ensureIds({ components: [pipe('1', '2', 0, 2000, 0), sup('1', 'anchor'), sup('2', 'anchor')] }).components;
+  const lc = (missingMass) => ({ id: 'S', type: 'seismic', enabled: true, method: 'spectral', cutoff: 1, maxModes: 10, modal: 'SRSS', directional: 'SRSS', missingMass, damping: 5, spectra: { Z: { factor: 1, points: [[0.1, 1], [100, 1]] } } });
+  // aucun mode sous 1 Hz : sans correction la réponse est nulle, avec correction
+  // elle doit égaler la réponse statique à 1 g
+  m.loadCases = [lc(true), { id: 'Q', type: 'seismic', enabled: true, method: 'static', directional: 'SRSS', staticAcc: { Z: 1 } }];
+  const r = runAnalysis(m);
+  const [a, b] = r.cases;
+  near(a.supportLoads[2], b.supportLoads[2], 1e-6, 'réaction');
+  near(a.supportLoads[4], b.supportLoads[4], 1e-6, 'moment');
+});
+
+test('CQC et interpolation de spectre', () => {
+  near(cqcRho(10, 10, 0.05), 1, 1e-12, 'ρ modes confondus');
+  assert.ok(cqcRho(10, 20, 0.05) < 0.02);
+  near(spectrumAt([[1, 1], [10, 10]], Math.sqrt(10)), Math.sqrt(10), 1e-12, 'log-log');
+});
+
+test('Mécanisme détecté', () => {
+  const m = setup();
+  m.components = ensureIds({ components: [pipe('1', '2', 1000, 0, 0), sup('1', 'rest')] }).components;
+  m.loadCases = [{ id: 'W', type: 'weight', enabled: true }];
+  assert.throws(() => runAnalysis(m), /instable/);
+});

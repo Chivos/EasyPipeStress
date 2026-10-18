@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EasyPipeStress</title>
+    <meta name="description" content="Analyse de flexibilité des tuyauteries dans le navigateur : modélisation, poids, pression, dilatation, séisme spectral, dépouillement RCC-M classe 2." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M4 26V12a6 6 0 0 1 6-6h18' fill='none' stroke='%230b7285' stroke-width='6'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true"><path d="M4 26V12a6 6 0 0 1 6-6h18" fill="none" stroke="currentColor" stroke-width="5" /></svg>
+        <b>EasyPipeStress</b><span class="muted">flexibilité des tuyauteries</span>
+      </div>
+      <nav>
+        <button id="btn-new" class="ghost">Nouveau</button>
+        <button id="btn-example" class="ghost">Exemple</button>
+        <label class="button ghost">Ouvrir<input id="file-open" type="file" accept=".json,application/json" hidden /></label>
+        <button id="btn-save" class="ghost">Enregistrer</button>
+        <button id="btn-report" class="ghost">Note de calcul</button>
+        <button id="btn-run" class="primary" title="Ctrl + Entrée">▶ Calculer</button>
+      </nav>
+    </header>
+    <main>
+      <aside id="panel">
+        <div id="tabs" class="tabs"></div>
+        <div id="panel-body"></div>
+      </aside>
+      <section id="workspace">
+        <div id="view-wrap">
+          <canvas id="view"></canvas>
+          <div id="view-toolbar" class="overlay"></div>
+          <div class="hint">Glisser : rotation · Maj+glisser : translation · Molette : zoom · Clic : nœud</div>
+        </div>
+        <div id="bottom">
+          <div id="bottom-tabs" class="tabs"></div>
+          <div id="bottom-body"></div>
+        </div>
+      </section>
+    </main>
+    <footer id="status"></footer>
+    <noscript>Cette application nécessite JavaScript.</noscript>
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>
