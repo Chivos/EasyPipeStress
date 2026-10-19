@@ -46,7 +46,7 @@ test('Méthode sismique statique équivalente', () => {
 
 test('Analyse modale : Σ masses modales effectives = masse globale (tous modes)', () => {
   const m = exampleModel();
-  m.loadCases.find((c) => c.type === 'seismic').maxModes = 10000;
+  Object.assign(m.loadCases.find((c) => c.type === 'seismic'), { maxModes: 10000, cutoff: 1e9 });
   const { modal } = runAnalysis(m);
   const eff = [0, 0, 0];
   for (const md of modal.modes) md.effMass.forEach((v, d) => (eff[d] += v));

@@ -106,6 +106,14 @@ tridiagonalisation de Householder et algorithme QL implicite (EISPACK
 tred2/tql2 [5]), puis étendus à tous les DDL par φ = K⁻¹·M·φ·ω². Ils sont normés
 à la masse. Facteurs de participation Γᵢ = φᵢᵀ·M·r, masses effectives Γᵢ².
 
+Au-delà de 120 DDL massiques, les modes sont obtenus par la **méthode de
+Lanczos** avec réorthogonalisation complète (Paige, 1972 ; Parlett, *The
+Symmetric Eigenvalue Problem*) sur le même opérateur M^½·K⁻¹·M^½ : seuls les
+modes utiles sont calculés, jusqu'au premier mode convergé au-dessus de la
+fréquence de coupure (ou au nombre maximal de modes), au prix d'une résolution
+par itération. Les résultats sont identiques à la résolution complète (écart
+~10⁻¹³) pour un coût très inférieur (×13 plus rapide à 1 160 DDL).
+
 ### 3.2 Réponse spectrale
 
 Par défaut, les deux directions horizontales (déduites de l'axe vertical du
@@ -158,7 +166,7 @@ la fois pour la dilatation et comme conditions de calcul du code.
 | (6) | Poids propre + pression | S_L = P·Dₑ/(4eₙ) + 0,75i·M_A/Z ≤ k₆·Sh (k₆ = 1,0 par défaut) |
 | (7) | Dilatation thermique | S_E = i·M_C/Z ≤ S_A = f·(1,25·Sc + 0,25·Sh) [+ f·(Sh − S_L), option] |
 | (8) | (6) + (7), si (7) non satisfaite | P·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ Sh + S_A |
-| (10B), (10C), (10D) | Séisme, par niveau de critère | P·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ k·Sh, k = 1,2 (B), 1,8 (C), 2,4 (D) par défaut, plafond optionnel k'·Sy ; M_B = réponse sismique × coefficient du niveau |
+| (10B), (10C), (10D) | Séisme, par niveau de critère | P·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ k·Sh, k = 1,2 (B), 1,8 (C), 2,4 (D) par défaut ; M_B = réponse sismique × coefficient du niveau |
 
 0,75i est pris au moins égal à 1. En classe 2, seul le facteur
 d'intensification i intervient ; les indices de contraintes primaires B₁, B₂
@@ -177,7 +185,7 @@ enveloppe sismique (combinaisons modale et directionnelle) × coefficient du
 niveau. Le tableau « Cumul des chargements » de l'onglet Code détaille ces
 cumuls à partir des cas actifs.
 
-Tous les coefficients d'admissible (k₆, k par niveau, plafonds Sy) sont des
+Tous les coefficients d'admissible (k₆, k par niveau) sont des
 paramètres de l'onglet *Code*, à caler sur l'édition applicable.
 
 Facteur de réduction f selon le nombre de cycles équivalents N : 1,0 (N ≤ 7 000),
@@ -212,7 +220,7 @@ Points vérifiés et corrigés lors de l'audit :
 
 À confirmer par l'utilisateur dans l'édition du RCC-M applicable (texte non
 accessible publiquement, AFCEN) : les coefficients des admissibles (k₆, niveaux
-B/C/D, plafonds Sy), le tableau du facteur f et les éventuelles fiches de
+B/C/D), le tableau du facteur f et les éventuelles fiches de
 modification. Non traités à ce jour : éq. (9) (occasionnelles hors séisme),
 mouvements différentiels d'ancrages, facteurs de correction des coudes à
 brides, module de flexion effectif des piquages réduits, réductions.

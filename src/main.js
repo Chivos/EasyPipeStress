@@ -45,7 +45,7 @@ const state = {
   matSel: null,
   quick: { from: '', to: '', dx: '', dy: '', dz: '', bend: true, tee: true, radius: '', len: '1000' },
   display: { mode: 'geom', scale: 1, labels: true, showAll: false, animate: true },
-  filter: { eq: 'all', internal: false, sort: true, failOnly: false, case: null },
+  filter: { eq: 'all', internal: false, sort: true, failOnly: false, case: null, all: false },
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -106,6 +106,7 @@ function run() {
   state.runError = null;
   try {
     state.result = runAnalysis(state.model);
+    state.filter.all = false;
     state.display.mode = state.result.check ? 'ratio:max' : 'geom';
   } catch (e) {
     state.result = null;
