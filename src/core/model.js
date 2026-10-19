@@ -57,6 +57,7 @@ export function defaultLoadCases() {
       modal: 'CQC',
       directional: 'SRSS',
       missingMass: true,
+      rigid: 'gupta',
       maxModes: 60,
       spectra: {
         X: { factor: 1, points: DEFAULT_SPECTRUM.map((p) => [...p]) },
@@ -72,7 +73,7 @@ export function emptyModel() {
   return {
     version: MODEL_VERSION,
     meta: { title: 'Nouvelle étude', author: '', notes: '' },
-    settings: { vertical: 'Z', tRef: 20, meshMaxLength: 1000, bendDivisionAngle: 22.5, shear: true, checkThickness: false },
+    settings: { vertical: 'Z', tRef: 20, meshMaxLength: 500, bendDivisionAngle: 10, shear: true, checkThickness: false },
     materials: structuredClone(DEFAULT_MATERIALS),
     sections: structuredClone(DEFAULT_SECTIONS),
     nodeCoords: [{ node: '10', x: 0, y: 0, z: 0 }],

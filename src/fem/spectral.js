@@ -31,6 +31,30 @@ export function zpa(points) {
   return p.length ? p[p.length - 1][1] : 0;
 }
 
+/**
+ * Méthode de Gupta (USNRC RG 1.92 rév. 3 §C.1.4.1, ASCE 4-16) : part rigide αᵢ
+ * de la réponse de chaque mode.
+ *   f1 = SA_max / (2π·SV_max) (fin de la zone d'amplification),
+ *   f2 = (f1 + 2·f_ZPA)/3,
+ *   α(f) = ln(f/f1)/ln(f2/f1) borné à [0, 1].
+ * La part rigide αᵢRᵢ est cumulée algébriquement avec la masse manquante ;
+ * la part périodique √(1−αᵢ²)·Rᵢ est combinée par SRSS ou CQC.
+ */
+export function guptaAlpha(points, fZPA) {
+  const p = points.filter((x) => x[0] > 0 && x[1] >= 0);
+  if (!p.length) return () => 0;
+  const saMax = Math.max(...p.map((x) => x[1]));
+  const svMax = Math.max(...p.map((x) => x[1] / (2 * Math.PI * x[0])));
+  if (!(saMax > 0)) return () => 0;
+  const f1 = saMax / (2 * Math.PI * svMax);
+  const f2 = (f1 + 2 * fZPA) / 3;
+  return (f) => {
+    if (f <= f1) return 0;
+    if (f >= f2) return 1;
+    return Math.log(f / f1) / Math.log(f2 / f1);
+  };
+}
+
 /** Coefficient de corrélation CQC pour un amortissement réduit ξ commun. */
 export function cqcRho(wi, wj, xi) {
   const r = wj / wi;

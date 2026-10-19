@@ -35,6 +35,7 @@ export function fieldInput(field, value, onChange, { model, focusKey } = {}) {
       return h('input', { type: 'checkbox', checked: !!(value ?? field.default), onchange: (e) => onChange(e.target.checked), ...common });
     case 'select': {
       const opts = field.options(model);
+      value = value ?? field.default;
       const sel = h(
         'select',
         { onchange: (e) => onChange(e.target.value), ...common },

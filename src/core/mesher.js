@@ -92,9 +92,32 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
   for (const c of byPhase('corner')) components.get(c.type).mesh(c, cornerCtx);
 
   // --- 4. nœuds et éléments
+  // Segments de longueur nulle (coude soudé directement sur un piquage, coudes
+  // bout à bout) : leurs deux extrémités sont un seul et même nœud, connu sous
+  // les deux repères (le repère utilisateur est conservé comme repère principal).
+  const parent = new Map();
+  const find = (l) => {
+    while (parent.has(l) && parent.get(l) !== l) l = parent.get(l);
+    return l;
+  };
+  const kindOf = new Map();
+  for (const s of segments) {
+    kindOf.set(s.a, s.nodeKinds[0]);
+    kindOf.set(s.b, s.nodeKinds[1]);
+  }
+  for (const s of segments) {
+    if (vec.norm(vec.sub(s.pb, s.pa)) >= 1) continue;
+    const ra = find(s.a);
+    const rb = find(s.b);
+    if (ra === rb) continue;
+    if (kindOf.get(rb) === 'user' && kindOf.get(ra) !== 'user') parent.set(ra, rb);
+    else parent.set(rb, ra);
+  }
   const nodeMap = new Map();
   const rawNodes = [];
-  const getNode = (label, p, kind) => {
+  const getNode = (label0, p, kind0) => {
+    const label = find(label0);
+    const kind = kindOf.get(label) ?? kind0;
     if (nodeMap.has(label)) return nodeMap.get(label);
     const i = rawNodes.length;
     rawNodes.push({ label, x: p[0], y: p[1], z: p[2], kind });
@@ -105,10 +128,7 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
   const maxLen = +settings.meshMaxLength > 0 ? +settings.meshMaxLength : 1e12;
   for (const s of segments) {
     const L = vec.norm(vec.sub(s.pb, s.pa));
-    if (L < 1) {
-      errors.push(`Segment ${s.a}-${s.b} de longueur quasi nulle (${L.toFixed(2)} mm) : vérifier les coudes successifs.`);
-      continue;
-    }
+    if (L < 1) continue; // extrémités fusionnées ci-dessus
     const nsub = s.subdivide ? Math.max(1, Math.ceil(L / maxLen - 1e-9)) : 1;
     let prev = getNode(s.a, s.pa, s.nodeKinds[0]);
     const end = getNode(s.b, s.pb, s.nodeKinds[1]);
@@ -125,6 +145,7 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
   perm.forEach((old, nw) => (inv[old] = nw));
   const nodes = perm.map((old) => rawNodes[old]);
   const nodeIndex = new Map(nodes.map((n, i) => [n.label, i]));
+  for (const l of parent.keys()) if (!nodeIndex.has(l) && nodeIndex.has(find(l))) nodeIndex.set(l, nodeIndex.get(find(l)));
 
   // --- 5. caractéristiques des éléments
   const tRef = +settings.tRef || 20;
@@ -225,9 +246,12 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
     elementsAt: (i) => nodeElems[i],
     /** Facteurs locaux (té…) appliqués aux extrémités des éléments aboutissant au nœud. */
     addNodeFactors(i, desc) {
+      // le SIF d'un té se calcule avec les dimensions du collecteur (tube principal :
+      // plus grand diamètre, puis plus grande épaisseur) et s'applique aux trois branches
+      const run = [...nodeElems[i]].sort((a, b) => b.sec.od - a.sec.od || b.sec.t - a.sec.t)[0];
       for (const e of nodeElems[i]) {
         const end = e.n1 === i ? 0 : 1;
-        e.endFactors[end] = factors({ ...desc, sec: e.sec, P: e.P1, Ec: e.E, params: model.code?.params ?? {} });
+        e.endFactors[end] = factors({ ...desc, sec: run.sec, P: run.P1, Ec: run.E, params: model.code?.params ?? {} });
         e.endFactors[end].component = desc.kind;
       }
       tees.push({ node: i, ...desc });

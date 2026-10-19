@@ -10,7 +10,7 @@
 
 import { G_STD } from '../core/units.js';
 import { bodyForceLoads, pack, unpack } from './common.js';
-import { spectrumAt, zpa, combineModal, combineDirectional, srss2 } from '../fem/spectral.js';
+import { spectrumAt, zpa, combineModal, combineDirectional, srss2, guptaAlpha } from '../fem/spectral.js';
 
 const DIRS = ['X', 'Y', 'Z'];
 
@@ -55,10 +55,12 @@ export const seismic = {
     { key: 'maxModes', label: 'Nombre maximal de modes', type: 'number' },
     { key: 'modal', label: 'Combinaison modale', type: 'select', options: () => ['CQC', 'SRSS'] },
     { key: 'directional', label: 'Combinaison directionnelle', type: 'select', options: () => ['SRSS', '100-40-40'] },
+    { key: 'rigid', label: 'Réponse rigide des modes', type: 'select', options: () => ['gupta', 'none'],
+      default: 'gupta', optionLabel: (v) => (v === 'gupta' ? 'Méthode de Gupta (RG 1.92 rév. 3)' : 'Aucune (tous les modes périodiques)'), title: 'Part rigide des modes entre f1 et f_ZPA, cumulée algébriquement avec la masse manquante' },
     { key: 'sameHorizontal', label: 'Même spectre pour les deux directions horizontales', type: 'checkbox', default: true },
     { key: 'missingMass', label: 'Correction de masse manquante (ZPA)', type: 'checkbox', default: true },
   ],
-  create: () => ({ type: 'seismic', label: 'Séisme', enabled: true, levels: defaultLevels() }),
+  create: () => ({ type: 'seismic', label: 'Séisme', enabled: true, rigid: 'gupta', levels: defaultLevels() }),
 
   run(ctx, lc) {
     const { sys } = ctx;
@@ -102,13 +104,23 @@ function runSpectral(sys, lc) {
     const di = DIRS.indexOf(d);
     const modeVectors = [];
     const omegas = [];
+    const gupta = lc.rigid !== 'none';
+    const alphaOf = gupta ? guptaAlpha(sp.points, cutoff) : () => 0;
+    let rigidSum = null; // Σ αᵢ·Rᵢ (signé) + masse manquante
     const residual = new Float64Array(n); // M·r − Σ Γ·M·φ
     for (let node = 0; node < sys.mesh.nodes.length; node++) residual[node * 6 + di] = mass[node * 6 + di];
     for (const m of used) {
       const sa = factor * spectrumAt(sp.points, m.freq) * G_STD;
       const q = (m.gamma[di] * sa) / (m.omega * m.omega);
       const u = m.phi.map((v) => v * q);
-      modeVectors.push(pack({ u, ...sys.responses(u) }));
+      const v = pack({ u, ...sys.responses(u) });
+      const alpha = alphaOf(m.freq);
+      if (alpha > 0) {
+        rigidSum ??= new Float64Array(v.length);
+        for (let k = 0; k < v.length; k++) rigidSum[k] += alpha * v[k];
+      }
+      const per = Math.sqrt(Math.max(0, 1 - alpha * alpha));
+      modeVectors.push(per === 1 ? v : v.map((x) => x * per));
       omegas.push(m.omega);
       for (let i = 0; i < n; i++) residual[i] -= m.gamma[di] * mass[i] * m.phi[i];
     }
@@ -120,8 +132,12 @@ function runSpectral(sys, lc) {
     if (lc.missingMass !== false) {
       const a0 = factor * zpa(sp.points) * G_STD;
       const F = residual.map((v) => v * a0);
-      const r = sys.solveStatic({ F });
-      const rigid = pack(r).map(Math.abs);
+      const mm = pack(sys.solveStatic({ F }));
+      if (rigidSum) for (let k = 0; k < mm.length; k++) rigidSum[k] += mm[k];
+      else rigidSum = mm;
+    }
+    if (rigidSum) {
+      const rigid = rigidSum.map(Math.abs);
       resp = resp ? srss2(resp, rigid) : rigid;
     }
     if (!resp) continue;

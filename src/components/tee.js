@@ -1,8 +1,8 @@
 // Té (piquage) placé au nœud de jonction de trois tubes. Le té ne modifie pas
 // la géométrie : le nœud reste commun aux trois branches. Il applique, aux
 // extrémités des éléments qui aboutissent au nœud, le facteur d'intensification
-// de contraintes i fourni par le code de vérification (RCC-M C 3680 /
-// ASME NC-3673.2) selon le type de té :
+// de contraintes i fourni par le code de vérification (classe 2, équivalent
+// ASME NC-3673.2), calculé avec les dimensions du collecteur, selon le type de té :
 //  - 'welding'      té forgé à souder bout à bout (B16.9) : h = 4,4·e/r
 //  - 'reinforced'   té de fabrication renforcé           : h = (e + e_r/2)^(5/2) / (e^(3/2)·r)
 //  - 'unreinforced' té de fabrication non renforcé       : h = e/r

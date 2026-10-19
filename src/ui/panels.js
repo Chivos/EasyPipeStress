@@ -317,7 +317,7 @@ export function renderLoads(app) {
         h('button', { class: 'icon danger', title: 'Supprimer le cas', onclick: () => app.update((mm) => mm.loadCases.splice(li, 1)) }, '✕'),
       ),
       type?.description ? help(type.description) : null,
-      type ? fieldForm(type.fields.filter((f) => !(lc.type === 'seismic' && lc.method === 'static' && ['damping', 'cutoff', 'maxModes', 'modal', 'missingMass'].includes(f.key))), lc, set, { model: m, focusPrefix: `lc${li}` }) : null,
+      type ? fieldForm(type.fields.filter((f) => !(lc.type === 'seismic' && lc.method === 'static' && ['damping', 'cutoff', 'maxModes', 'modal', 'missingMass', 'rigid'].includes(f.key))), lc, set, { model: m, focusPrefix: `lc${li}` }) : null,
       lc.type === 'seismic' ? seismicEditor(app, lc, li) : null,
     );
   });
@@ -352,7 +352,7 @@ export function renderLoads(app) {
 }
 
 function defaultSeismic() {
-  return { levels: defaultLevels(), method: 'spectral', damping: 5, cutoff: 33, modal: 'CQC', directional: 'SRSS', missingMass: true, maxModes: 60, spectra: { X: { factor: 1, points: DEFAULT_SPECTRUM }, Y: { factor: 1, points: DEFAULT_SPECTRUM }, Z: { factor: 2 / 3, points: DEFAULT_SPECTRUM } }, staticAcc: { X: 1.5, Y: 1.5, Z: 1 } };
+  return { levels: defaultLevels(), method: 'spectral', damping: 5, cutoff: 33, modal: 'CQC', directional: 'SRSS', missingMass: true, rigid: 'gupta', maxModes: 60, spectra: { X: { factor: 1, points: DEFAULT_SPECTRUM }, Y: { factor: 1, points: DEFAULT_SPECTRUM }, Z: { factor: 2 / 3, points: DEFAULT_SPECTRUM } }, staticAcc: { X: 1.5, Y: 1.5, Z: 1 } };
 }
 
 function seismicEditor(app, lc, li) {
@@ -511,8 +511,8 @@ export function renderCode(app) {
           {},
           code?.thickness ? eqRow(code.thickness.ref, 'Épaisseur minimale — tenue à la pression seule (option de l’onglet Projet)', code.thickness.formula) : null,
           eqRow('(6)', 'Poids propre + pression', 'S_L = P·Dₑ/(4eₙ) + 0,75i·M_A/Z ≤ k₆·S_h   (0,75i ≥ 1)'),
-          eqRow('(7)', 'Dilatation thermique', 'S_E = i·M_C/Z ≤ S_A = f(1,25 S_c + 0,25 S_h) [+ (S_h − S_L) en option]'),
-          eqRow('(8)', '(6) + (7), si (7) non satisfaite', 'P_max·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ S_h + S_A'),
+          eqRow('(7)', 'Dilatation thermique', 'S_E = i·M_C/Z ≤ S_A = f(1,25 S_c + 0,25 S_h) [+ f(S_h − S_L) en option]'),
+          eqRow('(8)', '(6) + (7), si (7) non satisfaite', 'P_c·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ S_h + S_A'),
           eqRow('(10B) (10C) (10D)', 'Séisme, par niveau de critère', 'P_max·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ k·S_h  (B : 1,2 — C : 1,8 — D : 2,4 par défaut, plafond k·Sy optionnel) ; M_B = séisme × coefficient du niveau'),
         ),
       ),

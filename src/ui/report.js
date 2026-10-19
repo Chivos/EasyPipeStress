@@ -120,7 +120,7 @@ function loadParams(lc, vertical) {
     case 'seismic':
       return lc.method === 'static'
         ? `statique équivalente, ${levelsText(lc)}, accélérations ${['X', 'Y', 'Z'].map((d) => `${d} ${lc.staticAcc?.[d] ?? 0} g`).join(', ')}, ${lc.directional}`
-        : `spectrale, ${levelsText(lc)}, ξ = ${lc.damping} %, coupure ${lc.cutoff} Hz, ${lc.modal}, ${lc.directional}, masse manquante ${lc.missingMass !== false ? 'oui' : 'non'}, ${lc.sameHorizontal !== false ? 'spectre horizontal commun, ' : ''}facteurs ${['X', 'Y', 'Z'].map((d) => `${d} ${fmt(spectrumFor(lc, d, vertical)?.factor ?? 0, 2)}`).join(', ')}`;
+        : `spectrale, ${levelsText(lc)}, ξ = ${lc.damping} %, coupure ${lc.cutoff} Hz, ${lc.modal}, ${lc.directional}, masse manquante ${lc.missingMass !== false ? 'oui' : 'non'}, réponse rigide ${lc.rigid === 'none' ? 'non' : 'Gupta'}, ${lc.sameHorizontal !== false ? 'spectre horizontal commun, ' : ''}facteurs ${['X', 'Y', 'Z'].map((d) => `${d} ${fmt(spectrumFor(lc, d, vertical)?.factor ?? 0, 2)}`).join(', ')}`;
     default:
       return '';
   }
