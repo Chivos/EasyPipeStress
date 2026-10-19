@@ -544,7 +544,6 @@ export function renderCode(app) {
           eqRow('(10B) (10C) (10D)', 'Séisme, par niveau de critère', 'P·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ k·S_h  (B : 1,2 — C : 1,8 — D : 2,4) ; M_B = séisme × coefficient du niveau'),
         ),
       ),
-      help('Classe 2 : seul le facteur d’intensification i intervient (0,75i ≥ 1 pour les charges primaires) ; les indices B₁, B₂ relèvent de la classe 1 (sous-section B).'),
       help('Coudes : h = eₙR/r², k = 1,65/h, i = 0,9/h^⅔ (≥ 1). Tés : i = 0,9/h^⅔ ≥ 1 avec h = 4,4eₙ/r (forgé), (eₙ + e_r/2)^(5/2)/(eₙ^(3/2)·r) (fabrication renforcé), eₙ/r (non renforcé).'),
     ),
     combinationsSection(code, m),
