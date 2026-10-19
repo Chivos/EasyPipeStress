@@ -48,7 +48,7 @@ const state = {
   quick: { from: '', to: '', dx: '', dy: '', dz: '', bend: true, tee: true, radius: '', len: '1000' },
   display: { mode: 'geom', scale: 1, labels: true, showAll: false, animate: true, render: '3d', ratioMap: 'bands' },
   highlight: null,
-  filter: { eq: 'all', internal: false, sort: true, failOnly: false, case: null, all: false },
+  filter: { eq: null, internal: false, sort: true, failOnly: false, case: null, all: false },
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -116,7 +116,10 @@ function run() {
   try {
     state.result = runAnalysis(state.model);
     state.filter.all = false;
-    state.display.mode = state.result.check ? 'ratio:max' : 'geom';
+    // affichage initial : taux de l'équation la plus chargée
+    const gov = state.result.check?.summary.governing.reduce((a, g) => (!a || g.effRatio > a.effRatio ? g : a), null);
+    state.display.mode = gov ? `ratio:${gov.eq}` : 'geom';
+    if (gov) state.filter.eq = gov.eq;
   } catch (e) {
     state.result = null;
     state.runError = e.errors ? e.errors.join('\n') : e.message;
@@ -188,7 +191,6 @@ function renderViewToolbar() {
   if (r) {
     for (const c of displayCases(r)) opts.push([`case:${c.id}`, `${c.signed ? 'Déformée' : 'Enveloppe'} ${c.id} – ${c.label}`]);
     if (r.check) {
-      opts.push(['ratio:max', 'Taux de travail (max)']);
       for (const eq of [...new Set(r.check.rows.map((x) => x.eq))]) opts.push([`ratio:${eq}`, eq === 'e' ? 'Taux : épaisseur' : `Taux : éq. (${eq})`]);
     }
     r.modal?.modes.slice(0, 30).forEach((m, k) => opts.push([`mode:${k}`, `Mode ${k + 1} – ${m.freq.toFixed(2)} Hz`]));

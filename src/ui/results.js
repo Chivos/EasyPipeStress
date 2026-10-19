@@ -107,7 +107,7 @@ export function buildScene(state) {
   } else if (kind === 'ratio' && result.check) {
     const per = new Float64Array(mesh.elements.length);
     for (const r of result.check.rows) {
-      if (arg !== 'max' && r.eq !== arg) continue;
+      if (r.eq !== arg) continue;
       const v = r.coveredBy ? 0 : r.ratio;
       if (v > per[r.ie]) per[r.ie] = v;
     }
@@ -362,7 +362,8 @@ function codeTable(app, r, nodeOk, internalChk) {
   if (!r.check) return h('p', { class: 'muted pad' }, 'Aucun code sélectionné.');
   const f = app.state.filter;
   const eqs = [...new Set(r.check.rows.map((x) => x.eq))];
-  const rows = r.check.rows.filter((x) => (f.eq === 'all' || x.eq === f.eq) && nodeOk(x.node) && (!f.failOnly || (x.ratio > 1 && !x.coveredBy)));
+  if (!eqs.includes(f.eq)) f.eq = eqs[0];
+  const rows = r.check.rows.filter((x) => x.eq === f.eq && nodeOk(x.node) && (!f.failOnly || (x.ratio > 1 && !x.coveredBy)));
   if (f.sort) rows.sort((a, b) => b.ratio - a.ratio);
   return h(
     'div',
@@ -370,7 +371,7 @@ function codeTable(app, r, nodeOk, internalChk) {
     h(
       'div',
       { class: 'toolbar' },
-      h('select', { onchange: (e) => app.setUi(() => (f.eq = e.target.value)) }, h('option', { value: 'all' }, 'Toutes les équations'), eqs.map((q) => h('option', { value: q, selected: q === f.eq }, q === 'e' ? 'Épaisseur' : `Éq. (${q})`))),
+      h('select', { onchange: (e) => app.setUi(() => (f.eq = e.target.value)) }, eqs.map((q) => h('option', { value: q, selected: q === f.eq }, q === 'e' ? 'Épaisseur' : `Éq. (${q})`))),
       internalChk,
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: f.sort, onchange: (e) => app.setUi(() => (f.sort = e.target.checked)) }), ' trier par taux'),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: f.failOnly, onchange: (e) => app.setUi(() => (f.failOnly = e.target.checked)) }), ' non conformes seulement'),
