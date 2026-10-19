@@ -158,7 +158,6 @@ export function renderResultsPanel(app) {
             ),
           ),
         ),
-        h('ul', { class: 'notes' }, r.check.notes.map((n) => h('li', {}, n))),
       ),
     );
   }

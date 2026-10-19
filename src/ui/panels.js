@@ -24,7 +24,7 @@ export function renderProject(app) {
     { key: 'meshMaxLength', label: 'Longueur maximale d’élément', unit: 'mm', type: 'number', title: 'Discrétisation des tubes droits (précision du poids réparti et de l’analyse modale)' },
     { key: 'bendDivisionAngle', label: 'Angle maximal par élément de coude', unit: '°', type: 'number' },
     { key: 'shear', label: 'Déformation d’effort tranchant (Timoshenko)', type: 'checkbox', default: true },
-    { key: 'checkThickness', label: 'Vérifier l’épaisseur minimale (tenue à la pression seule, formule du code retenu)', type: 'checkbox', default: false },
+    { key: 'checkThickness', label: 'Vérifier l’épaisseur minimale (tenue à la pression seule)', type: 'checkbox', default: false },
   ];
   return h(
     'div',
