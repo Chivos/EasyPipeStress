@@ -9,6 +9,7 @@ import { loadTypes } from '../loads/index.js';
 import { codes } from '../codes/index.js';
 import { newId } from '../core/model.js';
 import { DEFAULT_SPECTRUM } from '../core/model.js';
+import { seismicAxes } from '../loads/seismic.js';
 
 const section = (title, ...content) => h('section', { class: 'card' }, h('h3', {}, title), ...content);
 const help = (...t) => h('p', { class: 'help' }, ...t);
@@ -380,12 +381,15 @@ function seismicEditor(app, lc, li) {
     h(
       'div',
       { class: 'spectra' },
-      ['X', 'Y', 'Z'].map((d) => {
+      spectrumBlocks(lc, app.state.model.settings.vertical).map(({ title, dirs }) => {
+        const d = dirs[0];
         const sp = lc.spectra[d] ?? { factor: 0, points: [] };
+        // une saisie partagée est recopiée dans toutes les directions du bloc
+        const write = (mm, val) => dirs.forEach((x) => (mm.loadCases[li].spectra[x] = structuredClone(val)));
         return h(
           'div',
           { class: 'spectrum' },
-          h('div', { class: 'toolbar' }, h('b', {}, `Direction ${d}`), h('span', { class: 'muted' }, '× facteur'), fieldInput({ type: 'number' }, round(sp.factor, 4), (v) => app.update((mm) => { mm.loadCases[li].spectra[d] = { ...sp, factor: v === '' ? 0 : v }; }), { focusKey: `lc${li}:fac${d}` })),
+          h('div', { class: 'toolbar' }, h('b', {}, title), h('span', { class: 'muted' }, '× facteur'), fieldInput({ type: 'number' }, round(sp.factor, 4), (v) => app.update((mm) => write(mm, { ...sp, factor: v === '' ? 0 : v })), { focusKey: `lc${li}:fac${d}` })),
           h('textarea', {
             rows: 6,
             dataset: { focus: `lc${li}:sp${d}` },
@@ -396,7 +400,7 @@ function seismicEditor(app, lc, li) {
                   .split('\n')
                   .map((l) => l.trim().replace(/,/g, '.').split(/[\s;\t]+/).map(Number))
                   .filter((p) => p.length >= 2 && p.every(Number.isFinite));
-                mm.loadCases[li].spectra[d] = { ...sp, points: pts };
+                write(mm, { ...sp, points: pts });
               }),
           }),
           spectrumSvg(sp.points ?? []),
@@ -404,6 +408,15 @@ function seismicEditor(app, lc, li) {
       }),
     ),
   );
+}
+
+function spectrumBlocks(lc, vertical) {
+  const { horizontal, vertical: v } = seismicAxes(vertical);
+  if (lc.sameHorizontal === false) return ['X', 'Y', 'Z'].map((d) => ({ title: `Direction ${d}`, dirs: [d] }));
+  return [
+    { title: `Horizontal (${horizontal.join(' et ')})`, dirs: horizontal },
+    { title: `Vertical (${v})`, dirs: [v] },
+  ];
 }
 
 const round = (v, d) => (typeof v === 'number' ? +v.toFixed(d) : v);

@@ -14,6 +14,23 @@ import { spectrumAt, zpa, combineModal, combineDirectional, srss2 } from '../fem
 
 const DIRS = ['X', 'Y', 'Z'];
 
+/** Directions horizontales et verticale, selon l'axe vertical du projet. */
+export function seismicAxes(vertical = 'Z') {
+  const v = DIRS.includes(vertical) ? vertical : 'Z';
+  return { horizontal: DIRS.filter((d) => d !== v), vertical: v };
+}
+
+/**
+ * Spectre appliqué dans la direction d. Par défaut (sameHorizontal ≠ false), les
+ * deux directions horizontales partagent le spectre (et le facteur) de la
+ * première d'entre elles : une seule saisie pour l'horizontal.
+ */
+export function spectrumFor(lc, d, vertical = 'Z') {
+  const { horizontal } = seismicAxes(vertical);
+  const key = lc.sameHorizontal !== false && horizontal.includes(d) ? horizontal[0] : d;
+  return lc.spectra?.[key];
+}
+
 export const seismic = {
   id: 'seismic',
   label: 'Séisme',
@@ -26,6 +43,7 @@ export const seismic = {
     { key: 'maxModes', label: 'Nombre maximal de modes', type: 'number' },
     { key: 'modal', label: 'Combinaison modale', type: 'select', options: () => ['CQC', 'SRSS'] },
     { key: 'directional', label: 'Combinaison directionnelle', type: 'select', options: () => ['SRSS', '100-40-40'] },
+    { key: 'sameHorizontal', label: 'Même spectre pour les deux directions horizontales', type: 'checkbox', default: true },
     { key: 'missingMass', label: 'Correction de masse manquante (ZPA)', type: 'checkbox', default: true },
   ],
   create: () => ({ type: 'seismic', label: 'Séisme', enabled: true }),
@@ -66,7 +84,7 @@ function runSpectral(sys, lc) {
   const dirResults = [];
   const dirInfo = {};
   for (const d of DIRS) {
-    const sp = lc.spectra?.[d];
+    const sp = spectrumFor(lc, d, DIRS[sys.mesh.up.indexOf(1)]);
     const factor = +(sp?.factor ?? 0);
     if (!sp || !factor || !sp.points?.length) continue;
     const di = DIRS.indexOf(d);

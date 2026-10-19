@@ -253,3 +253,16 @@ test('Épaisseur minimale : désactivée par défaut, activable dans le projet',
   const row = runAnalysis(m).check.rows.find((x) => x.eq === 'e');
   near(row.stress, (5 * 168.3) / (2 * (100 + 0.4 * 5)), 1e-12, 'e_m');
 });
+
+test('Séisme : spectre horizontal commun aux deux directions horizontales', () => {
+  const m = setup({ density: 0, maxLen: 500 });
+  m.components = ensureIds({ components: [pipe('1', '2', 0, 0, 2000), sup('1', 'anchor'), { type: 'mass', node: '2', mass: 1000 }] }).components;
+  const flat = (a) => ({ factor: 1, points: [[0.1, a], [100, a]] });
+  const lc = (same) => ({ id: 'S', type: 'seismic', enabled: true, method: 'spectral', cutoff: 1000, maxModes: 10, modal: 'SRSS', directional: 'SRSS', missingMass: true, damping: 5, sameHorizontal: same, spectra: { X: flat(0.5), Y: flat(0.2), Z: flat(0) } });
+  m.loadCases = [lc(true)];
+  let s = runAnalysis(m).cases[0].supportLoads;
+  near(Math.abs(s[1]), 0.5 * 9806.65, 1e-4, 'Y reçoit le spectre horizontal (celui de X)');
+  m.loadCases = [lc(false)];
+  s = runAnalysis(m).cases[0].supportLoads;
+  near(Math.abs(s[1]), 0.2 * 9806.65, 1e-4, 'Y propre si l’option est décochée');
+});

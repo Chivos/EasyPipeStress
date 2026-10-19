@@ -23,7 +23,8 @@ exportables/importables en JSON.
 2. **Supports & masses** : ancrages, appuis, guides, butées, ressorts, blocages
    personnalisés, déplacements imposés de piquage ; masses ponctuelles.
 3. **Chargements** : poids (fluide, calorifuge), pression, dilatation, séisme
-   (niveau B/C/D, spectres par direction, CQC/SRSS, masse manquante,
+   (niveau B/C/D, spectre horizontal commun aux deux directions horizontales et
+   spectre vertical, ou un spectre par direction, CQC/SRSS, masse manquante,
    100-40-40/SRSS, ou statique équivalente).
 4. **Code** : paramètres du RCC-M C (nombre de cycles, coefficients des
    admissibles par équation et par niveau, indices 0,75i ou B₁/B₂,
