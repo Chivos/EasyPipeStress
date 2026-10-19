@@ -163,10 +163,10 @@ la fois pour la dilatation et comme conditions de calcul du code.
 | Réf. | Critère | Formule (formulation par défaut « 0,75 i ») |
 |---|---|---|
 | C 3641 | Épaisseur minimale (tenue à la pression seule, option du projet désactivée par défaut) | eₘ = P·Dₑ / [2(S/I + 0,4·P)] + c ≤ eₙ·(1 − tol) ; I = (4R/Dₑ − 1)/(4R/Dₑ − 2) à l'intrados des coudes |
-| (6) | Poids propre + pression | S_L = P·Dₑ/(4eₙ) + 0,75i·M_A/Z ≤ k₆·Sh (k₆ = 1,0 par défaut) |
-| (7) | Dilatation thermique | S_E = i·M_C/Z ≤ S_A = f·(1,25·Sc + 0,25·Sh) [+ f·(Sh − S_L), option] |
+| (6) | Poids propre + pression | S_L = P·Dₑ/(4eₙ) + 0,75i·M_A/Z ≤ 1,0·Sh |
+| (7) | Dilatation thermique | S_E = i·M_C/Z ≤ S_A = f·(1,25·Sc + 0,25·Sh) |
 | (8) | (6) + (7), si (7) non satisfaite | P·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ Sh + S_A |
-| (10B), (10C), (10D) | Séisme, par niveau de critère | P·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ k·Sh, k = 1,2 (B), 1,8 (C), 2,4 (D) par défaut ; M_B = réponse sismique × coefficient du niveau |
+| (10B), (10C), (10D) | Séisme, par niveau de critère | P·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ k·Sh, k = 1,2 (B), 1,8 (C), 2,4 (D) ; M_B = réponse sismique × coefficient du niveau |
 
 0,75i est pris au moins égal à 1. En classe 2, seul le facteur
 d'intensification i intervient ; les indices de contraintes primaires B₁, B₂
@@ -185,8 +185,10 @@ enveloppe sismique (combinaisons modale et directionnelle) × coefficient du
 niveau. Le tableau « Cumul des chargements » de l'onglet Code détaille ces
 cumuls à partir des cas actifs.
 
-Tous les coefficients d'admissible (k₆, k par niveau) sont des
-paramètres de l'onglet *Code*, à caler sur l'édition applicable.
+Les coefficients d'admissible (1,0·Sh pour (6) ; 1,2 / 1,8 / 2,4·Sh pour
+(10B) / (10C) / (10D)) sont fixés par le code et ne sont pas paramétrables.
+S_A ne comporte pas de report de marge f·(Sh − S_L) : cette majoration relève
+de l'ASME B31.1 / B31.3, pas de la classe 2 du RCC-M.
 
 Facteur de réduction f selon le nombre de cycles équivalents N : 1,0 (N ≤ 7 000),
 0,9 (≤ 14 000), 0,8 (≤ 22 000), 0,7 (≤ 45 000), 0,6 (≤ 100 000), 0,5 au-delà.
@@ -211,16 +213,16 @@ Points vérifiés et corrigés lors de l'audit :
   pas d'indices B₁/B₂ (classe 1) ;
 - une seule pression P et une seule température T par tube, communes aux
   équations (6), (7), (8), (10) et à l'épaisseur minimale ;
-- report de marge sur S_A : S_A = f(1,25 Sc + 0,25 Sh) + f(Sh − S_L) (le
-  facteur f s'applique aussi au report) ;
+- S_A = f(1,25 Sc + 0,25 Sh), sans report de marge (Sh − S_L), propre aux
+  codes B31 ;
+- coefficients des admissibles fixes : 1,0·Sh (6), 1,2 / 1,8 / 2,4·Sh (10B/C/D) ;
 - SIF des tés calculé avec les dimensions du collecteur et appliqué aux trois
   branches ; coudes : h, k, i avec l'épaisseur propre du coude ;
 - moments résultants aux extrémités d'élément ; M_A + M_B en somme de
   résultants (conservatif) ; M_C calculé avec E à froid.
 
 À confirmer par l'utilisateur dans l'édition du RCC-M applicable (texte non
-accessible publiquement, AFCEN) : les coefficients des admissibles (k₆, niveaux
-B/C/D), le tableau du facteur f et les éventuelles fiches de
+accessible publiquement, AFCEN) : le tableau du facteur f et les éventuelles fiches de
 modification. Non traités à ce jour : éq. (9) (occasionnelles hors séisme),
 mouvements différentiels d'ancrages, facteurs de correction des coudes à
 brides, module de flexion effectif des piquages réduits, réductions.
