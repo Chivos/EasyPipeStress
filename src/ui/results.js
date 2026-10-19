@@ -33,7 +33,7 @@ export function displayCases(result) {
 export function buildScene(state) {
   const { result, preview, display } = state;
   const mesh = result?.mesh ?? preview;
-  const scene = { mesh, selected: state.selected, labels: display.labels, showAllNodes: display.showAll };
+  const scene = { mesh, selected: state.selected, labels: display.labels, showAllNodes: display.showAll, render: display.render };
   if (!result || !mesh) return scene;
   const [kind, arg] = display.mode.split(':');
   const size = modelSize(mesh);

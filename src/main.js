@@ -44,7 +44,7 @@ const state = {
   selected: null,
   matSel: null,
   quick: { from: '', to: '', dx: '', dy: '', dz: '', bend: true, tee: true, radius: '', len: '1000' },
-  display: { mode: 'geom', scale: 1, labels: true, showAll: false, animate: true },
+  display: { mode: 'geom', scale: 1, labels: true, showAll: false, animate: true, render: '3d' },
   filter: { eq: 'all', internal: false, sort: true, failOnly: false, case: null, all: false },
 };
 
@@ -191,6 +191,7 @@ function renderViewToolbar() {
       ? h('label', { class: 'check', title: 'Amplification de la déformée' }, '×', h('input', { type: 'range', min: -1.5, max: 1.5, step: 0.1, value: Math.log10(d.scale), oninput: (e) => { d.scale = 10 ** +e.target.value; viewer.setScene(buildScene(state)); } }))
       : null,
     d.mode.startsWith('mode') ? h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: d.animate, onchange: (e) => app.setUi(() => (d.animate = e.target.checked)) }), ' animer') : null,
+    h('select', { title: 'Rendu', onchange: (e) => app.setUi(() => (d.render = e.target.value)) }, h('option', { value: '3d', selected: d.render !== 'wire' }, '3D'), h('option', { value: 'wire', selected: d.render === 'wire' }, 'Filaire')),
     h('span', { class: 'sep' }),
     ...[
       ['iso', 'Iso'],

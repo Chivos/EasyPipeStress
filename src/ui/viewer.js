@@ -177,66 +177,85 @@ export class Viewer {
     const colors = sc.elementColors; // tableau de couleurs par élément ou null
     const ghost = disp && disp.signed;
 
-    // Tangentes fantômes des coudes
-    ctx.setLineDash([4, 4]);
-    ctx.strokeStyle = C.muted;
-    ctx.lineWidth = 1;
-    for (const [, c] of mesh.corners) {
-      const a = this.toScreen(c.start);
-      const b = this.toScreen(c.point);
-      const d = this.toScreen(c.end);
-      ctx.beginPath();
-      ctx.moveTo(a[0], a[1]);
-      ctx.lineTo(b[0], b[1]);
-      ctx.lineTo(d[0], d[1]);
-      ctx.stroke();
-    }
-    ctx.setLineDash([]);
-
-    // Tuyauterie (non déformée)
     const pxPerMm = this.frame.s;
+    const solid = sc.render !== 'wire';
+    const odAtNode = (i) => Math.max(0, ...(mesh.nodeElems?.[i] ?? []).filter((e) => e.kind !== 'valve').map((e) => e.sec.od));
+
+    // Tangentes fantômes des coudes (filaire seulement)
+    if (!solid) {
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = C.muted;
+      ctx.lineWidth = 1;
+      for (const [, c] of mesh.corners) {
+        const a = this.toScreen(c.start);
+        const b = this.toScreen(c.point);
+        const d = this.toScreen(c.end);
+        ctx.beginPath();
+        ctx.moveTo(a[0], a[1]);
+        ctx.lineTo(b[0], b[1]);
+        ctx.lineTo(d[0], d[1]);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    }
+
+    // Géométrie non déformée : volumes ombrés (3D) ou traits (filaire). Quand une
+    // déformée est affichée, la géométrie initiale est rappelée en filaire grisé.
     ctx.lineCap = 'round';
+    const prims = []; // primitives 3D triées par profondeur (peintre)
+    const tubeOrLine = (pa, pb, od, color) => {
+      if (solid) prims.push(this.tubePrim(pa, pb, od, color));
+      else {
+        const a = this.toScreen(pa);
+        const b = this.toScreen(pb);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(a[0], a[1]);
+        ctx.lineTo(b[0], b[1]);
+        ctx.stroke();
+      }
+    };
+    const valveShape = (pa, pb, od, color) => {
+      if (solid) prims.push(this.valvePrim(pa, pb, od, color, mesh.up));
+      else drawValve(ctx, this.toScreen(pa), this.toScreen(pb), color, 9);
+    };
     mesh.elements.forEach((e, ie) => {
-      const a = S[e.n1];
-      const b = S[e.n2];
-      ctx.strokeStyle = ghost ? C.muted : colors?.[ie] ?? C.pipe;
-      ctx.globalAlpha = ghost ? 0.45 : 1;
-      ctx.lineWidth = Math.max(2.5, Math.min(14, e.sec.od * pxPerMm));
-      if (e.kind === 'valve') {
-        drawValve(ctx, a, b, ghost ? C.muted : colors?.[ie] ?? C.valve, Math.max(6, Math.min(18, 1.6 * e.sec.od * pxPerMm)));
+      if (ghost) {
+        const a = S[e.n1];
+        const b = S[e.n2];
+        ctx.strokeStyle = C.muted;
+        ctx.globalAlpha = 0.55;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(a[0], a[1]);
+        ctx.lineTo(b[0], b[1]);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
         return;
       }
-      ctx.beginPath();
-      ctx.moveTo(a[0], a[1]);
-      ctx.lineTo(b[0], b[1]);
-      ctx.stroke();
+      if (e.kind === 'valve') valveShape(P[e.n1], P[e.n2], e.sec.od, colors?.[ie] ?? C.valve);
+      else tubeOrLine(P[e.n1], P[e.n2], e.sec.od, colors?.[ie] ?? C.pipe);
     });
-    ctx.globalAlpha = 1;
 
     // Déformée (interpolation d'Hermite des déplacements nodaux)
     if (ghost) {
       const amp = disp.scale * (sc.animate ? Math.sin(performance.now() / 300) : 1);
       mesh.elements.forEach((e, ie) => {
-        ctx.lineWidth = Math.max(2, Math.min(10, e.sec.od * pxPerMm * 0.8));
-        const pts = deformedPoints(e, P, disp.u, amp, e.kind === 'bend' ? 2 : 8);
-        const scr = pts.map((p) => this.toScreen(p));
-        if (disp.colorOf && disp.colorMax > 0) {
-          // couleur continue selon le déplacement total interpolé le long de l'élément
-          for (let k = 1; k < scr.length; k++) {
-            ctx.strokeStyle = disp.colorOf((pts.mags[k - 1] + pts.mags[k]) / 2 / disp.colorMax);
-            ctx.beginPath();
-            ctx.moveTo(scr[k - 1][0], scr[k - 1][1]);
-            ctx.lineTo(scr[k][0], scr[k][1]);
-            ctx.stroke();
-          }
+        const pts = deformedPoints(e, P, disp.u, amp, e.kind === 'bend' || e.kind === 'valve' ? 1 : 8);
+        if (e.kind === 'valve') {
+          const c = disp.colorOf && disp.colorMax > 0 ? disp.colorOf((pts.mags[0] + pts.mags[pts.length - 1]) / 2 / disp.colorMax) : C.valve;
+          valveShape(pts[0], pts[pts.length - 1], e.sec.od, c);
           return;
         }
-        ctx.strokeStyle = colors?.[ie] ?? C.deformed;
-        ctx.beginPath();
-        scr.forEach((s, k) => (k ? ctx.lineTo(s[0], s[1]) : ctx.moveTo(s[0], s[1])));
-        ctx.stroke();
+        for (let k = 1; k < pts.length; k++) {
+          const c = disp.colorOf && disp.colorMax > 0 ? disp.colorOf((pts.mags[k - 1] + pts.mags[k]) / 2 / disp.colorMax) : colors?.[ie] ?? C.deformed;
+          tubeOrLine(pts[k - 1], pts[k], e.sec.od, c);
+        }
       });
     }
+    prims.sort((a, b) => b.depth - a.depth);
+    for (const pr of prims) pr.draw(ctx);
 
     // Supports
     const springsByNode = new Map();
@@ -252,8 +271,10 @@ export class Viewer {
       ctx.fillStyle = color;
       ctx.lineWidth = 2.5;
       const springs = (springsByNode.get(sup.node) ?? []).filter((s) => mesh.supports[s.support] === sup);
+      // symboles à l'échelle du tube en 3D (taille minimale lisible), fixes en filaire
+      const size = solid ? Math.max(7, 0.9 * odAtNode(sup.node) * pxPerMm) : 7;
       if (sup.kind === 'anchor' || springs.some((s) => s.rot)) {
-        ctx.fillRect(s0[0] - 7, s0[1] - 7, 14, 14);
+        ctx.fillRect(s0[0] - size, s0[1] - size, 2 * size, 2 * size);
         return;
       }
       for (const sp of springs) {
@@ -267,7 +288,7 @@ export class Viewer {
           continue;
         }
         d = [d[0] / l, d[1] / l];
-        const L = 16;
+        const L = 2.2 * size;
         ctx.beginPath();
         ctx.moveTo(s0[0] - d[0] * L, s0[1] - d[1] * L);
         ctx.lineTo(s0[0] + d[0] * L, s0[1] + d[1] * L);
@@ -283,24 +304,10 @@ export class Viewer {
       }
     });
 
-    // Tés : losange autour du nœud de jonction
-    ctx.strokeStyle = C.sel;
-    ctx.lineWidth = 2;
-    for (const t of mesh.tees ?? []) {
-      const s = S[t.node];
-      ctx.beginPath();
-      ctx.moveTo(s[0], s[1] - 9);
-      ctx.lineTo(s[0] + 9, s[1]);
-      ctx.lineTo(s[0], s[1] + 9);
-      ctx.lineTo(s[0] - 9, s[1]);
-      ctx.closePath();
-      ctx.stroke();
-    }
-
     // Masses ponctuelles
     for (const pm of mesh.pointMasses) {
       const s = S[pm.node];
-      const r = Math.max(4, Math.min(11, 3 + 2 * Math.log10(pm.m * 1000 + 1)));
+      const r = solid ? Math.max(4, 0.45 * odAtNode(pm.node) * pxPerMm) : Math.max(4, Math.min(11, 3 + 2 * Math.log10(pm.m * 1000 + 1)));
       ctx.fillStyle = '#2e86c1';
       ctx.strokeStyle = C.bg;
       ctx.lineWidth = 1.5;
@@ -442,9 +449,138 @@ export class Viewer {
     this.onPick(best?.label ?? null);
   }
 
+  /** Tube cylindrique à l'échelle : trait de largeur Dₑ avec ombrage transversal. */
+  tubePrim(pa, pb, od, color) {
+    const a = this.toScreen(pa);
+    const b = this.toScreen(pb);
+    const w = Math.max(1.2, od * this.frame.s);
+    return {
+      depth: (a[2] + b[2]) / 2,
+      draw: (ctx) => {
+        ctx.lineCap = 'round';
+        ctx.lineWidth = w;
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(a[0], a[1]);
+        ctx.lineTo(b[0], b[1]);
+        ctx.stroke();
+        if (w < 4) return;
+        ctx.strokeStyle = shading(ctx, a, b, w);
+        ctx.stroke();
+      },
+    };
+  }
+
+  /**
+   * Robinet : deux cônes opposés par la pointe (bases aux brides, pointes au
+   * milieu), tige et volant de manœuvre, projetés en vraie grandeur.
+   */
+  valvePrim(pa, pb, od, color, up) {
+    const axis = vec.sub(pb, pa);
+    const L = vec.norm(axis);
+    const u = L > 0 ? vec.scale(axis, 1 / L) : [1, 0, 0];
+    // repère du plan de section ; e1 = direction de la tige (au plus près de la verticale)
+    let e1 = vec.sub(up, vec.scale(u, vec.dot(up, u)));
+    if (vec.norm(e1) < 1e-6) e1 = Math.abs(u[0]) < 0.9 ? vec.cross(u, [1, 0, 0]) : vec.cross(u, [0, 1, 0]);
+    e1 = vec.unit(e1);
+    const e2 = vec.cross(u, e1);
+    const R = 0.8 * od;
+    const mid = vec.add(pa, vec.scale(axis, 0.5));
+    const circle = (c, r, a, b) => Array.from({ length: 28 }, (_, k) => {
+      const t = (2 * Math.PI * k) / 28;
+      return this.toScreen(vec.add(c, vec.add(vec.scale(a, r * Math.cos(t)), vec.scale(b, r * Math.sin(t)))));
+    });
+    const apex = this.toScreen(mid);
+    const cones = [pa, pb].map((base) => ({ base: circle(base, R, e1, e2), hull: convexHull([...circle(base, R, e1, e2), apex]) }));
+    const stemTop = vec.add(mid, vec.scale(e1, 1.5 * od));
+    const wheel = circle(stemTop, 0.55 * od, u, e2);
+    const ms = this.toScreen(mid);
+    const st = this.toScreen(stemTop);
+    const s = this.frame.s;
+    return {
+      depth: ms[2],
+      draw: (ctx) => {
+        // cônes, le plus éloigné d'abord
+        const order = cones.map((c) => ({ c, d: c.base.reduce((x, p) => x + p[2], 0) / c.base.length })).sort((x, y) => y.d - x.d);
+        for (const { c } of order) {
+          ctx.fillStyle = color;
+          polygon(ctx, c.hull);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(0,0,0,0.18)';
+          polygon(ctx, c.base);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+        // tige et volant
+        ctx.strokeStyle = color;
+        ctx.lineCap = 'round';
+        ctx.lineWidth = Math.max(1.5, 0.12 * od * s);
+        ctx.beginPath();
+        ctx.moveTo(ms[0], ms[1]);
+        ctx.lineTo(st[0], st[1]);
+        ctx.stroke();
+        polygon(ctx, wheel);
+        ctx.stroke();
+      },
+    };
+  }
+
   snapshot() {
     return this.canvas.toDataURL('image/png');
   }
+}
+
+/** Dégradé d'ombrage perpendiculaire au tube (lumière venant du haut-gauche). */
+function shading(ctx, a, b, w) {
+  let nx = -(b[1] - a[1]);
+  let ny = b[0] - a[0];
+  const l = Math.hypot(nx, ny);
+  if (l < 1e-6) {
+    nx = 0;
+    ny = 1;
+  } else {
+    nx /= l;
+    ny /= l;
+  }
+  if (ny > 0) {
+    nx = -nx;
+    ny = -ny;
+  }
+  const mx = (a[0] + b[0]) / 2;
+  const my = (a[1] + b[1]) / 2;
+  const g = ctx.createLinearGradient(mx + (nx * w) / 2, my + (ny * w) / 2, mx - (nx * w) / 2, my - (ny * w) / 2);
+  g.addColorStop(0, 'rgba(0,0,0,0.25)');
+  g.addColorStop(0.28, 'rgba(255,255,255,0.35)');
+  g.addColorStop(0.5, 'rgba(255,255,255,0)');
+  g.addColorStop(1, 'rgba(0,0,0,0.4)');
+  return g;
+}
+
+function polygon(ctx, pts) {
+  ctx.beginPath();
+  pts.forEach((p, k) => (k ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+  ctx.closePath();
+}
+
+/** Enveloppe convexe (chaîne monotone d'Andrew) de points écran. */
+function convexHull(points) {
+  const p = points.map((q) => [q[0], q[1]]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (p.length < 3) return p;
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower = [];
+  for (const q of p) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], q) <= 0) lower.pop();
+    lower.push(q);
+  }
+  const upper = [];
+  for (let i = p.length - 1; i >= 0; i--) {
+    const q = p[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], q) <= 0) upper.pop();
+    upper.push(q);
+  }
+  return lower.slice(0, -1).concat(upper.slice(0, -1));
 }
 
 /** Symbole de robinet : deux triangles opposés par la pointe, au milieu de l'élément. */
