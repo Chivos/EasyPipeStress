@@ -134,13 +134,17 @@ export function renderResultsPanel(app) {
   }
   if (r.modal) {
     const tot = r.modal.totalMass;
-    let cum = [0, 0, 0];
+    const sums = modalSums(r.modal);
+    const shown = r.modal.modes.slice(0, 12);
+    const pct = (v, d) => fmt((100 * v) / (tot[d] || 1), 1);
     const seis = r.cases.find((c) => c.info?.method === 'spectral');
     out.push(
       h(
         'section',
         { class: 'card' },
         h('h3', {}, 'Analyse modale'),
+        h('p', {}, h('b', {}, `Masse globale du système : ${fmt(tot[0] * 1000, 0)} kg`), h('small', { class: 'muted' }, ` (tube, fluide, calorifuge et masses ponctuelles)`)),
+        h('p', { class: 'muted' }, 'Les % sont les masses modales effectives (masses participantes) de chaque mode, rapportées à la masse globale, pour chaque direction d’excitation.'),
         seis ? h('p', { class: 'muted' }, `${seis.info.modesUsed} mode(s) sous ${seis.info.cutoff} Hz retenus ; ${Object.entries(seis.info.directions).map(([d, v]) => `${d} : ${fmt(100 * v.captured, 0)} % de masse modale`).join(', ')}.`) : null,
         h(
           'table',
@@ -149,17 +153,21 @@ export function renderResultsPanel(app) {
           h(
             'tbody',
             {},
-            r.modal.modes.slice(0, 12).map((md, k) => {
-              cum = cum.map((c, d) => c + md.effMass[d]);
-              return h(
+            shown.map((md, k) =>
+              h(
                 'tr',
                 {},
                 h('td', {}, k + 1),
                 h('td', { class: 'num' }, fmt(md.freq, 2)),
-                [0, 1, 2].map((d) => h('td', { class: 'num' }, fmt((100 * md.effMass[d]) / (tot[d] || 1), 1))),
+                [0, 1, 2].map((d) => h('td', { class: 'num' }, pct(md.effMass[d], d))),
                 h('td', {}, h('button', { class: 'small ghost', onclick: () => app.setDisplay(`mode:${k}`) }, 'voir')),
-              );
-            }),
+              ),
+            ),
+            r.modal.modes.length > shown.length
+              ? h('tr', {}, h('td', { colspan: 6, class: 'muted' }, `… ${r.modal.modes.length - shown.length} autres modes (onglet « Modes propres »)`))
+              : null,
+            h('tr', { class: 'total' }, h('td', {}, `Σ ${r.modal.modes.length} modes`), h('td', {}), [0, 1, 2].map((d) => h('td', { class: 'num' }, pct(sums.eff[d], d))), h('td', {})),
+            h('tr', { class: 'muted' }, h('td', { colspan: 2 }, 'Masse sur supports rigides'), [0, 1, 2].map((d) => h('td', { class: 'num' }, pct(sums.supported[d], d))), h('td', {})),
           ),
         ),
       ),
@@ -247,17 +255,23 @@ export function renderBottom(app) {
       if (!r.modal) return h('p', { class: 'muted pad' }, 'Pas d’analyse modale (aucun cas sismique spectral actif).');
       const tot = r.modal.totalMass;
       const cum = [0, 0, 0];
+      const sums = modalSums(r.modal);
+      const pct = (v, d) => fmt((100 * v) / (tot[d] || 1), 1);
+      const totalRow = ['Σ', '', '', '', '', '', ...sums.eff.map(pct), ...sums.eff.map(pct)];
+      totalRow.total = true;
+      const supRow = ['Supports rigides', '', '', '', '', '', ...sums.supported.map(pct), '', '', ''];
+      supRow.total = true;
       return h(
         'div',
         {},
-        h('p', { class: 'muted' }, `Masse totale (t) : X ${fmt(tot[0], 3)}, Y ${fmt(tot[1], 3)}, Z ${fmt(tot[2], 3)} — modes normés à la masse.`),
+        h('p', {}, h('b', {}, `Masse globale du système : ${fmt(tot[0] * 1000, 0)} kg`), h('span', { class: 'muted' }, ' — %X, %Y, %Z : masse modale effective (participante) de chaque mode rapportée à la masse globale ; ΣX… : cumul. La masse portée par les supports rigides ne participe à aucun mode : elle est prise en compte par la correction de masse manquante.')),
         simpleTable(
           ['Mode', 'f (Hz)', 'T (s)', 'Γx', 'Γy', 'Γz', '%X', '%Y', '%Z', 'ΣX %', 'ΣY %', 'ΣZ %'],
           r.modal.modes.map((md, k) => {
             md.effMass.forEach((v, d) => (cum[d] += v));
-            return [k + 1, fmt(md.freq, 3), fmt(1 / md.freq, 4), ...md.gamma.map((g) => fmt(g, 4)), ...md.effMass.map((v, d) => fmt((100 * v) / (tot[d] || 1), 1)), ...cum.map((v, d) => fmt((100 * v) / (tot[d] || 1), 1))];
-          }),
-          (row) => app.setDisplay(`mode:${row[0] - 1}`),
+            return [k + 1, fmt(md.freq, 3), fmt(1 / md.freq, 4), ...md.gamma.map((g) => fmt(g, 4)), ...md.effMass.map(pct), ...cum.map(pct)];
+          }).concat([totalRow, supRow]),
+          (row) => !row.total && app.setDisplay(`mode:${row[0] - 1}`),
         ),
       );
     }
@@ -306,6 +320,13 @@ function detailText(x) {
   return parts.join(' · ');
 }
 
+/** Sommes des masses modales effectives (tous modes calculés) et masse sur supports rigides. */
+export function modalSums(modal) {
+  const eff = [0, 0, 0];
+  for (const md of modal.modes) md.effMass.forEach((v, d) => (eff[d] += v));
+  return { eff, supported: modal.supportedMass ?? [0, 0, 0] };
+}
+
 export function simpleTable(headers, rows, onRowClick, renderCell = (c) => c) {
   return h(
     'div',
@@ -317,7 +338,7 @@ export function simpleTable(headers, rows, onRowClick, renderCell = (c) => c) {
       h(
         'tbody',
         {},
-        rows.map((row) => h('tr', { class: onRowClick ? 'clickable' : '', onclick: onRowClick ? () => onRowClick(row) : undefined }, row.map((cell) => h('td', { class: typeof cell === 'string' && /^-?[\d.]/.test(cell) ? 'num' : '' }, renderCell(cell))))),
+        rows.map((row) => h('tr', { class: row.total ? 'total' : onRowClick ? 'clickable' : '', onclick: onRowClick ? () => onRowClick(row) : undefined }, row.map((cell) => h('td', { class: typeof cell === 'string' && /^-?[\d.]/.test(cell) ? 'num' : '' }, renderCell(cell))))),
       ),
     ),
   );

@@ -3,7 +3,7 @@
 import { fmt } from '../core/units.js';
 import { components } from '../components/index.js';
 import { SUPPORT_KINDS } from '../components/support.js';
-import { displayCases } from './results.js';
+import { displayCases, modalSums } from './results.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const table = (headers, rows) => `<table><thead><tr>${headers.map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
@@ -61,7 +61,19 @@ export function buildReport(state, snapshot) {
     if (r.modal) {
       parts.push('<h3>Modes propres</h3>');
       const tot = r.modal.totalMass;
-      parts.push(table(['Mode', 'f (Hz)', '%X', '%Y', '%Z'], r.modal.modes.slice(0, 30).map((md, k) => [k + 1, fmt(md.freq, 2), ...md.effMass.map((v, d) => fmt((100 * v) / (tot[d] || 1), 1))])));
+      const sums = modalSums(r.modal);
+      const pct = (v, d) => fmt((100 * v) / (tot[d] || 1), 1);
+      parts.push(`<p>Masse globale du système : <b>${fmt(tot[0] * 1000, 0)} kg</b>. %X, %Y, %Z : masse modale effective (participante) de chaque mode rapportée à la masse globale.</p>`);
+      parts.push(
+        table(
+          ['Mode', 'f (Hz)', '%X', '%Y', '%Z'],
+          [
+            ...r.modal.modes.map((md, k) => [k + 1, fmt(md.freq, 2), ...md.effMass.map(pct)]),
+            [`Σ ${r.modal.modes.length} modes`, '', ...sums.eff.map(pct)],
+            ['Masse sur supports rigides', '', ...sums.supported.map(pct)],
+          ],
+        ),
+      );
     }
     for (const c of displayCases(r)) {
       parts.push(`<h3>Efforts sur supports — ${esc(c.id)} ${esc(c.label)}${c.signed ? '' : ' (enveloppe)'}</h3>`);
