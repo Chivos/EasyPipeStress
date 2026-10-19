@@ -10,12 +10,12 @@ import { emptyResponse } from './common.js';
 export const pressure = {
   id: 'pressure',
   label: 'Pression',
-  description: 'Pressions de calcul et de service définies par tube (colonnes « P max » et « P calc. »). Utilisées par les équations du code.',
+  description: 'Pression intérieure définie par tube (colonne « P » de l’onglet Géométrie). Utilisée par les équations du code.',
   fields: [],
   create: () => ({ type: 'pressure', label: 'Pression', enabled: true }),
 
   run(ctx) {
-    const pmax = Math.max(0, ...ctx.sys.mesh.elements.map((e) => Math.max(e.P1, e.Pd)));
+    const pmax = Math.max(0, ...ctx.sys.mesh.elements.map((e) => e.P1));
     return { signed: true, fe: false, ...emptyResponse(ctx.sys), info: { pmax } };
   },
 };

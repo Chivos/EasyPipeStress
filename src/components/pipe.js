@@ -1,7 +1,7 @@
 // Tube droit défini, à la manière des logiciels de flexibilité usuels, par son
 // nœud de départ, son nœud d'arrivée et les composantes DX, DY, DZ du vecteur
-// départ → arrivée. Les conditions de service (température, pression) sont
-// portées par l'élément et héritées par les coudes qui le prolongent.
+// départ → arrivée. Une température et une pression uniques
+// sont portées par l'élément et héritées par les coudes qui le prolongent.
 
 export const pipe = {
   id: 'pipe',
@@ -15,10 +15,8 @@ export const pipe = {
     { key: 'dz', label: 'DZ', unit: 'mm', type: 'number', width: 70 },
     { key: 'section', label: 'Section', type: 'select', options: (m) => m.sections.map((s) => s.id), width: 100 },
     { key: 'material', label: 'Matériau', type: 'select', options: (m) => m.materials.map((s) => s.id), width: 100 },
-    { key: 'T1', label: 'T service', unit: '°C', type: 'number', width: 58, title: 'Température de service (dilatation, Sh pour l’éq. 10)' },
-    { key: 'P1', label: 'P max', unit: 'MPa', type: 'number', width: 58, title: 'Pression maximale de service (éq. 9 et 11)' },
-    { key: 'Td', label: 'T calc.', unit: '°C', type: 'number', width: 58, title: 'Température de calcul (S pour éq. 8, 9, épaisseur)' },
-    { key: 'Pd', label: 'P calc.', unit: 'MPa', type: 'number', width: 58, title: 'Pression de calcul (éq. 8, épaisseur)' },
+    { key: 'T1', label: 'T', unit: '°C', type: 'number', width: 58, title: 'Température : dilatation thermique et contraintes admissibles S, Sy des équations (6), (7), (8), (10)' },
+    { key: 'P1', label: 'P', unit: 'MPa', type: 'number', width: 58, title: 'Pression intérieure : terme de pression des équations (6), (8), (10) et épaisseur minimale' },
   ],
 
   create(model, { from, to, dx = 0, dy = 0, dz = 0 } = {}) {
@@ -34,8 +32,6 @@ export const pipe = {
       material: prev?.material ?? model.materials[0]?.id,
       T1: prev?.T1 ?? 20,
       P1: prev?.P1 ?? 0,
-      Td: prev?.Td ?? prev?.T1 ?? 20,
-      Pd: prev?.Pd ?? prev?.P1 ?? 0,
     };
   },
 
@@ -54,8 +50,10 @@ export const pipe = {
         material: comp.material,
         T1: +comp.T1 || 0,
         P1: +comp.P1 || 0,
-        Td: comp.Td === '' || comp.Td == null ? +comp.T1 || 0 : +comp.Td,
-        Pd: comp.Pd === '' || comp.Pd == null ? +comp.P1 || 0 : +comp.Pd,
+        // une seule température et une seule pression par tube (simplification) :
+        // elles servent aussi de conditions de calcul (Td, Pd) pour le code
+        Td: +comp.T1 || 0,
+        Pd: +comp.P1 || 0,
       },
     });
   },

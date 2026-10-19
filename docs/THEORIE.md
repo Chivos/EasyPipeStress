@@ -131,16 +131,18 @@ plancher, ASME III Annexe N-1225 / pratique RCC-M), combinaison directionnelle.
 
 Notations : Dₑ diamètre extérieur, eₙ épaisseur nominale, Z module de flexion,
 M moment résultant √(Mx² + My² + Mz²) à chaque extrémité d'élément, S contrainte
-admissible de base (à la température de calcul), Sy limite d'élasticité, Sc et Sh
-valeurs de S à froid et à chaud.
+admissible de base (à la température T du tube), Sy limite d'élasticité, Sc et Sh
+valeurs de S à froid et à chaud, P pression intérieure. Pour rester simple,
+chaque tube porte une seule température T et une seule pression P, utilisées à
+la fois pour la dilatation et comme conditions de calcul du code.
 
 | Réf. | Critère | Formule (formulation par défaut « 0,75 i ») |
 |---|---|---|
 | C 3641 | Épaisseur minimale (tenue à la pression seule, option du projet désactivée par défaut) | eₘ = P·Dₑ / [2(S/I + 0,4·P)] + c ≤ eₙ·(1 − tol) ; I = (4R/Dₑ − 1)/(4R/Dₑ − 2) à l'intrados des coudes |
 | (6) | Poids propre + pression | S_L = P·Dₑ/(4eₙ) + 0,75i·M_A/Z ≤ k₆·Sh (k₆ = 1,0 par défaut) |
 | (7) | Dilatation thermique | S_E = i·M_C/Z ≤ S_A = f·(1,25·Sc + 0,25·Sh) [+ f·(Sh − S_L), option] |
-| (8) | (6) + (7), si (7) non satisfaite | P_c·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ Sh + S_A |
-| (10B), (10C), (10D) | Séisme, par niveau de critère | P_max·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ k·Sh, k = 1,2 (B), 1,8 (C), 2,4 (D) par défaut, plafond optionnel k'·Sy ; M_B = réponse sismique × coefficient du niveau |
+| (8) | (6) + (7), si (7) non satisfaite | P·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ Sh + S_A |
+| (10B), (10C), (10D) | Séisme, par niveau de critère | P·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ k·Sh, k = 1,2 (B), 1,8 (C), 2,4 (D) par défaut, plafond optionnel k'·Sy ; M_B = réponse sismique × coefficient du niveau |
 
 0,75i est pris au moins égal à 1. En classe 2, seul le facteur
 d'intensification i intervient ; les indices de contraintes primaires B₁, B₂
@@ -152,7 +154,7 @@ coefficient (réponse linéaire vis-à-vis du spectre) et est vérifié avec ses
 propres admissibles.
 
 **Cumul des chargements.** (6) : moment résultant du poids propre M_A et
-pression de calcul ; (7) : étendue de dilatation M_C seule, depuis l'état froid
+pression P ; (7) : étendue de dilatation M_C seule, depuis l'état froid
 (déplacements imposés compris) ; (8) : contraintes de (6) et de (7)
 additionnées ; (10) : M_A + M_B, somme des moments résultants, avec M_B
 enveloppe sismique (combinaisons modale et directionnelle) × coefficient du
@@ -183,9 +185,8 @@ Points vérifiés et corrigés lors de l'audit :
 
 - formulation classe 2 par le seul facteur i (P·Dₑ/4eₙ, 0,75i ≥ 1, i·M_C/Z) ;
   pas d'indices B₁/B₂ (classe 1) ;
-- éq. (6) : pression de calcul et S à la température de calcul ; éq. (8) :
-  même pression que (6) (cumul (6) + (7)) ; éq. (10) : pression maximale de
-  service ;
+- une seule pression P et une seule température T par tube, communes aux
+  équations (6), (7), (8), (10) et à l'épaisseur minimale ;
 - report de marge sur S_A : S_A = f(1,25 Sc + 0,25 Sh) + f(Sh − S_L) (le
   facteur f s'applique aussi au report) ;
 - SIF des tés calculé avec les dimensions du collecteur et appliqué aux trois

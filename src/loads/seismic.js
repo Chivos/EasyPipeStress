@@ -3,7 +3,7 @@
 //    manquante, combinaison directionnelle SRSS ou 100-40-40 ;
 //  - 'static'   : méthode statique équivalente (accélérations uniformes par
 //    direction, typiquement 1,5 × pic du spectre), combinaison directionnelle.
-// Le niveau de critère (B, C, D) sert au dépouillement (éq. 9).
+// Les niveaux de critère (B, C, D) servent au dépouillement (éq. 10B, 10C, 10D).
 // Évolutions prévues : mouvements différentiels des ancrages (SAM, éq. 10a),
 // spectres multiples (supports à excitations différentes), méthode de Gupta /
 // Lindley-Yow pour la réponse rigide.
