@@ -7,6 +7,7 @@ import { renderProject, renderGeometry, renderSupports, renderLoads, renderCode 
 import { renderResultsPanel, renderBottom, BOTTOM_TABS, buildScene, displayCases } from './ui/results.js';
 import { buildReport } from './ui/report.js';
 import { exampleModel, emptyModel, normalizeModel } from './core/model.js';
+import { initSplitters, initGridKeys } from './ui/layout.js';
 import { buildMesh } from './core/mesher.js';
 import { runAnalysis } from './analysis.js';
 import { codes } from './codes/index.js';
@@ -137,6 +138,7 @@ function queueRender() {
 function render() {
   const focusKey = document.activeElement?.dataset?.focus;
   const selStart = document.activeElement?.selectionStart;
+  const allSelected = selStart === 0 && document.activeElement?.selectionEnd > 0 && document.activeElement?.selectionEnd === document.activeElement?.value?.length;
   const panel = $('#panel-body');
   const scroll = panel.scrollTop;
   const bottomBody = $('#bottom-body');
@@ -169,7 +171,8 @@ function render() {
       el.focus();
       if (selStart != null && el.setSelectionRange && el.type === 'text') {
         try {
-          el.setSelectionRange(el.value.length, el.value.length);
+          if (allSelected) el.select(); // navigation au clavier : texte entièrement sélectionné
+          else el.setSelectionRange(el.value.length, el.value.length);
         } catch {
           /* type de champ sans sélection */
         }
@@ -306,6 +309,8 @@ function init() {
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') run();
   });
+  initSplitters();
+  initGridKeys();
   refreshPreview();
   render();
   viewer.setView('iso');

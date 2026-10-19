@@ -40,6 +40,12 @@ exportables/importables en JSON.
 
 Le bouton **Exemple** charge une ligne DN150 inox entre deux piquages.
 
+Ergonomie : les séparateurs entre le volet de saisie, la vue et le bandeau de
+résultats se déplacent à la souris (double-clic : taille par défaut). Dans les
+tableaux de saisie, ↑ / ↓ / Entrée passent à la ligne précédente / suivante et
+← / → à la cellule voisine (en début / fin de texte), la valeur étant validée
+au passage.
+
 ## Lancer en local
 
 ```bash
