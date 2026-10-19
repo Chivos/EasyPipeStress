@@ -439,7 +439,7 @@ export function openRowDetail(row) {
 }
 
 /** Fenêtre modale (fermeture : bouton, Échap ou clic hors de la fenêtre). */
-function showModal(title, body, { label = title, wide = false } = {}) {
+export function showModal(title, body, { label = title, wide = false } = {}) {
   document.querySelector('.modal-backdrop')?.remove();
   const close = () => {
     backdrop.remove();
@@ -542,38 +542,44 @@ function openPointResults(title, subtitle, r, columns, values, derived, digits) 
   );
 }
 
-/** Efforts sur un support, tous cas et combinaisons (repère global). */
-export function openSupportResults(r, k) {
+/** Définition des résultats complets d'un support (repère global). */
+export function supportPoint(r, k) {
   const sup = r.mesh.supports[k];
   const kind = SUPPORT_KINDS[sup.kind]?.label ?? sup.kind;
-  openPointResults(
-    `Support ${sup.label || ''} — nœud ${r.mesh.nodes[sup.node].label}`.replace('  ', ' '),
-    `${kind} — efforts exercés par la tuyauterie sur le support, repère global.`,
-    r,
-    ['FX (N)', 'FY (N)', 'FZ (N)', 'MX (N·m)', 'MY (N·m)', 'MZ (N·m)'],
-    (c) => Array.from({ length: 6 }, (_, d) => c.supportLoads[k * 6 + d] / (d < 3 ? 1 : 1000)),
-    [['F rés. (N)', [0, 1, 2]], ['M rés. (N·m)', [3, 4, 5]]],
-    [0, 0, 0, 0, 0, 0, 0, 0],
-  );
+  return {
+    title: `Support ${sup.label || ''} — nœud ${r.mesh.nodes[sup.node].label}`.replace('  ', ' '),
+    subtitle: `${kind} — efforts exercés par la tuyauterie sur le support, repère global.`,
+    columns: ['FX (N)', 'FY (N)', 'FZ (N)', 'MX (N·m)', 'MY (N·m)', 'MZ (N·m)'],
+    values: (c) => Array.from({ length: 6 }, (_, d) => c.supportLoads[k * 6 + d] / (d < 3 ? 1 : 1000)),
+    derived: [['F rés. (N)', [0, 1, 2]], ['M rés. (N·m)', [3, 4, 5]]],
+    digits: [0, 0, 0, 0, 0, 0, 0, 0],
+  };
 }
 
-/** Efforts internes à une extrémité d'élément, tous cas et combinaisons (repère local). */
-export function openForceResults(r, ie, end) {
+/** Définition des résultats complets à une extrémité d'élément (repère local). */
+export function forcePoint(r, ie, end) {
   const e = r.mesh.elements[ie];
-  openPointResults(
-    `Efforts internes — élément ${e.label}, nœud ${r.mesh.nodes[end ? e.n2 : e.n1].label}`,
-    'Repère local de l’élément : N axial (+ traction), Vy, Vz tranchants, Mt torsion, My, Mz flexion.',
-    r,
-    ['N (N)', 'Vy (N)', 'Vz (N)', 'Mt (N·m)', 'My (N·m)', 'Mz (N·m)'],
-    (c) => {
+  return {
+    title: `Efforts internes — élément ${e.label}, nœud ${r.mesh.nodes[end ? e.n2 : e.n1].label}`,
+    subtitle: 'Repère local de l’élément : N axial (+ traction), Vy, Vz tranchants, Mt torsion, My, Mz flexion.',
+    columns: ['N (N)', 'Vy (N)', 'Vz (N)', 'Mt (N·m)', 'My (N·m)', 'Mz (N·m)'],
+    values: (c) => {
       const o = ie * 12 + end * 6;
       const sg = c.signed ? (end ? 1 : -1) : 1;
       return Array.from({ length: 6 }, (_, d) => (sg * c.elemForces[o + d]) / (d < 3 ? 1 : 1000));
     },
-    [['Mf (N·m)', [4, 5]], ['M rés. (N·m)', [3, 4, 5]]],
-    [0, 0, 0, 1, 1, 1, 1, 1],
-  );
+    derived: [['Mf (N·m)', [4, 5]], ['M rés. (N·m)', [3, 4, 5]]],
+    digits: [0, 0, 0, 1, 1, 1, 1, 1],
+  };
 }
+
+const openPoint = (r, d) => openPointResults(d.title, d.subtitle, r, d.columns, d.values, d.derived, d.digits);
+
+/** Efforts sur un support, tous cas et combinaisons (repère global). */
+export const openSupportResults = (r, k) => openPoint(r, supportPoint(r, k));
+
+/** Efforts internes à une extrémité d'élément, tous cas et combinaisons (repère local). */
+export const openForceResults = (r, ie, end) => openPoint(r, forcePoint(r, ie, end));
 
 // Colonnes de repères (toujours alignées à gauche, même si le repère est numérique).
 const LABEL_COLUMNS = new Set(['Nœud', 'Élément', 'Repère', 'Type', 'Cas', 'Critère', 'Composant', 'Détail', 'Mode']);

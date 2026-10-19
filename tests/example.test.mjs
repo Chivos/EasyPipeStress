@@ -108,3 +108,19 @@ test('Catalogue ASME : épaisseurs B36.10M / B36.19M et rayons de coudes B16.9',
   b.radius = 300;
   assert.equal(runAnalysis(m).mesh.corners.get('20').radius, 300, 'rayon saisi prioritaire');
 });
+
+test('Export Excel : une feuille par équation, par support, par cas ; archive xlsx valide', async () => {
+  const { exportSheets } = await import('../src/ui/export.js');
+  const { buildXlsx, crc32 } = await import('../src/core/xlsx.js');
+  const m = exampleModel();
+  const r = runAnalysis(m);
+  const sheets = exportSheets({ model: m, result: r }, ['summary', 'code', 'supports', 'disp', 'modes']);
+  const names = sheets.map((s) => s.name);
+  for (const n of ['Synthèse', 'Éq 6', 'Éq 7', 'Éq 10B', 'Modes propres', 'Dépl W', 'Dépl T1']) assert.ok(names.includes(n), `feuille ${n}`);
+  assert.equal(names.filter((n) => n.startsWith('Sup ')).length, r.mesh.supports.length);
+  const eq7 = sheets.find((s) => s.name === 'Éq 7');
+  assert.equal(eq7.rows.length - 1, r.check.rows.filter((x) => x.eq === '7').length);
+  const bytes = buildXlsx(sheets);
+  assert.equal(new DataView(bytes.buffer).getUint32(0, true), 0x04034b50, 'signature ZIP');
+  assert.equal(crc32(new TextEncoder().encode('123456789')), 0xcbf43926, 'CRC-32 de référence');
+});

@@ -36,7 +36,8 @@ exportables/importables en JSON.
 5. **Calculer** (Ctrl + Entrée) : synthèse du dépouillement, taux de travail en
    couleur sur la vue, déformées, modes propres animés, tableaux de
    déplacements, d'efforts sur supports et d'efforts internes, **note de calcul**
-   imprimable.
+   imprimable, **export Excel** (choix des contenus : une feuille par équation,
+   par support, par cas de déplacements et d'efforts, modes propres).
 
 Le bouton **Exemple** charge une ligne DN150 inox entre deux piquages.
 
