@@ -9,7 +9,7 @@
 //  éq. (8)   (6) + (7), si (7) non satisfaite :
 //            P·De/(4eₙ) + 0,75i·MA/Z + i·MC/Z ≤ Sh + S_A
 //  éq. (10)  séisme, pour chaque niveau de critère B, C, D (même spectre, coefficient
-//            propre au niveau) : P·De/(4eₙ) + 0,75i·(MA + MB)/Z ≤ min(kS·Sh ; kY·Sy)
+//            propre au niveau) : P·De/(4eₙ) + 0,75i·(MA + MB)/Z ≤ k·Sh
 //  avec 0,75i ≥ 1. Moments : moment résultant √(Mx²+My²+Mz²) aux extrémités.
 //  Épaisseur minimale (méthode `thickness`, si l'option du projet est cochée) :
 //            C 3641.1  e_m = P·De / (2(S/I + y·P)) + c,  y = 0,4
@@ -30,11 +30,8 @@ export const DEFAULT_PARAMS = {
   k6: 1.0,
   shMinusSL: false,
   levelB_kS: 1.2,
-  levelB_kY: '',
   levelC_kS: 1.8,
-  levelC_kY: '',
   levelD_kS: 2.4,
-  levelD_kY: '',
 };
 
 /** Facteur de réduction f en fonction du nombre de cycles thermiques équivalents. */
@@ -93,7 +90,7 @@ const num = (v, d) => (v === '' || v == null || !Number.isFinite(+v) ? d : +v);
 export function levelLimits(params, level) {
   const p = { ...DEFAULT_PARAMS, ...params };
   const L = ['B', 'C', 'D'].includes(level) ? level : 'D';
-  return { kS: num(p[`level${L}_kS`], DEFAULT_PARAMS[`level${L}_kS`]), kY: num(p[`level${L}_kY`], null) };
+  return { kS: num(p[`level${L}_kS`], DEFAULT_PARAMS[`level${L}_kS`]) };
 }
 
 export const rccmC = {
@@ -106,11 +103,8 @@ export const rccmC = {
     { key: 'k6', label: 'Éq. (6) : admissible = k × Sh, k =', type: 'number' },
     { key: 'shMinusSL', label: 'Éq. (7) : ajouter (Sh − S_L) à S_A', type: 'checkbox', title: 'Report de la marge de l’éq. (6) sur l’admissible de dilatation' },
     { key: 'levelB_kS', label: 'Éq. (10) niveau B : k × Sh', type: 'number' },
-    { key: 'levelB_kY', label: 'Éq. (10) niveau B : plafond k × Sy (vide = sans)', type: 'number' },
     { key: 'levelC_kS', label: 'Éq. (10) niveau C : k × Sh', type: 'number' },
-    { key: 'levelC_kY', label: 'Éq. (10) niveau C : plafond k × Sy (vide = sans)', type: 'number' },
     { key: 'levelD_kS', label: 'Éq. (10) niveau D : k × Sh', type: 'number' },
-    { key: 'levelD_kY', label: 'Éq. (10) niveau D : plafond k × Sy (vide = sans)', type: 'number' },
     { key: 'pressureCorrection', label: 'Correction de pression sur k et i des coudes', type: 'checkbox' },
   ],
   componentFactors,
@@ -263,20 +257,20 @@ export const rccmC = {
           const lim = levelLimits(params, sc.level);
           const MB = resultant(sc.elemForces, ie, end);
           const s10 = pTerm(e.P1) + (i75 * (MA + MB)) / Z;
-          const allow = lim.kY ? Math.min(lim.kS * Sh, lim.kY * Sy) : lim.kS * Sh;
+          const allow = lim.kS * Sh;
           const L = sc.level ?? 'D';
           rows.push({
             ...base, eq: `10${L}`, eqLabel: `Éq. (10) niveau ${L}`, case: `${wId ? `${wId}+P+` : 'P+'}${sc.id}`, stress: s10, allow, ratio: s10 / allow,
             detail: { i: fac.i, i75, P: e.P1, MA, MB, Z, S: Sh, Sy, factor: sc.factor },
             calc: {
-              formula: 'P·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ min(k·Sh ; k′·Sy)',
+              formula: 'P·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ k·Sh',
               items: [
                 ...geom, ['0,75i (≥ 1)', i75, ''], ...pItems(e.P1),
                 ['Moment résultant M_A', MA / 1000, 'N·m'], ['Moment résultant M_B (séisme × coefficient)', MB / 1000, 'N·m'],
                 ['Coefficient du niveau sur le séisme', sc.factor ?? 1, ''], ['Contrainte 0,75i·(M_A + M_B)/Z', (i75 * (MA + MB)) / Z, 'MPa'],
               ],
               moments: [...momA, moment(`M_B — ${sc.id} (enveloppe)`, sc, ie, end)],
-              allow: [['Température T', e.Td, '°C'], ['S à T', Sh, 'MPa'], ['Sy à T', Sy, 'MPa'], [`k niveau ${L}`, lim.kS, ''], ...(lim.kY ? [[`k′ niveau ${L} (plafond Sy)`, lim.kY, '']] : []), ['Admissible', allow, 'MPa']],
+              allow: [['Température T', e.Td, '°C'], ['S à T', Sh, 'MPa'], [`k niveau ${L}`, lim.kS, ''], ['Admissible k·Sh', allow, 'MPa']],
             },
           });
         }
@@ -317,7 +311,7 @@ export const rccmC = {
           name: `Séisme niveau ${lv.level}`,
           loads: `${w} + P + ${s.id}-${String(lv.name ?? '').trim() || lv.level} (= ${num(lv.factor, 1)} × ${s.id})`,
           rule: `M_A + M_B (somme des moments résultants) ; M_B = réponse sismique ${s.method === 'static' ? 'statique équivalente' : `spectrale ${s.modal ?? 'CQC'}`}, directions ${s.directional ?? 'SRSS'}, × ${num(lv.factor, 1)}`,
-          allow: `${lim.kS}·Sh${lim.kY ? ` et ${lim.kY}·Sy` : ''}`,
+          allow: `${lim.kS}·Sh`,
         });
       }
     }

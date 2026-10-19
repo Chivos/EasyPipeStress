@@ -91,7 +91,7 @@ function runSpectral(sys, lc) {
   const maxModes = Math.max(1, +lc.maxModes || 60);
   const cutoff = +lc.cutoff > 0 ? +lc.cutoff : 33;
   const xi = (+lc.damping || 5) / 100;
-  const modal = sys.modal({ maxModes });
+  const modal = sys.modal({ maxModes, fmax: cutoff });
   const used = modal.modes.filter((m) => m.freq <= cutoff);
   const { mass } = modal;
   const n = sys.n;

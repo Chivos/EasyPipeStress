@@ -309,6 +309,8 @@ export function renderBottom(app) {
   }
 }
 
+const MAX_ROWS = 200; // lignes affichées par défaut (les plus chargées si tri par taux)
+
 function codeTable(app, r, nodeOk, internalChk) {
   if (!r.check) return h('p', { class: 'muted pad' }, 'Aucun code sélectionné.');
   const f = app.state.filter;
@@ -326,10 +328,13 @@ function codeTable(app, r, nodeOk, internalChk) {
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: f.sort, onchange: (e) => app.setUi(() => (f.sort = e.target.checked)) }), ' trier par taux'),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: f.failOnly, onchange: (e) => app.setUi(() => (f.failOnly = e.target.checked)) }), ' non conformes seulement'),
       h('span', { class: 'muted' }, `${rows.length} ligne(s)`),
+      rows.length > MAX_ROWS && !f.all
+        ? h('button', { class: 'small ghost', onclick: () => app.setUi(() => (f.all = true)) }, `Afficher les ${rows.length} lignes`)
+        : null,
     ),
     simpleTable(
       ['Critère', 'Cas', 'Nœud', 'Élément', 'Composant', 'σ (MPa)', 'Admissible', 'Taux', 'Détail'],
-      rows.slice(0, 3000).map((x) => Object.assign([x.eqLabel, x.case, x.node, x.elem, x.comp, fmt(x.stress, x.unit === 'mm' ? 2 : 1) + (x.unit === 'mm' ? ' mm' : ''), fmt(x.allow, x.unit === 'mm' ? 2 : 1), { ratio: x.ratio, covered: x.coveredBy }, detailText(x)], { src: x })),
+      rows.slice(0, f.all ? rows.length : MAX_ROWS).map((x) => Object.assign([x.eqLabel, x.case, x.node, x.elem, x.comp, fmt(x.stress, x.unit === 'mm' ? 2 : 1) + (x.unit === 'mm' ? ' mm' : ''), fmt(x.allow, x.unit === 'mm' ? 2 : 1), { ratio: x.ratio, covered: x.coveredBy }, detailText(x)], { src: x })),
       (row) => {
         app.select(row[2]);
         openRowDetail(row.src);

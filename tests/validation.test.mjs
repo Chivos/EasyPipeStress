@@ -441,3 +441,20 @@ test('Séisme : nom des niveaux repris dans le bilan, détail de calcul complet'
   near(row.calc.moments.find((mo) => mo.name.startsWith('M_B')).res, 9806.65 * 2, 1e-6, 'M_B en N·m');
   assert.ok(row.calc.items.some(([k]) => /effet de fond/.test(k)));
 });
+
+test('Analyse modale : Lanczos identique à la résolution complète', async () => {
+  const { exampleModel } = await import('../src/core/model.js');
+  const { buildMesh } = await import('../src/core/mesher.js');
+  const { FeSystem } = await import('../src/fem/system.js');
+  const mesh = buildMesh(exampleModel());
+  const d = new FeSystem(mesh).modal({ maxModes: 30, method: 'dense' });
+  const l = new FeSystem(mesh).modal({ maxModes: 30, method: 'lanczos' });
+  assert.equal(l.modes.length, 30);
+  d.modes.forEach((md, k) => {
+    near(l.modes[k].freq, md.freq, 1e-9, `f${k + 1}`);
+    md.effMass.forEach((e, dd) => assert.ok(Math.abs(l.modes[k].effMass[dd] - e) <= 1e-9 * d.totalMass[dd]));
+  });
+  // arrêt à la fréquence de coupure : premier mode au-delà conservé
+  const c = new FeSystem(mesh).modal({ maxModes: 60, method: 'lanczos', fmax: 15 });
+  assert.ok(c.modes.length < 30 && c.modes[c.modes.length - 1].freq > 15 && c.modes[c.modes.length - 2].freq <= 15);
+});
