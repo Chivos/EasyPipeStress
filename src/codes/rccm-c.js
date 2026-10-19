@@ -5,9 +5,9 @@
 // classe 2 par le facteur d'intensification i (les indices B1/B2 relèvent de la
 // classe 1, sous-section B, et ne sont pas utilisés ici) :
 //  éq. (6)   poids propre + pression       S_L = Pc·De/(4eₙ) + 0,75i·MA/Z ≤ k6·Sh
-//  éq. (7)   dilatation thermique          S_E = i·MC/Z ≤ S_A = f(1,25 Sc + 0,25 Sh) [+ (Sh − S_L)]
+//  éq. (7)   dilatation thermique          S_E = i·MC/Z ≤ S_A = f(1,25 Sc + 0,25 Sh) [+ f(Sh − S_L)]
 //  éq. (8)   (6) + (7), si (7) non satisfaite :
-//            Pmax·De/(4eₙ) + 0,75i·MA/Z + i·MC/Z ≤ Sh + S_A
+//            Pc·De/(4eₙ) + 0,75i·MA/Z + i·MC/Z ≤ Sh + S_A
 //  éq. (10)  séisme, pour chaque niveau de critère B, C, D (même spectre, coefficient
 //            propre au niveau) : Pmax·De/(4eₙ) + 0,75i·(MA + MB)/Z ≤ min(kS·Sh ; kY·Sy)
 //  avec 0,75i ≥ 1. Moments : moment résultant √(Mx²+My²+Mz²) aux extrémités.
@@ -171,13 +171,13 @@ export const rccmC = {
         rows.push({ ...base, eq: '6', eqLabel: 'Éq. (6) poids propre + pression', case: wId ? `${wId}+P` : 'P', stress: SL, allow: k6 * Sh, ratio: SL / (k6 * Sh), detail: { i: fac.i, i75, P: e.Pd, MA, Z, S: Sh } });
         // éq. (7) / (8) par cas thermique
         let SA = f * (1.25 * atC.S + 0.25 * atH.S);
-        if (params.shMinusSL && atH.S > SL) SA += atH.S - SL;
+        if (params.shMinusSL && atH.S > SL) SA += f * (atH.S - SL); // S_A = f[1,25(Sc + Sh) − S_L]
         for (const tc of thermalCases) {
           const MC = resultant(tc.elemForces, ie, end);
           const SE = (fac.i * MC) / Z;
           rows.push({ ...base, eq: '7', eqLabel: 'Éq. (7) dilatation thermique', case: tc.id, stress: SE, allow: SA, ratio: SE / SA, detail: { i: fac.i, MC, Z, SA, f, Sc: atC.S, Sh: atH.S } });
           if (SE > SA) {
-            const s8 = pTerm(e.P1) + (i75 * MA) / Z + SE;
+            const s8 = pTerm(e.Pd) + (i75 * MA) / Z + SE; // (6) + (7) : même pression que (6)
             const allow8 = atH.S + SA;
             rows.push({ ...base, eq: '8', eqLabel: 'Éq. (8) = (6) + (7)', case: `${wId ? `${wId}+P+` : 'P+'}${tc.id}`, thermalCase: tc.id, stress: s8, allow: allow8, ratio: s8 / allow8, detail: { i: fac.i, i75, MA, MC, Z } });
           }
@@ -218,7 +218,7 @@ export const rccmC = {
     ];
     for (const t of T) {
       out.push({ eq: '(7)', name: 'Dilatation thermique', loads: `${t} (étendue depuis l’état froid, déplacements imposés compris)`, rule: 'M_C = moment résultant de l’étendue de dilatation, sans poids ni pression', allow: 'S_A = f(1,25 Sc + 0,25 Sh)' });
-      out.push({ eq: '(8)', name: '(6) + (7), si (7) non satisfaite', loads: `${w} + P max + ${t}`, rule: 'contraintes de (6) [avec P max] et de (7) additionnées', allow: 'Sh + S_A' });
+      out.push({ eq: '(8)', name: '(6) + (7), si (7) non satisfaite', loads: `${w} + Pc + ${t}`, rule: 'contraintes de (6) et de (7) additionnées', allow: 'Sh + S_A' });
     }
     for (const s of S) {
       for (const lv of seismicLevels(s).filter((x) => x.enabled !== false)) {

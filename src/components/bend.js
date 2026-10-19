@@ -65,7 +65,7 @@ export const bend = {
 
     const n = vec.unit(vec.sub(d2, vec.scale(d1, vec.dot(d2, d1))));
     const C = vec.add(P1, vec.scale(n, R));
-    let nd = +comp.divisions > 0 ? Math.round(+comp.divisions) : Math.max(2, Math.ceil(theta / ((ctx.settings.bendDivisionAngle ?? 22.5) * Math.PI / 180)));
+    let nd = +comp.divisions > 0 ? Math.round(+comp.divisions) : Math.max(2, Math.ceil(theta / ((ctx.settings.bendDivisionAngle ?? 10) * Math.PI / 180)));
     if (nd % 2) nd += 1; // nombre pair : un nœud au milieu de l'arc
     const pts = [];
     for (let k = 0; k <= nd; k++) {

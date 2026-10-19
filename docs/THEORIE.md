@@ -22,14 +22,15 @@ vertical global (ou un axe horizontal si l'élément est vertical) ; z = x ∧ y
 ### 1.2 Coudes
 
 Le sommet d'intersection des tangentes est remplacé par un arc de rayon R,
-discrétisé en cordes (au plus 22,5° par élément, nombre pair pour disposer d'un
+discrétisé en cordes (au plus 10° par élément par défaut, nombre pair pour disposer d'un
 nœud milieu). Les nœuds créés sont nommés `<sommet>A`, `<sommet>M`,
 `<sommet>B`. La flexibilité de l'ovalisation de la section (von Kármán, 1911 ;
 Rodabaugh & George, 1957 [3]) est représentée par le **facteur de flexibilité**
 k appliqué sur l'inertie de flexion (I/k), dans et hors du plan :
 
 - caractéristique de flexibilité h = eₙ·R / r² (r rayon moyen) ;
-- k = 1,65 / h ≥ 1 ; i = 0,9 / h^(2/3) ≥ 1 (RCC-M C 3680, ASME NC-3673.2) ;
+- k = 1,65 / h ≥ 1 ; i = 0,9 / h^(2/3) ≥ 1 (table des facteurs de flexibilité
+  et d'intensification de la classe 2, équivalente à ASME NC-3673.2) ;
 - correction optionnelle de raidissement par la pression (Kellogg [4], ASME
   NC-3673.2 note) : k / [1 + 6(P/E)(r/e)^(7/3)(R/r)^(1/3)] et
   i / [1 + 3,25(P/E)(r/e)^(5/2)(R/r)^(2/3)].
@@ -42,7 +43,7 @@ analyse et dépouillement.
 
 Le té est placé au nœud de jonction de trois tubes ; il ne modifie ni la
 géométrie ni la raideur (k = 1). Son facteur d'intensification de contraintes
-(RCC-M C 3680, ASME NC-3673.2, d'après les essais de Markl [3]) s'applique aux
+(classe 2, équivalent ASME NC-3673.2, d'après les essais de Markl [3]) s'applique aux
 extrémités des trois éléments qui aboutissent au nœud, le plus pénalisant
 étant retenu si l'élément porte déjà un facteur (coude) :
 
@@ -108,8 +109,13 @@ Pour chaque direction d'excitation (X, Y, Z) :
 3. **correction de masse manquante** (USNRC RG 1.92 rév. 3 [7], ASCE 4-16 [8]) :
    la masse non capturée par les modes inférieurs à la fréquence de coupure,
    Mr − Σ Γᵢ·M·φᵢ, est soumise statiquement à l'accélération à période nulle
-   (ZPA) ; la réponse rigide obtenue est combinée en SRSS avec la réponse
-   modale.
+   (ZPA) ;
+4. **réponse rigide des modes** (méthode de Gupta, RG 1.92 rév. 3 §C.1.4.1,
+   option par défaut) : pour chaque mode, αᵢ = ln(fᵢ/f₁)/ln(f₂/f₁) borné à
+   [0 ; 1], avec f₁ = SA_max/(2π·SV_max) et f₂ = (f₁ + 2·f_ZPA)/3
+   (f_ZPA = fréquence de coupure). La part rigide αᵢ·Rᵢ est cumulée
+   algébriquement avec la réponse de masse manquante ; la part périodique
+   √(1 − αᵢ²)·Rᵢ est combinée par SRSS ou CQC ; réponse = √(R_p² + R_r²).
 
 Puis combinaison directionnelle **SRSS** ou **100-40-40** (Newmark).
 
@@ -132,8 +138,8 @@ valeurs de S à froid et à chaud.
 |---|---|---|
 | C 3641 | Épaisseur minimale (tenue à la pression seule, option du projet désactivée par défaut) | eₘ = P·Dₑ / [2(S/I + 0,4·P)] + c ≤ eₙ·(1 − tol) ; I = (4R/Dₑ − 1)/(4R/Dₑ − 2) à l'intrados des coudes |
 | (6) | Poids propre + pression | S_L = P·Dₑ/(4eₙ) + 0,75i·M_A/Z ≤ k₆·Sh (k₆ = 1,0 par défaut) |
-| (7) | Dilatation thermique | S_E = i·M_C/Z ≤ S_A = f·(1,25·Sc + 0,25·Sh) [+ (Sh − S_L), option] |
-| (8) | (6) + (7), si (7) non satisfaite | P_max·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ Sh + S_A |
+| (7) | Dilatation thermique | S_E = i·M_C/Z ≤ S_A = f·(1,25·Sc + 0,25·Sh) [+ f·(Sh − S_L), option] |
+| (8) | (6) + (7), si (7) non satisfaite | P_c·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ Sh + S_A |
 | (10B), (10C), (10D) | Séisme, par niveau de critère | P_max·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ k·Sh, k = 1,2 (B), 1,8 (C), 2,4 (D) par défaut, plafond optionnel k'·Sy ; M_B = réponse sismique × coefficient du niveau |
 
 0,75i est pris au moins égal à 1. En classe 2, seul le facteur
@@ -147,7 +153,7 @@ propres admissibles.
 
 **Cumul des chargements.** (6) : moment résultant du poids propre M_A et
 pression de calcul ; (7) : étendue de dilatation M_C seule, depuis l'état froid
-(déplacements imposés compris) ; (8) : contraintes de (6), avec P max, et de (7)
+(déplacements imposés compris) ; (8) : contraintes de (6) et de (7)
 additionnées ; (10) : M_A + M_B, somme des moments résultants, avec M_B
 enveloppe sismique (combinaisons modale et directionnelle) × coefficient du
 niveau. Le tableau « Cumul des chargements » de l'onglet Code détaille ces
@@ -169,7 +175,60 @@ imposés compris). La somme M_A + M_B des moments résultants est conservative.
 > aux fiches de modification applicables à son projet, et remplacer les
 > propriétés matériaux indicatives par celles de l'Annexe Z I.
 
-## 5. Validation
+## 5. Audit de l'implémentation
+
+### 5.1 Dépouillement RCC-M classe 2 (C 3600)
+
+Points vérifiés et corrigés lors de l'audit :
+
+- formulation classe 2 par le seul facteur i (P·Dₑ/4eₙ, 0,75i ≥ 1, i·M_C/Z) ;
+  pas d'indices B₁/B₂ (classe 1) ;
+- éq. (6) : pression de calcul et S à la température de calcul ; éq. (8) :
+  même pression que (6) (cumul (6) + (7)) ; éq. (10) : pression maximale de
+  service ;
+- report de marge sur S_A : S_A = f(1,25 Sc + 0,25 Sh) + f(Sh − S_L) (le
+  facteur f s'applique aussi au report) ;
+- SIF des tés calculé avec les dimensions du collecteur et appliqué aux trois
+  branches ; coudes : h, k, i avec l'épaisseur propre du coude ;
+- moments résultants aux extrémités d'élément ; M_A + M_B en somme de
+  résultants (conservatif) ; M_C calculé avec E à froid.
+
+À confirmer par l'utilisateur dans l'édition du RCC-M applicable (texte non
+accessible publiquement, AFCEN) : les coefficients des admissibles (k₆, niveaux
+B/C/D, plafonds Sy), le tableau du facteur f et les éventuelles fiches de
+modification. Non traités à ce jour : éq. (9) (occasionnelles hors séisme),
+mouvements différentiels d'ancrages, facteurs de correction des coudes à
+brides, module de flexion effectif des piquages réduits, réductions.
+
+### 5.2 Solveur
+
+Vérifications numériques (tests automatiques) :
+
+| Contrôle | Référence | Écart |
+|---|---|---|
+| Console, charge ponctuelle, avec/sans cisaillement | PL³/3EI + PL/GAₛ | < 10⁻³ |
+| Console, poids réparti | wL⁴/8EI | < 10⁻⁴ (pénalité) |
+| Tube bridé, dilatation | E·A·α·ΔT | < 10⁻⁴ |
+| Dilatation libre, T_réf ≠ 20 °C | ᾱ(T)(T−20) − ᾱ(T_réf)(T_réf−20) | < 10⁻⁹ |
+| Coude 90°, flexion hors plan + torsion | Castigliano avec I/k | < 0,5 % (10°/élément) |
+| Fréquence propre d'une console | 1,875²/2π·√(EI/mL⁴) | < 0,5 % |
+| Oscillateur simple, spectre plat | m·Sa·L | < 10⁻⁴ |
+| Masse manquante, modes tronqués | réponse statique rigide | < 10⁻⁶ |
+| Σ masses modales effectives (tous modes) | masse globale | < 10⁻⁶ |
+| Gupta, oscillateur simple | réponse sans Gupta (invariance) | < 10⁻⁹ |
+
+Discrétisation : avec 500 mm par élément droit (défaut), les fréquences de
+l'exemple sont à moins de 1 % d'un maillage de 100 mm (contre 3 % avec
+1 000 mm) ; les contraintes y sont insensibles. Les coudes discrétisés en
+cordes de 22,5° sous-estimaient la souplesse de 1,5 % ; 10° par élément
+ramène l'écart sous 0,5 %.
+
+Choix de modélisation conformes à la pratique : masses concentrées en
+translation (inertie de rotation négligée), raideur à E froid, supports
+linéaires par pénalité (erreur relative ~10⁻⁵), spectre à fournir pour
+l'amortissement retenu (le même ξ est utilisé par la CQC).
+
+### 5.3 Tests automatiques
 
 Les tests automatiques (`npm test`) comparent le solveur à des solutions
 analytiques : console sous charge ponctuelle (avec et sans cisaillement) et

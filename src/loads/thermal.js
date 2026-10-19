@@ -7,6 +7,8 @@
 import { axialStrainEquivalent } from '../fem/beam3d.js';
 import { materialAt } from '../core/materials.js';
 
+const T_TABLE = 20; // température de référence des coefficients moyens de dilatation
+
 export const thermal = {
   id: 'thermal',
   label: 'Dilatation thermique',
@@ -20,8 +22,10 @@ export const thermal = {
     const { sys, model } = ctx;
     const tRef = +model.settings.tRef || 20;
     const elemEq = sys.mesh.elements.map((e) => {
-      const { alpha } = materialAt(e.mat, e.T1);
-      const eps = alpha * (e.T1 - tRef);
+      // α des tables = coefficient MOYEN entre 20 °C (référence des tables) et T :
+      // la déformation entre l'état de montage T_réf et l'état chaud T est donc
+      // ε = ᾱ(T)·(T − 20) − ᾱ(T_réf)·(T_réf − 20)
+      const eps = materialAt(e.mat, e.T1).alpha * (e.T1 - T_TABLE) - materialAt(e.mat, tRef).alpha * (tRef - T_TABLE);
       return axialStrainEquivalent(e.E, e.sec.A, eps);
     });
     let imposed = null;

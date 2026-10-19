@@ -7,7 +7,7 @@ import { runAnalysis } from '../src/analysis.js';
 import { pipeSection } from '../src/core/sections.js';
 import { componentFactors, rangeReductionFactor } from '../src/codes/rccm-c.js';
 import { symmetricEigen, ProfileCholesky } from '../src/core/linalg.js';
-import { spectrumAt, cqcRho } from '../src/fem/spectral.js';
+import { spectrumAt, cqcRho, guptaAlpha } from '../src/fem/spectral.js';
 
 const near = (a, b, rel, msg) => assert.ok(Math.abs(a - b) <= rel * Math.abs(b), `${msg}: ${a} vs ${b}`);
 
@@ -286,4 +286,93 @@ test('Séisme : niveaux 10B, 10C, 10D, même spectre et coefficients propres', (
   assert.ok(!r.check.rows.some((x) => x.eq === '10C'));
   const comb = r.code.combinations({ model: m }).map((c) => c.eq);
   assert.deepEqual(comb, ['(6)', '(10B)', '(10D)']);
+});
+
+// ---------------------------------------------------------------- audit
+
+test('Coude 90° : flexibilité vs Castigliano (flexion I/k + torsion), discrétisation par défaut', () => {
+  const R = 1000;
+  const m = setup({ maxLen: 50 });
+  m.components = ensureIds({ components: [pipe('1', '2', R, 0, 0), pipe('2', '3', 0, R, 0), { type: 'bend', node: '2', radius: R }, sup('1', 'anchor'), { type: 'mass', node: '3', mass: 1000 }] }).components;
+  m.loadCases = [{ id: 'W', type: 'weight', enabled: true }];
+  const r = runAnalysis(m);
+  assert.ok(r.mesh.nodeIndex.has('1') && r.mesh.nodeIndex.has('2A'), 'coude soudé directement sur l’ancrage : nœuds fusionnés');
+  assert.equal(r.mesh.nodeIndex.get('1'), r.mesh.nodeIndex.get('2A'));
+  const sp = pipeSection(m.sections[0]);
+  const k = r.mesh.elements.find((e) => e.kind === 'bend').factors.k;
+  const E = 200000;
+  const G = E / 2.6;
+  const P = 9806.65;
+  // quart de cercle, ancrage en φ = 0, charge P (–Z) en φ = π/2
+  let s = 0;
+  const N = 20000;
+  for (let n = 0; n < N; n++) {
+    const ph = ((n + 0.5) / N) * (Math.PI / 2);
+    const ex = R - R * Math.sin(ph);
+    const ey = R - R * (1 - Math.cos(ph));
+    const Mx = -P * ey;
+    const My = P * ex;
+    const Mt = Mx * Math.cos(ph) + My * Math.sin(ph);
+    const Mb = -Mx * Math.sin(ph) + My * Math.cos(ph);
+    s += ((Mb * Mb * k) / (E * sp.I) + (Mt * Mt) / (G * sp.J)) * ((R * Math.PI) / 2 / N);
+  }
+  const dz = -nodeDisp(r, 'W', '3')[2];
+  near(dz, s / P, 5e-3, 'flèche du coude');
+});
+
+test('Dilatation : coefficient moyen depuis 20 °C et température de référence ≠ 20 °C', () => {
+  const m = setup();
+  m.materials[0].table = [
+    { T: 20, E: 200000, alpha: 12, S: 100, Sy: 200 },
+    { T: 300, E: 200000, alpha: 13.4, S: 100, Sy: 200 },
+  ];
+  m.settings.tRef = 50;
+  m.components = ensureIds({ components: [pipe('1', '2', 1000, 0, 0, { T1: 300 }), sup('1', 'anchor')] }).components;
+  m.loadCases = [{ id: 'T1', type: 'thermal', enabled: true }];
+  const r = runAnalysis(m);
+  const a50 = 12 + (1.4 * 30) / 280;
+  near(nodeDisp(r, 'T1', '2')[0], (13.4e-6 * 280 - a50 * 1e-6 * 30) * 1000, 1e-9, 'ΔL');
+});
+
+test('Té : SIF calculé avec les dimensions du collecteur, appliqué à la dérivation', () => {
+  const m = setup({ maxLen: 500 });
+  m.sections.push({ id: 'B', od: 60.3, t: 3.91, millTol: 0, corrosion: 0, fluidDensity: 0, insulThk: 0, insulDensity: 0 });
+  m.components = ensureIds({
+    components: [pipe('1', '2', 1000, 0, 0), pipe('2', '3', 1000, 0, 0), pipe('2', '4', 0, 800, 0, { section: 'B' }), { type: 'tee', node: '2', teeType: 'welding' }, sup('1', 'anchor'), sup('3', 'anchor'), sup('4', 'anchor')],
+  }).components;
+  m.loadCases = [{ id: 'W', type: 'weight', enabled: true }];
+  const r = runAnalysis(m);
+  const run = pipeSection(m.sections[0]);
+  const iRun = 0.9 / ((4.4 * run.t) / run.rm) ** (2 / 3);
+  for (const e of r.mesh.nodeElems[r.mesh.nodeIndex.get('2')]) near(e.endFactors[e.n1 === r.mesh.nodeIndex.get('2') ? 0 : 1].i, Math.max(1, iRun), 1e-12, 'i du té');
+});
+
+test('Gupta (RG 1.92 rév. 3) : coefficients α et invariance pour un oscillateur simple', () => {
+  const pts = [[1, 0.2], [3, 1], [8, 1], [33, 0.3], [50, 0.3]];
+  const a = guptaAlpha(pts, 33);
+  const svMax = Math.max(...pts.map((p) => p[1] / (2 * Math.PI * p[0])));
+  const f1 = 1 / (2 * Math.PI * svMax);
+  const f2 = (f1 + 66) / 3;
+  assert.equal(a(f1 * 0.99), 0);
+  assert.equal(a(f2 * 1.01), 1);
+  near(a(Math.sqrt(f1 * f2)), 0.5, 1e-12, 'α au milieu (log)');
+  // oscillateur simple : part rigide + part périodique = réponse totale
+  const m = setup({ density: 0, maxLen: 500 });
+  m.components = ensureIds({ components: [pipe('1', '2', 0, 0, 1500), sup('1', 'anchor'), { type: 'mass', node: '2', mass: 300 }] }).components;
+  const lc = (rigid) => ({ id: 'S', type: 'seismic', enabled: true, method: 'spectral', cutoff: 33, maxModes: 10, modal: 'CQC', directional: 'SRSS', missingMass: true, rigid, damping: 5, spectra: { X: { factor: 1, points: pts } } });
+  m.loadCases = [lc('none')];
+  const base = runAnalysis(m).cases[0].supportLoads[4];
+  m.loadCases = [lc('gupta')];
+  near(runAnalysis(m).cases[0].supportLoads[4], base, 1e-9, 'moment de base');
+});
+
+test('RCC-M C : S_A avec report (Sh − S_L) multiplié par f', () => {
+  const m = setup({ alpha: 12 });
+  m.code.params = { ...m.code.params, cycles: 1e6, shMinusSL: true };
+  m.components = ensureIds({ components: [pipe('1', '2', 3000, 0, 0, { T1: 100, Td: 100 }), pipe('2', '3', 0, 2000, 0, { T1: 100, Td: 100 }), sup('1', 'anchor'), sup('3', 'anchor')] }).components;
+  m.loadCases = [{ id: 'T1', type: 'thermal', enabled: true }];
+  const r = runAnalysis(m);
+  const row = r.check.rows.find((x) => x.eq === '7');
+  const sl = r.check.rows.find((x) => x.eq === '6' && x.ie === row.ie && x.end === row.end).stress;
+  near(row.allow, 0.5 * (1.25 * 100 + 0.25 * 100) + 0.5 * (100 - sl), 1e-12, 'S_A');
 });
