@@ -199,61 +199,88 @@ export class Viewer {
       ctx.setLineDash([]);
     }
 
-    // Géométrie non déformée : volumes ombrés (3D) ou traits (filaire). Quand une
-    // déformée est affichée, la géométrie initiale est rappelée en filaire grisé.
+    // Rendu des tubes par « lignes continues » (suites d'éléments de même diamètre
+    // reliés deux à deux) : les coudes sont tracés sur leur arc réel finement
+    // échantillonné et chaque ligne est ombrée d'un seul tenant, indépendamment
+    // du découpage en éléments de calcul. Quand une déformée est affichée, la
+    // géométrie initiale est rappelée en filaire grisé.
     ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     const prims = []; // primitives 3D triées par profondeur (peintre)
-    const tubeOrLine = (pa, pb, od, color) => {
-      if (solid) prims.push(this.tubePrim(pa, pb, od, color));
-      else {
-        const a = this.toScreen(pa);
-        const b = this.toScreen(pb);
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.moveTo(a[0], a[1]);
-        ctx.lineTo(b[0], b[1]);
-        ctx.stroke();
-      }
-    };
     const valveShape = (pa, pb, od, color) => {
       if (solid) prims.push(this.valvePrim(pa, pb, od, color, mesh.up));
       else drawValve(ctx, this.toScreen(pa), this.toScreen(pb), color, 9);
     };
-    mesh.elements.forEach((e, ie) => {
+    const arcs = this.bendArcs(mesh);
+    const amp = ghost ? disp.scale * (sc.animate ? Math.sin(performance.now() / 300) : 1) : 0;
+    const useDisp = disp?.colorOf && disp.colorMax > 0;
+    // points (3D) et couleurs d'un élément, dans le sens de parcours demandé
+    const elemTrace = (e, ie, rev) => {
+      const arc = e.kind === 'bend' ? arcs.get(e.index) : null;
+      const nseg = arc ? Math.max(2, Math.ceil(arc.phi / (3 * Math.PI / 180))) : ghost ? 8 : 1;
+      let pts;
+      let mags = null;
       if (ghost) {
+        pts = deformedPoints(e, P, disp.u, amp, nseg);
+        mags = pts.mags;
+        if (arc) pts = pts.map((p, k) => vec.add(p, vec.sub(arc.at(k / nseg), vec.add(P[e.n1], vec.scale(vec.sub(P[e.n2], P[e.n1]), k / nseg)))));
+      } else {
+        pts = Array.from({ length: nseg + 1 }, (_, k) => (arc ? arc.at(k / nseg) : vec.add(P[e.n1], vec.scale(vec.sub(P[e.n2], P[e.n1]), k / nseg))));
+      }
+      const segColors = Array.from({ length: nseg }, (_, k) =>
+        ghost ? (useDisp ? disp.colorOf((mags[k] + mags[k + 1]) / 2 / disp.colorMax) : colors?.[ie] ?? C.deformed) : colors?.[ie] ?? C.pipe,
+      );
+      if (rev) {
+        pts.reverse();
+        segColors.reverse();
+      }
+      return { pts, segColors };
+    };
+    if (ghost) {
+      ctx.strokeStyle = C.muted;
+      ctx.globalAlpha = 0.55;
+      ctx.lineWidth = 1.5;
+      for (const e of mesh.elements) {
         const a = S[e.n1];
         const b = S[e.n2];
-        ctx.strokeStyle = C.muted;
-        ctx.globalAlpha = 0.55;
-        ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo(a[0], a[1]);
         ctx.lineTo(b[0], b[1]);
         ctx.stroke();
-        ctx.globalAlpha = 1;
+      }
+      ctx.globalAlpha = 1;
+    }
+    for (const chain of this.tubeChains(mesh)) {
+      const pts = [];
+      const segColors = [];
+      chain.forEach(({ e, rev }, k) => {
+        const t = elemTrace(e, e.index, rev);
+        pts.push(...(k ? t.pts.slice(1) : t.pts));
+        segColors.push(...t.segColors);
+      });
+      const od = chain[0].e.sec.od;
+      const scr = pts.map((p) => this.toScreen(p));
+      if (solid) prims.push(this.chainPrim(scr, segColors, od));
+      else {
+        ctx.lineWidth = 2.5;
+        for (let k = 1; k < scr.length; k++) {
+          ctx.strokeStyle = segColors[k - 1];
+          ctx.beginPath();
+          ctx.moveTo(scr[k - 1][0], scr[k - 1][1]);
+          ctx.lineTo(scr[k][0], scr[k][1]);
+          ctx.stroke();
+        }
+      }
+    }
+    mesh.elements.forEach((e, ie) => {
+      if (e.kind !== 'valve') return;
+      if (!ghost) {
+        valveShape(P[e.n1], P[e.n2], e.sec.od, colors?.[ie] ?? C.valve);
         return;
       }
-      if (e.kind === 'valve') valveShape(P[e.n1], P[e.n2], e.sec.od, colors?.[ie] ?? C.valve);
-      else tubeOrLine(P[e.n1], P[e.n2], e.sec.od, colors?.[ie] ?? C.pipe);
+      const pts = deformedPoints(e, P, disp.u, amp, 1);
+      valveShape(pts[0], pts[1], e.sec.od, useDisp ? disp.colorOf((pts.mags[0] + pts.mags[1]) / 2 / disp.colorMax) : C.valve);
     });
-
-    // Déformée (interpolation d'Hermite des déplacements nodaux)
-    if (ghost) {
-      const amp = disp.scale * (sc.animate ? Math.sin(performance.now() / 300) : 1);
-      mesh.elements.forEach((e, ie) => {
-        const pts = deformedPoints(e, P, disp.u, amp, e.kind === 'bend' || e.kind === 'valve' ? 1 : 8);
-        if (e.kind === 'valve') {
-          const c = disp.colorOf && disp.colorMax > 0 ? disp.colorOf((pts.mags[0] + pts.mags[pts.length - 1]) / 2 / disp.colorMax) : C.valve;
-          valveShape(pts[0], pts[pts.length - 1], e.sec.od, c);
-          return;
-        }
-        for (let k = 1; k < pts.length; k++) {
-          const c = disp.colorOf && disp.colorMax > 0 ? disp.colorOf((pts.mags[k - 1] + pts.mags[k]) / 2 / disp.colorMax) : colors?.[ie] ?? C.deformed;
-          tubeOrLine(pts[k - 1], pts[k], e.sec.od, c);
-        }
-      });
-    }
     prims.sort((a, b) => b.depth - a.depth);
     for (const pr of prims) pr.draw(ctx);
 
@@ -307,7 +334,7 @@ export class Viewer {
     // Masses ponctuelles
     for (const pm of mesh.pointMasses) {
       const s = S[pm.node];
-      const r = solid ? Math.max(4, 0.45 * odAtNode(pm.node) * pxPerMm) : Math.max(4, Math.min(11, 3 + 2 * Math.log10(pm.m * 1000 + 1)));
+      const r = solid ? Math.max(4, 0.3 * odAtNode(pm.node) * pxPerMm) : Math.max(4, Math.min(11, 3 + 2 * Math.log10(pm.m * 1000 + 1)));
       ctx.fillStyle = '#2e86c1';
       ctx.strokeStyle = C.bg;
       ctx.lineWidth = 1.5;
@@ -449,26 +476,126 @@ export class Viewer {
     this.onPick(best?.label ?? null);
   }
 
-  /** Tube cylindrique à l'échelle : trait de largeur Dₑ avec ombrage transversal. */
-  tubePrim(pa, pb, od, color) {
-    const a = this.toScreen(pa);
-    const b = this.toScreen(pb);
+  /**
+   * Ligne de tubes à l'échelle (largeur = Dₑ) : couleurs par tronçon, puis
+   * ombrage cylindrique par passes concentriques tracées chacune d'un seul
+   * chemin (aucune surépaisseur aux raccords, coudes lisses).
+   */
+  chainPrim(scr, segColors, od) {
     const w = Math.max(1.2, od * this.frame.s);
+    const depth = scr.reduce((d, p) => d + p[2], 0) / scr.length;
     return {
-      depth: (a[2] + b[2]) / 2,
+      depth,
       draw: (ctx) => {
         ctx.lineCap = 'round';
-        ctx.lineWidth = w;
-        ctx.strokeStyle = color;
-        ctx.beginPath();
-        ctx.moveTo(a[0], a[1]);
-        ctx.lineTo(b[0], b[1]);
-        ctx.stroke();
+        ctx.lineJoin = 'round';
+        // couleur de base (opaque) : tronçons de même couleur regroupés
+        const base = (width) => {
+          ctx.lineWidth = width;
+          let k = 1;
+          while (k < scr.length) {
+            const color = segColors[k - 1];
+            ctx.strokeStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(scr[k - 1][0], scr[k - 1][1]);
+            while (k < scr.length && segColors[k - 1] === color) {
+              ctx.lineTo(scr[k][0], scr[k][1]);
+              k++;
+            }
+            ctx.stroke();
+          }
+        };
+        base(w);
         if (w < 4) return;
-        ctx.strokeStyle = shading(ctx, a, b, w);
+        const path = () => {
+          ctx.beginPath();
+          scr.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+        };
+        // bord assombri, puis couleur restaurée à l'intérieur
+        ctx.lineWidth = w;
+        ctx.strokeStyle = 'rgba(0,0,0,0.38)';
+        path();
         ctx.stroke();
+        ctx.lineWidth = w * 0.9;
+        ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+        path();
+        ctx.stroke();
+        base(w * 0.8);
+        // reflet progressif (passes fines et peu opaques : dégradé quasi continu)
+        const N = Math.min(14, Math.max(4, Math.round(w / 3)));
+        for (let i = 1; i <= N; i++) {
+          ctx.lineWidth = w * 0.8 * (1 - i / (N + 1));
+          ctx.strokeStyle = `rgba(255,255,255,${(0.32 / N).toFixed(3)})`;
+          path();
+          ctx.stroke();
+        }
       },
     };
+  }
+
+  /**
+   * Suites d'éléments (hors robinets) reliés deux à deux par des nœuds de degré 2
+   * et de même diamètre : chaque suite est dessinée comme un seul tube continu.
+   */
+  tubeChains(mesh) {
+    if (this._chains?.mesh === mesh) return this._chains.list;
+    const elems = mesh.elements.filter((e) => e.kind !== 'valve');
+    const at = new Map();
+    for (const e of elems) for (const n of [e.n1, e.n2]) (at.get(n) ?? at.set(n, []).get(n)).push(e);
+    const used = new Set();
+    const list = [];
+    const walk = (e, node) => {
+      const out = [];
+      let cur = e;
+      for (;;) {
+        const nb = at.get(node) ?? [];
+        if (nb.length !== 2) break;
+        const next = nb[0] === cur ? nb[1] : nb[0];
+        if (used.has(next) || Math.abs(next.sec.od - cur.sec.od) > 1e-6) break;
+        used.add(next);
+        const rev = next.n2 === node;
+        out.push({ e: next, rev });
+        node = rev ? next.n1 : next.n2;
+        cur = next;
+      }
+      return out;
+    };
+    for (const e of elems) {
+      if (used.has(e)) continue;
+      used.add(e);
+      const fwd = walk(e, e.n2);
+      const back = walk(e, e.n1).map(({ e: x, rev }) => ({ e: x, rev: !rev })).reverse();
+      list.push([...back, { e, rev: false }, ...fwd]);
+    }
+    this._chains = { mesh, list };
+    return list;
+  }
+
+  /** Arcs réels des éléments de coude (centre, rayon) pour un tracé lisse. */
+  bendArcs(mesh) {
+    if (this._arcs?.mesh === mesh) return this._arcs.map;
+    const map = new Map();
+    for (const e of mesh.elements) {
+      if (e.kind !== 'bend' || !e.bend) continue;
+      const c = mesh.corners.get(e.bend.node);
+      if (!c) continue;
+      const d1 = vec.unit(vec.sub(c.point, c.start));
+      const d2 = vec.unit(vec.sub(c.end, c.point));
+      const nrm = vec.unit(vec.sub(d2, vec.scale(d1, vec.dot(d2, d1))));
+      const center = vec.add(c.start, vec.scale(nrm, c.radius));
+      const n1 = mesh.nodes[e.n1];
+      const n2 = mesh.nodes[e.n2];
+      const v1 = vec.sub([n1.x, n1.y, n1.z], center);
+      const v2 = vec.sub([n2.x, n2.y, n2.z], center);
+      const phi = Math.acos(Math.max(-1, Math.min(1, vec.dot(v1, v2) / (vec.norm(v1) * vec.norm(v2)))));
+      const sphi = Math.sin(phi);
+      map.set(e.index, {
+        phi,
+        at: (t) => (sphi < 1e-9 ? vec.add(center, v1) : vec.add(center, vec.add(vec.scale(v1, Math.sin((1 - t) * phi) / sphi), vec.scale(v2, Math.sin(t * phi) / sphi)))),
+      });
+    }
+    this._arcs = { mesh, map };
+    return map;
   }
 
   /**
@@ -530,32 +657,6 @@ export class Viewer {
   snapshot() {
     return this.canvas.toDataURL('image/png');
   }
-}
-
-/** Dégradé d'ombrage perpendiculaire au tube (lumière venant du haut-gauche). */
-function shading(ctx, a, b, w) {
-  let nx = -(b[1] - a[1]);
-  let ny = b[0] - a[0];
-  const l = Math.hypot(nx, ny);
-  if (l < 1e-6) {
-    nx = 0;
-    ny = 1;
-  } else {
-    nx /= l;
-    ny /= l;
-  }
-  if (ny > 0) {
-    nx = -nx;
-    ny = -ny;
-  }
-  const mx = (a[0] + b[0]) / 2;
-  const my = (a[1] + b[1]) / 2;
-  const g = ctx.createLinearGradient(mx + (nx * w) / 2, my + (ny * w) / 2, mx - (nx * w) / 2, my - (ny * w) / 2);
-  g.addColorStop(0, 'rgba(0,0,0,0.25)');
-  g.addColorStop(0.28, 'rgba(255,255,255,0.35)');
-  g.addColorStop(0.5, 'rgba(255,255,255,0)');
-  g.addColorStop(1, 'rgba(0,0,0,0.4)');
-  return g;
 }
 
 function polygon(ctx, pts) {
