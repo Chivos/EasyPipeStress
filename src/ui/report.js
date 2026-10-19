@@ -116,7 +116,7 @@ function loadParams(lc, vertical) {
     case 'weight':
       return `fluide ${lc.fluid !== false ? 'oui' : 'non'}, calorifuge ${lc.insulation !== false ? 'oui' : 'non'}`;
     case 'thermal':
-      return `T service par tube, déplacements imposés ${lc.imposed !== false ? 'oui' : 'non'}`;
+      return `T par tube, déplacements imposés ${lc.imposed !== false ? 'oui' : 'non'}`;
     case 'seismic':
       return lc.method === 'static'
         ? `statique équivalente, ${levelsText(lc)}, accélérations ${['X', 'Y', 'Z'].map((d) => `${d} ${lc.staticAcc?.[d] ?? 0} g`).join(', ')}, ${lc.directional}`

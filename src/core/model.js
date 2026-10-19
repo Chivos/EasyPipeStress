@@ -87,7 +87,7 @@ export function emptyModel() {
 export function exampleModel() {
   const m = emptyModel();
   m.meta.title = 'Exemple – ligne DN150 inox entre deux piquages';
-  const base = { section: 'DN150-40S', material: 'Z2CN18-10', T1: 250, P1: 4, Td: 260, Pd: 4.5 };
+  const base = { section: 'DN150-40S', material: 'Z2CN18-10', T1: 250, P1: 4 };
   const pipes = [
     ['10', '15', 1500, 0, 0],
     ['15', '20', 1500, 0, 0],

@@ -4,12 +4,12 @@
 // paramétrables pour s'adapter à l'édition applicable). Formulation de la
 // classe 2 par le facteur d'intensification i (les indices B1/B2 relèvent de la
 // classe 1, sous-section B, et ne sont pas utilisés ici) :
-//  éq. (6)   poids propre + pression       S_L = Pc·De/(4eₙ) + 0,75i·MA/Z ≤ k6·Sh
+//  éq. (6)   poids propre + pression       S_L = P·De/(4eₙ) + 0,75i·MA/Z ≤ k6·Sh
 //  éq. (7)   dilatation thermique          S_E = i·MC/Z ≤ S_A = f(1,25 Sc + 0,25 Sh) [+ f(Sh − S_L)]
 //  éq. (8)   (6) + (7), si (7) non satisfaite :
-//            Pc·De/(4eₙ) + 0,75i·MA/Z + i·MC/Z ≤ Sh + S_A
+//            P·De/(4eₙ) + 0,75i·MA/Z + i·MC/Z ≤ Sh + S_A
 //  éq. (10)  séisme, pour chaque niveau de critère B, C, D (même spectre, coefficient
-//            propre au niveau) : Pmax·De/(4eₙ) + 0,75i·(MA + MB)/Z ≤ min(kS·Sh ; kY·Sy)
+//            propre au niveau) : P·De/(4eₙ) + 0,75i·(MA + MB)/Z ≤ min(kS·Sh ; kY·Sy)
 //  avec 0,75i ≥ 1. Moments : moment résultant √(Mx²+My²+Mz²) aux extrémités.
 //  Épaisseur minimale (méthode `thickness`, si l'option du projet est cochée) :
 //            C 3641.1  e_m = P·De / (2(S/I + y·P)) + c,  y = 0,4
@@ -214,11 +214,11 @@ export const rccmC = {
     const S = active.filter((c) => c.type === 'seismic');
     const w = W.join(' + ') || '(aucun poids)';
     const out = [
-      { eq: '(6)', name: 'Poids propre + pression', loads: `${w} ; pression de calcul Pc`, rule: 'M_A = moment résultant du poids propre ; terme de pression Pc·Dₑ/(4eₙ)', allow: `${num(params.k6, 1)}·Sh` },
+      { eq: '(6)', name: 'Poids propre + pression', loads: `${w} ; pression P`, rule: 'M_A = moment résultant du poids propre ; terme de pression P·Dₑ/(4eₙ)', allow: `${num(params.k6, 1)}·Sh` },
     ];
     for (const t of T) {
       out.push({ eq: '(7)', name: 'Dilatation thermique', loads: `${t} (étendue depuis l’état froid, déplacements imposés compris)`, rule: 'M_C = moment résultant de l’étendue de dilatation, sans poids ni pression', allow: 'S_A = f(1,25 Sc + 0,25 Sh)' });
-      out.push({ eq: '(8)', name: '(6) + (7), si (7) non satisfaite', loads: `${w} + Pc + ${t}`, rule: 'contraintes de (6) et de (7) additionnées', allow: 'Sh + S_A' });
+      out.push({ eq: '(8)', name: '(6) + (7), si (7) non satisfaite', loads: `${w} + P + ${t}`, rule: 'contraintes de (6) et de (7) additionnées', allow: 'Sh + S_A' });
     }
     for (const s of S) {
       for (const lv of seismicLevels(s).filter((x) => x.enabled !== false)) {
@@ -226,7 +226,7 @@ export const rccmC = {
         out.push({
           eq: `(10${lv.level})`,
           name: `Séisme niveau ${lv.level}`,
-          loads: `${w} + P max + ${num(lv.factor, 1)} × ${s.id}`,
+          loads: `${w} + P + ${num(lv.factor, 1)} × ${s.id}`,
           rule: `M_A + M_B (somme des moments résultants) ; M_B = réponse sismique ${s.method === 'static' ? 'statique équivalente' : `spectrale ${s.modal ?? 'CQC'}`}, directions ${s.directional ?? 'SRSS'}, × ${num(lv.factor, 1)}`,
           allow: `${lim.kS}·Sh${lim.kY ? ` et ${lim.kY}·Sy` : ''}`,
         });

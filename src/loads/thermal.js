@@ -12,7 +12,7 @@ const T_TABLE = 20; // température de référence des coefficients moyens de di
 export const thermal = {
   id: 'thermal',
   label: 'Dilatation thermique',
-  description: 'Températures de service (colonne « T service ») par rapport à la température de référence, et déplacements imposés des supports.',
+  description: 'Température de chaque tube (colonne « T ») par rapport à la température de référence, et déplacements imposés des supports.',
   fields: [
     { key: 'imposed', label: 'Appliquer les déplacements imposés des supports', type: 'checkbox', default: true },
   ],

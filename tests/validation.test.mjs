@@ -21,7 +21,7 @@ function setup({ density = 0, alpha = 12, E = 200000, shear = false, maxLen = 10
   m.loadCases = [];
   return m;
 }
-const pipe = (n1, n2, dx, dy, dz, extra = {}) => ({ type: 'pipe', n1, n2, dx, dy, dz, section: 'S', material: 'M', T1: 20, P1: 0, Td: 20, Pd: 0, ...extra });
+const pipe = (n1, n2, dx, dy, dz, extra = {}) => ({ type: 'pipe', n1, n2, dx, dy, dz, section: 'S', material: 'M', T1: 20, P1: 0, ...extra });
 const sup = (node, kind, extra = {}) => ({ type: 'support', node, kind, stiffness: '', dofs: '', imposed: '', label: '', ...extra });
 const nodeDisp = (r, caseId, label) => {
   const c = r.cases.find((x) => x.id === caseId);
@@ -189,7 +189,7 @@ test('Mécanisme détecté', () => {
 
 test('RCC-M C : équations (6), (7), (8), (10) sur une console', () => {
   const m = setup({ density: 0, maxLen: 500 });
-    m.components = ensureIds({ components: [pipe('1', '2', 2000, 0, 0, { P1: 5, Pd: 5, T1: 150, Td: 150 }), sup('1', 'anchor'), { type: 'mass', node: '2', mass: 1000 }] }).components;
+    m.components = ensureIds({ components: [pipe('1', '2', 2000, 0, 0, { P1: 5, T1: 150 }), sup('1', 'anchor'), { type: 'mass', node: '2', mass: 1000 }] }).components;
   m.loadCases = [
     { id: 'W', type: 'weight', enabled: true },
     { id: 'T1', type: 'thermal', enabled: true },
@@ -242,7 +242,7 @@ test('Té : SIF forgé 0,9/h^(2/3) (h = 4,4 e/r) appliqué aux trois branches', 
 
 test('Épaisseur minimale : désactivée par défaut, activable dans le projet', () => {
   const m = setup();
-  m.components = ensureIds({ components: [pipe('1', '2', 1000, 0, 0, { Pd: 5, P1: 5 }), sup('1', 'anchor')] }).components;
+  m.components = ensureIds({ components: [pipe('1', '2', 1000, 0, 0, { P1: 5 }), sup('1', 'anchor')] }).components;
   m.loadCases = [{ id: 'W', type: 'weight', enabled: true }];
   assert.ok(!runAnalysis(m).check.rows.some((x) => x.eq === 'e'));
   m.settings.checkThickness = true;
@@ -265,7 +265,7 @@ test('Séisme : spectre horizontal commun aux deux directions horizontales', () 
 
 test('Séisme : niveaux 10B, 10C, 10D, même spectre et coefficients propres', () => {
   const m = setup({ density: 0, maxLen: 500 });
-  m.components = ensureIds({ components: [pipe('1', '2', 2000, 0, 0, { P1: 0, Pd: 0 }), sup('1', 'anchor'), { type: 'mass', node: '2', mass: 1000 }] }).components;
+  m.components = ensureIds({ components: [pipe('1', '2', 2000, 0, 0, { P1: 0 }), sup('1', 'anchor'), { type: 'mass', node: '2', mass: 1000 }] }).components;
   m.loadCases = [
     {
       id: 'S1', type: 'seismic', enabled: true, method: 'static', directional: 'SRSS', staticAcc: { Z: 1 },
@@ -369,10 +369,18 @@ test('Gupta (RG 1.92 rév. 3) : coefficients α et invariance pour un oscillateu
 test('RCC-M C : S_A avec report (Sh − S_L) multiplié par f', () => {
   const m = setup({ alpha: 12 });
   m.code.params = { ...m.code.params, cycles: 1e6, shMinusSL: true };
-  m.components = ensureIds({ components: [pipe('1', '2', 3000, 0, 0, { T1: 100, Td: 100 }), pipe('2', '3', 0, 2000, 0, { T1: 100, Td: 100 }), sup('1', 'anchor'), sup('3', 'anchor')] }).components;
+  m.components = ensureIds({ components: [pipe('1', '2', 3000, 0, 0, { T1: 100 }), pipe('2', '3', 0, 2000, 0, { T1: 100 }), sup('1', 'anchor'), sup('3', 'anchor')] }).components;
   m.loadCases = [{ id: 'T1', type: 'thermal', enabled: true }];
   const r = runAnalysis(m);
   const row = r.check.rows.find((x) => x.eq === '7');
   const sl = r.check.rows.find((x) => x.eq === '6' && x.ie === row.ie && x.end === row.end).stress;
   near(row.allow, 0.5 * (1.25 * 100 + 0.25 * 100) + 0.5 * (100 - sl), 1e-12, 'S_A');
+});
+
+test('Tube : une seule température T et une seule pression P', () => {
+  const m = setup();
+  m.components = ensureIds({ components: [pipe('1', '2', 1000, 0, 0, { T1: 180, P1: 3, Td: 999, Pd: 99 }), sup('1', 'anchor')] }).components;
+  m.loadCases = [{ id: 'W', type: 'weight', enabled: true }];
+  const e = runAnalysis(m).mesh.elements[0];
+  assert.deepEqual([e.T1, e.Td, e.P1, e.Pd], [180, 180, 3, 3], 'Td/Pd anciens ignorés');
 });

@@ -24,7 +24,7 @@ export function renderProject(app) {
     { key: 'meshMaxLength', label: 'Longueur maximale d’élément', unit: 'mm', type: 'number', title: 'Discrétisation des tubes droits (précision du poids réparti et de l’analyse modale)' },
     { key: 'bendDivisionAngle', label: 'Angle maximal par élément de coude', unit: '°', type: 'number' },
     { key: 'shear', label: 'Déformation d’effort tranchant (Timoshenko)', type: 'checkbox', default: true },
-    { key: 'checkThickness', label: 'Vérifier l’épaisseur minimale (tenue à la pression seule, formule du code retenu)', type: 'checkbox', default: false },
+    { key: 'checkThickness', label: 'Vérifier l’épaisseur minimale (tenue à la pression seule)', type: 'checkbox', default: false },
   ];
   return h(
     'div',
@@ -275,7 +275,7 @@ export function renderGeometry(app) {
       ),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: q.tee !== false, onchange: (e) => (q.tee = e.target.checked) }), ' té automatique quand un troisième tube part d’un nœud'),
     ),
-    section('Tubes droits', help('T service / P max : conditions de fonctionnement (dilatation, éq. 9, 11). T calc. / P calc. : conditions de calcul (éq. 8, épaisseur) ; vides = valeurs de service.'), componentTable(app, 'pipe')),
+    section('Tubes droits', help('T et P : température et pression intérieure du tube, utilisées pour la dilatation, les contraintes admissibles et les termes de pression du code.'), componentTable(app, 'pipe')),
     section('Coudes', help('Un coude se place au sommet de deux tubes. Ses nœuds A (début), M (milieu), B (fin) peuvent recevoir supports et masses.'), componentTable(app, 'bend')),
     section(
       'Tés',
@@ -512,8 +512,8 @@ export function renderCode(app) {
           code?.thickness ? eqRow(code.thickness.ref, 'Épaisseur minimale — tenue à la pression seule (option de l’onglet Projet)', code.thickness.formula) : null,
           eqRow('(6)', 'Poids propre + pression', 'S_L = P·Dₑ/(4eₙ) + 0,75i·M_A/Z ≤ k₆·S_h   (0,75i ≥ 1)'),
           eqRow('(7)', 'Dilatation thermique', 'S_E = i·M_C/Z ≤ S_A = f(1,25 S_c + 0,25 S_h) [+ f(S_h − S_L) en option]'),
-          eqRow('(8)', '(6) + (7), si (7) non satisfaite', 'P_c·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ S_h + S_A'),
-          eqRow('(10B) (10C) (10D)', 'Séisme, par niveau de critère', 'P_max·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ k·S_h  (B : 1,2 — C : 1,8 — D : 2,4 par défaut, plafond k·Sy optionnel) ; M_B = séisme × coefficient du niveau'),
+          eqRow('(8)', '(6) + (7), si (7) non satisfaite', 'P·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ S_h + S_A'),
+          eqRow('(10B) (10C) (10D)', 'Séisme, par niveau de critère', 'P·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ k·S_h  (B : 1,2 — C : 1,8 — D : 2,4 par défaut, plafond k·Sy optionnel) ; M_B = séisme × coefficient du niveau'),
         ),
       ),
       help('Classe 2 : seul le facteur d’intensification i intervient (0,75i ≥ 1 pour les charges primaires) ; les indices B₁, B₂ relèvent de la classe 1 (sous-section B).'),
