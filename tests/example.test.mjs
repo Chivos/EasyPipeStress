@@ -86,3 +86,25 @@ test('Chargement : paramètres de code obsolètes supprimés', () => {
   const m = normalizeModel(raw);
   assert.deepEqual(Object.keys(m.code.params).sort(), ['cycles', 'pressureCorrection']);
 });
+
+test('Catalogue ASME : épaisseurs B36.10M / B36.19M et rayons de coudes B16.9', async () => {
+  const { PIPE_SIZES, schedulesOf, elbowRadius, sizeFromOD } = await import('../src/core/pipeCatalog.js');
+  const s6 = PIPE_SIZES.find((x) => x.nps === '6');
+  assert.equal(Object.fromEntries(schedulesOf('B36.10M', s6)).STD, 7.11);
+  const s12 = sizeFromOD(323.9);
+  assert.deepEqual(schedulesOf('B36.19M', s12), [['5S', 3.96], ['10S', 4.57], ['40S', 9.53], ['80S', 12.7]]);
+  assert.equal(elbowRadius('LR', 168.3).R, 229);
+  assert.equal(elbowRadius('SR', 114.3).R, 102);
+  assert.equal(elbowRadius('3D', 60.3).R, 152);
+  assert.equal(elbowRadius('', 168.3).R, 252);
+  assert.equal(elbowRadius('LR', 170).R, null, 'diamètre hors catalogue');
+  // coude du modèle : rayon selon le type, rayon saisi prioritaire
+  const m = exampleModel();
+  const b = m.components.find((c) => c.type === 'bend' && c.node === '20');
+  Object.assign(b, { radius: '', radiusType: 'SR' });
+  const od = m.sections.find((x) => x.id === m.components.find((c) => c.type === 'pipe' && (c.n1 === b.node || c.n2 === b.node)).section).od;
+  const corner = runAnalysis(m).mesh.corners.get(String(b.node));
+  assert.equal(corner.radius, elbowRadius('SR', od).R);
+  b.radius = 300;
+  assert.equal(runAnalysis(m).mesh.corners.get('20').radius, 300, 'rayon saisi prioritaire');
+});

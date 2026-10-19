@@ -19,7 +19,8 @@ exportables/importables en JSON.
    changement de direction, et un té quand un troisième tube part d'un nœud
    (forgé, de fabrication renforcé ou non, ou SIF imposé). Tableaux éditables
    des tubes (section, matériau, températures et pressions de service et de
-   calcul), des coudes (rayon, épaisseur) et des tés.
+   calcul), des coudes (rayon saisi ou normalisé ASME B16.9, épaisseur) et des
+   tés. Sections normalisées ASME B36.10M / B36.19M proposées par catalogue.
 2. **Supports & masses** : ancrages, appuis, guides, butées, ressorts, blocages
    personnalisés, déplacements imposés de piquage ; masses ponctuelles.
 3. **Chargements** : poids (fluide, calorifuge), pression, dilatation, séisme

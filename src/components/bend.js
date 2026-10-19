@@ -6,6 +6,7 @@
 // de vérification actif (cf. src/codes).
 
 import { vec } from '../core/linalg.js';
+import { BEND_RADIUS_TYPES, elbowRadius } from '../core/pipeCatalog.js';
 
 export const bend = {
   id: 'bend',
@@ -13,13 +14,22 @@ export const bend = {
   phase: 'corner',
   fields: [
     { key: 'node', label: 'Sommet', type: 'node', width: 60 },
-    { key: 'radius', label: 'Rayon', unit: 'mm', type: 'number', width: 70, title: 'Rayon de cintrage (grand rayon = 1,5 DN)' },
+    {
+      key: 'radiusType',
+      label: 'Type de rayon',
+      type: 'select',
+      width: 130,
+      options: () => Object.keys(BEND_RADIUS_TYPES),
+      optionLabel: (o) => BEND_RADIUS_TYPES[o],
+      title: 'Rayon de cintrage : 1,5 De, ou coude normalisé ASME B16.9 d’après le NPS du tube (SR petit rayon 1D, LR grand rayon 1,5D, 3D), ou coude cintré 5D. Un rayon saisi est prioritaire.',
+    },
+    { key: 'radius', label: 'Rayon', unit: 'mm', type: 'number', width: 70, placeholder: 'selon type', title: 'Rayon de cintrage imposé (vide = selon le type de rayon)' },
     { key: 't', label: 'Épaisseur', unit: 'mm', type: 'number', width: 70, placeholder: 'tube', title: 'Épaisseur nominale du coude (vide = celle du tube)' },
     { key: 'divisions', label: 'Divisions', type: 'number', width: 60, placeholder: 'auto' },
   ],
 
   create(model, { node, radius } = {}) {
-    return { type: 'bend', node: node ?? '', radius: radius ?? '', t: '', divisions: '' };
+    return { type: 'bend', node: node ?? '', radiusType: '', radius: radius ?? '', t: '', divisions: '' };
   },
 
   mesh(comp, ctx) {
@@ -51,7 +61,13 @@ export const bend = {
     }
     const props = { ...ends[0].seg.props };
     const sec = ctx.section(props.section);
-    const R = +comp.radius > 0 ? +comp.radius : Math.round(1.5 * (sec?.od ?? 100));
+    let R = +comp.radius;
+    if (!(R > 0)) {
+      const od = sec?.od ?? 100;
+      const std = elbowRadius(comp.radiusType ?? '', od);
+      R = std.R ?? Math.round(1.5 * od);
+      if (!std.R) ctx.warn(`Coude au nœud ${B} : ${std.reason} ; rayon pris égal à 1,5 De = ${R} mm.`);
+    }
     const Lt = R * Math.tan(theta / 2);
     for (const { seg, other } of ends) {
       const avail = vec.norm(vec.sub(other, pB)); // extrémité opposée déjà rognée si coude
