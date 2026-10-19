@@ -509,9 +509,11 @@ export class Viewer {
   }
 
   /**
-   * Ligne de tubes à l'échelle (largeur = Dₑ) : couleurs par tronçon, puis
-   * ombrage cylindrique par passes concentriques tracées chacune d'un seul
-   * chemin (aucune surépaisseur aux raccords, coudes lisses).
+   * Ligne de tubes à l'échelle (largeur = Dₑ), ombrée comme un cylindre éclairé
+   * (Lambert + reflet de Phong, lumière en haut à gauche) : la section est
+   * découpée en bandes fines dont la teinte est calculée d'après l'orientation
+   * de la surface ; les normales sont moyennées aux sommets, si bien que la
+   * ligne (coudes compris) est continue et sans bordure artificielle.
    */
   chainPrim(scr, segColors, od) {
     const w = Math.max(1.2, od * this.frame.s);
@@ -519,47 +521,78 @@ export class Viewer {
     return {
       depth,
       draw: (ctx) => {
-        ctx.lineCap = 'butt'; // extrémités franches (coupe du tube) ; raccords internes continus
+        const n = scr.length;
+        // trait de fond (comble les jointures entre bandes)
+        ctx.lineCap = 'butt';
         ctx.lineJoin = 'round';
-        // couleur de base (opaque) : tronçons de même couleur regroupés
-        const base = (width) => {
-          ctx.lineWidth = width;
-          let k = 1;
-          while (k < scr.length) {
-            const color = segColors[k - 1];
-            ctx.strokeStyle = color;
-            ctx.beginPath();
-            ctx.moveTo(scr[k - 1][0], scr[k - 1][1]);
-            while (k < scr.length && segColors[k - 1] === color) {
-              ctx.lineTo(scr[k][0], scr[k][1]);
-              k++;
-            }
-            ctx.stroke();
-          }
-        };
-        base(w);
-        if (w < 4) return;
-        const path = () => {
-          ctx.beginPath();
-          scr.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
-        };
-        // bord assombri, puis couleur restaurée à l'intérieur
         ctx.lineWidth = w;
-        ctx.strokeStyle = 'rgba(0,0,0,0.38)';
-        path();
-        ctx.stroke();
-        ctx.lineWidth = w * 0.9;
-        ctx.strokeStyle = 'rgba(0,0,0,0.12)';
-        path();
-        ctx.stroke();
-        base(w * 0.8);
-        // reflet progressif (passes fines et peu opaques : dégradé quasi continu)
-        const N = Math.min(14, Math.max(4, Math.round(w / 3)));
-        for (let i = 1; i <= N; i++) {
-          ctx.lineWidth = w * 0.8 * (1 - i / (N + 1));
-          ctx.strokeStyle = `rgba(255,255,255,${(0.32 / N).toFixed(3)})`;
-          path();
+        for (let k = 1; k < n; k++) {
+          ctx.strokeStyle = shade(segColors[k - 1], 0.85);
+          ctx.beginPath();
+          ctx.moveTo(scr[k - 1][0], scr[k - 1][1]);
+          ctx.lineTo(scr[k][0], scr[k][1]);
           ctx.stroke();
+        }
+        if (w < 3) return;
+        // normales écran aux sommets (moyenne des tronçons adjacents, orientation continue)
+        const dirs = [];
+        for (let k = 1; k < n; k++) {
+          const dx = scr[k][0] - scr[k - 1][0];
+          const dy = scr[k][1] - scr[k - 1][1];
+          const l = Math.hypot(dx, dy) || 1;
+          dirs.push([dx / l, dy / l]);
+        }
+        const normals = scr.map((_, i) => {
+          const a = dirs[Math.max(0, i - 1)] ?? [1, 0];
+          const b = dirs[Math.min(dirs.length - 1, i)] ?? a;
+          let tx = a[0] + b[0];
+          let ty = a[1] + b[1];
+          const l = Math.hypot(tx, ty);
+          if (l < 1e-6) [tx, ty] = b;
+          else (tx /= l), (ty /= l);
+          // facteur de raccord pour garder la largeur dans les coudes
+          const miter = 1 / Math.max(0.5, Math.abs(tx * b[0] + ty * b[1]));
+          return [-ty * miter, tx * miter];
+        });
+        const K = Math.max(6, Math.min(28, Math.round(w / 2)));
+        const ys = Array.from({ length: K + 1 }, (_, j) => -w / 2 + (j * w) / K);
+        // lumière : direction écran (haut gauche) et composante vers l'observateur
+        const Lx = -0.42;
+        const Ly = -0.58;
+        const Lz = 0.7;
+        for (let k = 1; k < n; k++) {
+          const base = toRGB(segColors[k - 1]);
+          const n0 = normals[k - 1];
+          const n1 = normals[k];
+          const lat = ((n0[0] + n1[0]) * Lx + (n0[1] + n1[1]) * Ly) / 2;
+          for (let j = 0; j < K; j++) {
+            const sy = (ys[j] + ys[j + 1]) / w; // position latérale (−1…1)
+            const nz = Math.sqrt(Math.max(0, 1 - sy * sy));
+            const diff = Math.max(0, sy * lat + nz * Lz);
+            // demi-vecteur L + V (V vers l'observateur)
+            const hl = Math.hypot(lat, Lz + 1);
+            const spec = Math.max(0, (sy * lat + nz * (Lz + 1)) / hl) ** 18;
+            const f = 0.5 + 0.62 * diff;
+            const r = Math.min(255, base[0] * f + 140 * spec);
+            const g = Math.min(255, base[1] * f + 140 * spec);
+            const b = Math.min(255, base[2] * f + 140 * spec);
+            ctx.fillStyle = `rgb(${r | 0},${g | 0},${b | 0})`;
+            // bandes opaques légèrement chevauchantes (½ px) : pas de joint visible
+            const y0 = j === 0 ? ys[j] : ys[j] - 0.5;
+            const y1 = j === K - 1 ? ys[j + 1] : ys[j + 1] + 0.5;
+            const d = dirs[k - 1];
+            const e0 = k > 1 ? 0.6 : 0;
+            const e1 = k < n - 1 ? 0.6 : 0;
+            const p0 = [scr[k - 1][0] - d[0] * e0, scr[k - 1][1] - d[1] * e0];
+            const p1 = [scr[k][0] + d[0] * e1, scr[k][1] + d[1] * e1];
+            ctx.beginPath();
+            ctx.moveTo(p0[0] + n0[0] * y0, p0[1] + n0[1] * y0);
+            ctx.lineTo(p1[0] + n1[0] * y0, p1[1] + n1[1] * y0);
+            ctx.lineTo(p1[0] + n1[0] * y1, p1[1] + n1[1] * y1);
+            ctx.lineTo(p0[0] + n0[0] * y1, p0[1] + n0[1] * y1);
+            ctx.closePath();
+            ctx.fill();
+          }
         }
       },
     };
@@ -787,6 +820,26 @@ export class Viewer {
     return this.canvas.toDataURL('image/png');
   }
 }
+
+/** Couleur CSS → [r, g, b] (via le moteur du navigateur, mis en cache). */
+const rgbCache = new Map();
+let colorCtx = null;
+function toRGB(color) {
+  if (rgbCache.has(color)) return rgbCache.get(color);
+  colorCtx ??= document.createElement('canvas').getContext('2d');
+  colorCtx.fillStyle = '#000';
+  colorCtx.fillStyle = color;
+  const v = colorCtx.fillStyle;
+  let rgb;
+  if (v.startsWith('#')) rgb = [1, 3, 5].map((i) => parseInt(v.slice(i, i + 2), 16));
+  else rgb = (v.match(/[\d.]+/g) ?? [0, 0, 0]).slice(0, 3).map(Number);
+  rgbCache.set(color, rgb);
+  return rgb;
+}
+const shade = (color, f) => {
+  const [r, g, b] = toRGB(color);
+  return `rgb(${(r * f) | 0},${(g * f) | 0},${(b * f) | 0})`;
+};
 
 /** Raccourcit une polyligne 3D de d0 au début et d1 à la fin (couleurs par tronçon). */
 function trimPolyline(pts, colors, d0, d1) {
