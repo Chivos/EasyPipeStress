@@ -116,8 +116,9 @@ function run() {
   try {
     state.result = runAnalysis(state.model);
     state.filter.all = false;
-    // affichage initial : taux de l'équation la plus chargée
-    const gov = state.result.check?.summary.governing.reduce((a, g) => (!a || g.effRatio > a.effRatio ? g : a), null);
+    // affichage initial : première équation du code (l'épaisseur minimale, si vérifiée, vient après)
+    const govs = state.result.check?.summary.governing ?? [];
+    const gov = govs.find((g) => g.eq !== 'e') ?? govs[0];
     state.display.mode = gov ? `ratio:${gov.eq}` : 'geom';
     if (gov) state.filter.eq = gov.eq;
   } catch (e) {
