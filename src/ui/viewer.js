@@ -226,11 +226,18 @@ export class Viewer {
         pts = deformedPoints(e, P, disp.u, amp, nseg);
         mags = pts.mags;
         if (arc) pts = pts.map((p, k) => vec.add(p, vec.sub(arc.at(k / nseg), vec.add(P[e.n1], vec.scale(vec.sub(P[e.n2], P[e.n1]), k / nseg)))));
+      } else if (arc) {
+        pts = Array.from({ length: nseg + 1 }, (_, k) => arc.at(k / nseg));
       } else {
-        pts = Array.from({ length: nseg + 1 }, (_, k) => (arc ? arc.at(k / nseg) : vec.add(P[e.n1], vec.scale(vec.sub(P[e.n2], P[e.n1]), k / nseg))));
+        // tube droit : tronçons courts aux extrémités (tri en profondeur correct
+        // au voisinage des robinets, disques de supports et tés)
+        const L = vec.norm(vec.sub(P[e.n2], P[e.n1]));
+        const a = L > 0 ? Math.min(0.3, (1.2 * e.sec.od) / L) : 0;
+        const ts = a > 0.02 ? [0, a, 1 - a, 1] : [0, 1];
+        pts = ts.map((t) => vec.add(P[e.n1], vec.scale(vec.sub(P[e.n2], P[e.n1]), t)));
       }
       const hl = isHl(e);
-      const segColors = Array.from({ length: nseg }, (_, k) =>
+      const segColors = Array.from({ length: pts.length - 1 }, (_, k) =>
         hl ? C.sel : ghost ? (useDisp ? disp.colorOf((mags[k] + mags[k + 1]) / 2 / disp.colorMax) : colors?.[ie] ?? C.deformed) : colors?.[ie] ?? C.pipe,
       );
       if (rev) {
@@ -297,32 +304,43 @@ export class Viewer {
       const pts = deformedPoints(e, P, disp.u, amp, 1);
       valveShape(pts[0], pts[1], e.sec.od, useDisp ? disp.colorOf((pts.mags[0] + pts.mags[1]) / 2 / disp.colorMax) : C.valve);
     });
-    prims.sort((a, b) => b.depth - a.depth);
-    for (const pr of prims) pr.draw(ctx);
-
     // Supports : flèches dont la pointe touche la paroi du tube, une par sens
     // bloqué (blocage bilatéral = deux flèches opposées) ; blocage axial =
     // flèches parallèles au tube ; point fixe = disque rouge dans le plan de
-    // section ; blocage partiel en rotation = disque jaune.
+    // section ; blocage partiel en rotation = disque jaune. Les disques sont
+    // triés en profondeur avec les tubes (le tube traverse le disque).
     const springsByNode = new Map();
     for (const s of mesh.springs) {
       if (!springsByNode.has(s.node)) springsByNode.set(s.node, []);
       springsByNode.get(s.node).push(s);
     }
+    const supInfo = mesh.supports.map((sup) => {
+      const springs = (springsByNode.get(sup.node) ?? []).filter((s) => mesh.supports[s.support] === sup);
+      return { springs, fullAnchor: sup.kind === 'anchor' || springs.filter((s) => s.rot).length >= 3 };
+    });
+    mesh.supports.forEach((sup, k) => {
+      const { springs, fullAnchor } = supInfo[k];
+      if (!fullAnchor && !springs.some((s) => s.rot)) return;
+      const p = P[sup.node];
+      const od = odAtNode(sup.node) || 100;
+      const axis = this.nodeAxis(mesh, sup.node);
+      prims.push({
+        depth: this.toScreen(p)[2],
+        draw: (c) => (fullAnchor ? this.drawDisc(c, p, axis, 1.0 * od, '#d62828', '#7a1010') : this.drawDisc(c, p, axis, 0.85 * od, '#f2c200', '#8a6d00')),
+      });
+    });
+    prims.sort((a, b) => b.depth - a.depth);
+    for (const pr of prims) pr.draw(ctx);
+
     const minPx = 14; // longueur minimale lisible d'une flèche (px)
-    mesh.supports.forEach((sup) => {
+    mesh.supports.forEach((sup, k) => {
       const p = P[sup.node];
       const od = odAtNode(sup.node) || 100;
       const R = od / 2;
       const axis = this.nodeAxis(mesh, sup.node);
-      const springs = (springsByNode.get(sup.node) ?? []).filter((s) => mesh.supports[s.support] === sup);
+      const { springs, fullAnchor } = supInfo[k];
       const color = SUPPORT_COLORS[sup.kind] ?? '#555';
-      const fullAnchor = sup.kind === 'anchor' || springs.filter((s) => s.rot).length >= 3;
-      if (fullAnchor) {
-        this.drawDisc(ctx, p, axis, 1.0 * od, '#d62828', '#7a1010');
-        return;
-      }
-      if (springs.some((s) => s.rot)) this.drawDisc(ctx, p, axis, 0.85 * od, '#f2c200', '#8a6d00');
+      if (fullAnchor) return;
       // longueur de flèche : 1,5 De à l'échelle, avec un minimum en pixels
       const L = Math.max(1.5 * od, minPx / pxPerMm);
       for (const sp of springs.filter((x) => !x.rot)) {
@@ -513,61 +531,73 @@ export class Viewer {
    * en haut à gauche : profil transversal doux (bord éclairé légèrement sombre,
    * reflet diffus, cœur à la teinte nominale, bord opposé dans l'ombre). Les
    * normales écran sont moyennées aux sommets : la ligne, coudes compris, est
-   * continue. Une primitive par tronçon, pour un tri en profondeur correct
-   * vis-à-vis des robinets et des autres lignes.
+   * continue. Chaque tronçon est prolongé à ses extrémités par la demi-ellipse
+   * de sa section projetée (tronçon incliné sur l'axe de vue, cercle complet
+   * pour un tronçon vu en bout). Une primitive par tronçon, pour un tri en
+   * profondeur correct vis-à-vis des robinets, des supports et des autres lignes.
    */
   chainPrims(scr, segColors, od) {
     const w = Math.max(1.2, od * this.frame.s);
     const n = scr.length;
     if (n < 2) return [];
-    if (w < 3) {
-      return segColors.map((c, k) => ({
-        depth: (scr[k][2] + scr[k + 1][2]) / 2,
-        draw: (ctx) => {
-          ctx.lineCap = 'round';
-          ctx.lineWidth = w;
-          ctx.strokeStyle = c;
-          ctx.beginPath();
-          ctx.moveTo(scr[k][0], scr[k][1]);
-          ctx.lineTo(scr[k + 1][0], scr[k + 1][1]);
-          ctx.stroke();
-        },
-      }));
-    }
+    const sc = this.frame.s;
+    // direction écran et inclinaison sur l'axe de vue (|cos|) de chaque tronçon
     const dirs = [];
+    const tilt = [];
     for (let k = 1; k < n; k++) {
       const dx = scr[k][0] - scr[k - 1][0];
       const dy = scr[k][1] - scr[k - 1][1];
-      const l = Math.hypot(dx, dy) || 1;
-      dirs.push([dx / l, dy / l]);
+      const dz = (scr[k][2] - scr[k - 1][2]) * sc;
+      const l = Math.hypot(dx, dy);
+      const l3 = Math.hypot(l, dz);
+      dirs.push(l > 1e-3 ? [dx / l, dy / l] : null);
+      tilt.push(l3 > 1e-9 ? Math.abs(dz) / l3 : 0);
     }
-    const normals = scr.map((_, i) => {
+    // tronçon vu en bout : direction empruntée au voisin le plus proche
+    for (let k = 0; k < dirs.length; k++) {
+      if (dirs[k]) continue;
+      for (let j = 1; j < dirs.length; j++) {
+        const c = dirs[k - j] ?? dirs[k + j];
+        if (c) {
+          dirs[k] = c;
+          break;
+        }
+      }
+      dirs[k] ??= [1, 0];
+    }
+    // normales aux sommets : moyennes (raccord en onglet) si l'angle est modéré
+    const segNormal = (d) => [-d[1], d[0]];
+    const joint = scr.map((_, i) => {
       const a = dirs[Math.max(0, i - 1)];
       const b = dirs[Math.min(dirs.length - 1, i)];
-      let tx = a[0] + b[0];
-      let ty = a[1] + b[1];
+      const c = a[0] * b[0] + a[1] * b[1];
+      if (c < 0.3) return null; // angle vif à l'écran : chaque tronçon garde sa normale
+      const tx = a[0] + b[0];
+      const ty = a[1] + b[1];
       const l = Math.hypot(tx, ty);
-      if (l < 1e-6) [tx, ty] = b;
-      else (tx /= l), (ty /= l);
-      // facteur de raccord pour garder la largeur dans les coudes
-      const miter = 1 / Math.max(0.5, Math.abs(tx * b[0] + ty * b[1]));
-      return [-ty * miter, tx * miter];
+      const miter = 1 / Math.max(0.6, Math.abs((tx / l) * b[0] + (ty / l) * b[1]));
+      return [(-ty / l) * miter, (tx / l) * miter];
     });
-    const K = Math.max(8, Math.min(40, Math.round(w / 1.5)));
+    const K = w < 3 ? 1 : Math.max(4, Math.min(40, Math.round(w / 1.5)));
     const ys = Array.from({ length: K + 1 }, (_, j) => -w / 2 + (j * w) / K);
     const prims = [];
     for (let k = 1; k < n; k++) {
-      const n0 = normals[k - 1];
-      const n1 = normals[k];
       const d = dirs[k - 1];
+      const own = segNormal(d);
+      const n0 = joint[k - 1] ?? own;
+      const n1 = joint[k] ?? own;
       // côté éclairé : composante de la normale écran vers la lumière ; le
       // profil est mélangé avec son symétrique quand le tube est orienté vers
       // la lumière, pour une transition continue
-      const lat = ((n0[0] + n1[0]) * LIGHT2D[0] + (n0[1] + n1[1]) * LIGHT2D[1]) / 2 / Math.hypot((n0[0] + n1[0]) / 2, (n0[1] + n1[1]) / 2);
+      const lat = own[0] * LIGHT2D[0] + own[1] * LIGHT2D[1];
       const wgt = Math.min(1, Math.max(0, 0.5 + lat / 0.5));
       const base = toRGB(segColors[k - 1]);
       const fills = [];
       for (let j = 0; j < K; j++) {
+        if (K === 1) {
+          fills.push(segColors[k - 1]);
+          break;
+        }
         const sy = (ys[j] + ys[j + 1]) / w; // −1…1 le long de la normale
         const pa = tubeProfile((1 - sy) / 2);
         const pb = tubeProfile((1 + sy) / 2);
@@ -575,23 +605,41 @@ export class Viewer {
         const add = wgt * pa[1] + (1 - wgt) * pb[1];
         fills.push(`rgb(${Math.min(255, base[0] * mul + add) | 0},${Math.min(255, base[1] * mul + add) | 0},${Math.min(255, base[2] * mul + add) | 0})`);
       }
-      // bandes opaques légèrement chevauchantes : pas de joint visible
+      // demi-ellipses d'extrémité : demi-petit axe = R·|cos| (R en pixels) ; inutiles
+      // à un raccord régulier avec un tronçon voisin assez long pour les couvrir
+      const capR = (w / 2) * tilt[k - 1];
+      const segLen = Math.hypot(scr[k][0] - scr[k - 1][0], scr[k][1] - scr[k - 1][1]);
+      const short = segLen < w;
+      const capA = k === 1 || !joint[k - 1] || short ? capR : 0;
+      const capB = k === n - 1 || !joint[k] || short ? capR : 0;
+      const ell = (y) => Math.sqrt(Math.max(0, 1 - ((2 * y) / w) ** 2));
+      // léger recouvrement longitudinal entre tronçons : pas de joint visible
       const e0 = k > 1 ? 0.6 : 0;
       const e1 = k < n - 1 ? 0.6 : 0;
-      const p0 = [scr[k - 1][0] - d[0] * e0, scr[k - 1][1] - d[1] * e0];
-      const p1 = [scr[k][0] + d[0] * e1, scr[k][1] + d[1] * e1];
+      const A = scr[k - 1];
+      const B = scr[k];
       prims.push({
-        depth: (scr[k - 1][2] + scr[k][2]) / 2,
+        depth: (A[2] + B[2]) / 2,
         draw: (ctx) => {
           for (let j = 0; j < K; j++) {
             const y0 = j === 0 ? ys[j] : ys[j] - 0.5;
             const y1 = j === K - 1 ? ys[j + 1] : ys[j + 1] + 0.5;
+            const yc = [y0, (y0 + y1) / 2, y1];
             ctx.fillStyle = fills[j];
             ctx.beginPath();
-            ctx.moveTo(p0[0] + n0[0] * y0, p0[1] + n0[1] * y0);
-            ctx.lineTo(p1[0] + n1[0] * y0, p1[1] + n1[1] * y0);
-            ctx.lineTo(p1[0] + n1[0] * y1, p1[1] + n1[1] * y1);
-            ctx.lineTo(p0[0] + n0[0] * y1, p0[1] + n0[1] * y1);
+            // bord y0 → y1 côté A (avec la demi-ellipse), puis retour côté B
+            yc.forEach((y, i) => {
+              const ex = e0 + capA * ell(y);
+              const x = A[0] + n0[0] * y - d[0] * ex;
+              const yy = A[1] + n0[1] * y - d[1] * ex;
+              if (i === 0) ctx.moveTo(x, yy);
+              else ctx.lineTo(x, yy);
+            });
+            for (let i = 2; i >= 0; i--) {
+              const y = yc[i];
+              const ex = e1 + capB * ell(y);
+              ctx.lineTo(B[0] + n1[0] * y + d[0] * ex, B[1] + n1[1] * y + d[1] * ex);
+            }
             ctx.closePath();
             ctx.fill();
           }
@@ -713,20 +761,23 @@ export class Viewer {
     const Rf = 0.8 * od; // bride
     const Rc = 0.7 * od; // base des cônes
     const tf = Math.min(0.12 * od, 0.12 * L);
-    // profil (abscisse, rayon) de pa à pb
-    const prof = [[0, 0], [0, Rf], [tf, Rf], [tf, Rc], [L / 2, 0], [L - tf, Rc], [L - tf, Rf], [L, Rf], [L, 0]];
+    // profil (abscisse, rayon) de pa à pb ; les faces des brides sont des
+    // couronnes autour du tube qui y entre
+    const ri = 0.49 * od;
+    const prof = [[0, ri], [0, Rf], [tf, Rf], [tf, Rc], [L / 2, 0], [L - tf, Rc], [L - tf, Rf], [L, Rf], [L, ri]];
     const N = 48;
     const ang = Array.from({ length: N + 1 }, (_, k) => (2 * Math.PI * k) / N);
     const pt = (x, r, t) => vec.add(pa, vec.add(vec.scale(u, x), vec.add(vec.scale(e1, r * Math.cos(t)), vec.scale(e2, r * Math.sin(t)))));
     const base = toRGB(color);
-    const prims = [];
-    for (let i = 1; i < prof.length; i++) {
+    // facettes visibles d'un tronçon de profil (surface de révolution)
+    const band = (i) => {
       const [x0, r0] = prof[i - 1];
       const [x1, r1] = prof[i];
       const dx = x1 - x0;
       const dr = r1 - r0;
       const ln = Math.hypot(dx, dr);
-      if (ln < 1e-9) continue;
+      const out = [];
+      if (ln < 1e-9) return out;
       for (let k = 0; k < N; k++) {
         const tm = (ang[k] + ang[k + 1]) / 2;
         const radial = vec.add(vec.scale(e1, Math.cos(tm)), vec.scale(e2, Math.sin(tm)));
@@ -735,35 +786,42 @@ export class Viewer {
         if (vn[2] <= 0) continue; // facette cachée
         const quad = grow([pt(x0, r0, ang[k]), pt(x1, r1, ang[k]), pt(x1, r1, ang[k + 1]), pt(x0, r0, ang[k + 1])].map((q) => this.toScreen(q)), 0.5);
         const f = 0.55 + 0.5 * Math.max(0, vn[0] * LIGHT3D[0] + vn[1] * LIGHT3D[1] + vn[2] * LIGHT3D[2]);
-        const fill = `rgb(${Math.min(255, base[0] * f) | 0},${Math.min(255, base[1] * f) | 0},${Math.min(255, base[2] * f) | 0})`;
-        prims.push({
-          depth: quad.reduce((z, q) => z + q[2], 0) / 4,
-          draw: (ctx) => {
-            ctx.fillStyle = fill;
-            polygon(ctx, quad);
-            ctx.fill();
-          },
-        });
+        out.push({ quad, fill: `rgb(${Math.min(255, base[0] * f) | 0},${Math.min(255, base[1] * f) | 0},${Math.min(255, base[2] * f) | 0})` });
       }
-    }
-    // silhouette en teinte moyenne sous les facettes : masque les joints d'anticrénelage
-    // (une enveloppe convexe par demi-corps : le corps est pincé au milieu)
-    if (prims.length) {
-      const depth = Math.max(...prims.map((q) => q.depth)) + 1e-6;
-      const fill = shade(color, 0.8);
-      for (const half of [prof.slice(0, 5), prof.slice(4)]) {
-        const sil = [];
-        for (const [x, r] of half) for (let k = 0; k < N; k += 2) sil.push(this.toScreen(pt(x, r, ang[k])));
-        const hull = convexHull(sil);
-        prims.push({
-          depth,
-          draw: (ctx) => {
-            ctx.fillStyle = fill;
-            polygon(ctx, hull);
+      return out;
+    };
+    // Chaque demi-corps (bride + cône) est dessiné d'un bloc, dans un ordre
+    // fixé par le côté d'où il est vu : le corps n'est pas convexe (gorge au
+    // milieu, épaulement de bride), un tri facette par facette serait faux.
+    // Tronçons : 1 face, 2 pourtour de bride, 3 épaulement, 4 cône (demi-corps
+    // côté pa) ; 8 face, 7 pourtour, 6 épaulement, 5 cône (côté pb).
+    const prims = [];
+    const halves = [
+      { segs: [1, 2, 3, 4], outward: vec.scale(u, -1), at: L / 4, sil: prof.slice(0, 5) },
+      { segs: [8, 7, 6, 5], outward: u, at: (3 * L) / 4, sil: prof.slice(4) },
+    ];
+    const under = shade(color, 0.8);
+    for (const hf of halves) {
+      const faceSeen = this.viewDir(hf.outward)[2] > 0;
+      const order = faceSeen ? [...hf.segs].reverse() : hf.segs;
+      const facets = order.flatMap((i) => band(i));
+      const sil = [];
+      for (const [x, r] of hf.sil) for (let k = 0; k < N; k += 2) sil.push(this.toScreen(pt(x, Math.max(r, 0), ang[k])));
+      const hull = convexHull(sil);
+      prims.push({
+        depth: this.toScreen(vec.add(pa, vec.scale(u, hf.at)))[2],
+        draw: (ctx) => {
+          // silhouette en teinte moyenne sous les facettes : masque les joints d'anticrénelage
+          ctx.fillStyle = under;
+          polygon(ctx, hull);
+          ctx.fill();
+          for (const ft of facets) {
+            ctx.fillStyle = ft.fill;
+            polygon(ctx, ft.quad);
             ctx.fill();
-          },
-        });
-      }
+          }
+        },
+      });
     }
     // tige et volant
     const mid = vec.add(pa, vec.scale(axis, 0.5));
@@ -859,9 +917,7 @@ export class Viewer {
     });
     polygon(ctx, pts);
     ctx.fillStyle = fill;
-    ctx.globalAlpha = 0.92;
     ctx.fill();
-    ctx.globalAlpha = 1;
     ctx.strokeStyle = stroke;
     ctx.lineWidth = 1.5;
     ctx.stroke();
@@ -872,7 +928,6 @@ export class Viewer {
   }
 }
 
-/** Couleur CSS → [r, g, b] (via le moteur du navigateur, mis en cache). */
 // Lumière (haut gauche, vers l'observateur) commune aux tubes et aux robinets
 const LIGHT2D = [-0.586, -0.81];
 const LIGHT3D = [-0.42, -0.58, 0.7];
@@ -895,6 +950,7 @@ function tubeProfile(t) {
   return [1 - ab - aw, 255 * aw];
 }
 
+/** Couleur CSS → [r, g, b] (via le moteur du navigateur, mis en cache). */
 const rgbCache = new Map();
 let colorCtx = null;
 function toRGB(color) {
