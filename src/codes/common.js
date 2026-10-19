@@ -46,6 +46,7 @@ export function thicknessRows(code, { model, mesh }) {
       ratio: res.tm / res.tAvail,
       unit: 'mm',
       detail: res.detail ?? {},
+      calc: res.calc,
     });
   }
   return rows;

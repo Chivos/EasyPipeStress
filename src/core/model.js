@@ -73,7 +73,7 @@ export function emptyModel() {
   return {
     version: MODEL_VERSION,
     meta: { title: 'Nouvelle étude', author: '', notes: '' },
-    settings: { vertical: 'Z', tRef: 20, meshMaxLength: 500, bendDivisionAngle: 10, shear: true, checkThickness: false },
+    settings: { vertical: 'Z', tRef: 20, meshMaxLength: 500, bendDivisionAngle: 10, shear: true, checkThickness: false, allowances: false },
     materials: structuredClone(DEFAULT_MATERIALS),
     sections: structuredClone(DEFAULT_SECTIONS),
     nodeCoords: [{ node: '10', x: 0, y: 0, z: 0 }],
@@ -94,8 +94,8 @@ export function exampleModel() {
     ['20', '30', 0, 0, -2500],
     ['30', '35', 0, 2000, 0],
     ['35', '40', 0, 2000, 0],
-    ['40', '45', 1200, 0, 0],
-    ['45', '50', 1200, 0, 0],
+    ['40', '45', 1000, 0, 0],
+    ['46', '50', 1000, 0, 0],
   ];
   for (const [n1, n2, dx, dy, dz] of pipes) m.components.push({ type: 'pipe', n1, n2, dx, dy, dz, ...base });
   // dérivation DN100 vers un troisième piquage, par un té forgé au nœud 15
@@ -104,7 +104,8 @@ export function exampleModel() {
   m.components.push({ type: 'bend', node: '55', radius: 152, t: '', divisions: '' });
   m.components.push({ type: 'tee', node: '15', teeType: 'welding', pad: '', sif: '', label: 'Té DN150×100' });
   for (const node of ['20', '30', '40']) m.components.push({ type: 'bend', node, radius: 229, t: '', divisions: '' });
-  m.components.push({ type: 'mass', node: '45', mass: 180, label: 'Robinet DN150' });
+  m.components.push({ type: 'valve', n1: '45', n2: '46', dx: 400, dy: 0, dz: 0, mass: 180, stiffFactor: 10, section: 'DN150-40S', label: 'Robinet DN150' });
+  m.components.push({ type: 'mass', node: '35', mass: 25, label: 'Instrument' });
   m.components.push({ type: 'support', node: '10', kind: 'anchor', stiffness: '', dofs: '', imposed: '', label: 'Piquage A' });
   m.components.push({ type: 'support', node: '35', kind: 'restguide', stiffness: '', dofs: '', imposed: '', label: 'S1' });
   m.components.push({ type: 'support', node: '50', kind: 'anchor', stiffness: '', dofs: '', imposed: '0 0 3', label: 'Piquage B' });

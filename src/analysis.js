@@ -28,7 +28,8 @@ export function runAnalysis(model) {
         cases.push({
           ...r,
           id: `${lc.id}-${lv.level}`,
-          label: `${lc.label || type.label} niveau ${lv.level} (× ${k})`,
+          label: `${lc.label || type.label} niveau ${lv.level}${lv.name ? ` — ${lv.name}` : ''} (× ${k})`,
+          levelName: lv.name || '',
           type: lc.type,
           level: lv.level,
           factor: k,

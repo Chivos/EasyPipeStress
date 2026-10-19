@@ -79,7 +79,7 @@ export function buildScene(state) {
       const v = r.coveredBy ? 0 : r.ratio;
       if (v > per[r.ie]) per[r.ie] = v;
     }
-    scene.elementColors = Array.from(per, ratioColor);
+    scene.elementColors = Array.from(per, (v, ie) => (mesh.elements[ie].kind === 'valve' ? null : ratioColor(v)));
     scene.legend = RATIO_LEGEND;
   }
   return scene;
@@ -147,7 +147,7 @@ export function renderResultsPanel(app) {
             s.governing.map((g) =>
               h(
                 'tr',
-                { class: 'clickable', onclick: () => app.select(g.node) },
+                { class: 'clickable', title: 'Détail du calcul', onclick: () => (app.select(g.node), openRowDetail(g)) },
                 h('td', {}, g.eqLabel),
                 h('td', {}, g.case),
                 h('td', {}, g.node),
@@ -329,8 +329,11 @@ function codeTable(app, r, nodeOk, internalChk) {
     ),
     simpleTable(
       ['Critère', 'Cas', 'Nœud', 'Élément', 'Composant', 'σ (MPa)', 'Admissible', 'Taux', 'Détail'],
-      rows.slice(0, 3000).map((x) => [x.eqLabel, x.case, x.node, x.elem, x.comp, fmt(x.stress, x.unit === 'mm' ? 2 : 1) + (x.unit === 'mm' ? ' mm' : ''), fmt(x.allow, x.unit === 'mm' ? 2 : 1), { ratio: x.ratio, covered: x.coveredBy }, detailText(x)]),
-      (row) => app.select(row[2]),
+      rows.slice(0, 3000).map((x) => Object.assign([x.eqLabel, x.case, x.node, x.elem, x.comp, fmt(x.stress, x.unit === 'mm' ? 2 : 1) + (x.unit === 'mm' ? ' mm' : ''), fmt(x.allow, x.unit === 'mm' ? 2 : 1), { ratio: x.ratio, covered: x.coveredBy }, detailText(x)], { src: x })),
+      (row) => {
+        app.select(row[2]);
+        openRowDetail(row.src);
+      },
       (cell) => (cell && typeof cell === 'object' && 'ratio' in cell ? h('span', { class: 'pill', style: { background: ratioColor(cell.covered ? 0 : cell.ratio) } }, fmt(cell.ratio, 2), cell.covered ? ` (${cell.covered} ok)` : '') : cell),
     ),
   );
@@ -354,6 +357,55 @@ export function modalSums(modal) {
   const eff = [0, 0, 0];
   for (const md of modal.modes) md.effMass.forEach((v, d) => (eff[d] += v));
   return { eff, supported: modal.supportedMass ?? [0, 0, 0] };
+}
+
+/** Fenêtre de détail d'une ligne de vérification : données, termes, moments, admissible. */
+export function openRowDetail(row) {
+  document.querySelector('.modal-backdrop')?.remove();
+  const c = row.calc;
+  const num = (v, unit) => (typeof v === 'number' ? fmt(v, Math.abs(v) >= 1000 || unit === 'mm³' ? 0 : unit === '' ? 3 : 2) : v);
+  const kv = (items) =>
+    h('table', { class: 'grid compact kv' }, h('tbody', {}, items.map(([k, v, u]) => h('tr', {}, h('td', {}, k), h('td', { class: 'num' }, num(v, u)), h('td', { class: 'muted' }, u)))));
+  const close = () => {
+    backdrop.remove();
+    document.removeEventListener('keydown', onKey);
+  };
+  const onKey = (e) => e.key === 'Escape' && close();
+  const ok = (row.coveredBy ? 0 : row.ratio) <= 1;
+  const backdrop = h(
+    'div',
+    { class: 'modal-backdrop', onclick: (e) => e.target === backdrop && close() },
+    h(
+      'div',
+      { class: 'modal', role: 'dialog', 'aria-label': 'Détail du calcul' },
+      h('div', { class: 'modal-head' }, h('h3', {}, row.eqLabel), h('button', { class: 'icon', title: 'Fermer (Échap)', onclick: close }, '✕')),
+      h('p', { class: 'muted' }, `Nœud ${row.node} — élément ${row.elem} — ${row.comp} — cas ${row.case}`),
+      c?.formula ? h('p', {}, h('code', {}, c.formula)) : null,
+      c?.items ? [h('h4', {}, 'Données et termes du calcul'), kv(c.items)] : null,
+      c?.moments?.length
+        ? [
+            h('h4', {}, 'Moments à l’extrémité de l’élément (repère local, N·m)'),
+            h(
+              'table',
+              { class: 'grid compact' },
+              h('thead', {}, h('tr', {}, ['Cas', 'Mt (torsion)', 'Mf,y', 'Mf,z', 'Résultant'].map((t) => h('th', {}, t)))),
+              h('tbody', {}, c.moments.map((mo) => h('tr', {}, h('td', {}, mo.name), [mo.mt, mo.my, mo.mz, mo.res].map((v) => h('td', { class: 'num' }, fmt(v, 1)))))),
+            ),
+            c.moments.some((mo) => !mo.signed) ? h('p', { class: 'help' }, 'Séisme : composantes enveloppes (non signées) après combinaisons modale et directionnelle ; résultant calculé sur ces composantes.') : null,
+          ]
+        : null,
+      c?.allow ? [h('h4', {}, 'Admissible'), kv(c.allow)] : null,
+      c?.note ? h('p', { class: 'help' }, c.note) : null,
+      h(
+        'div',
+        { class: `verdict ${ok ? 'ok' : 'ko'}` },
+        `${row.unit === 'mm' ? 'eₘ' : 'σ'} = ${fmt(row.stress, 2)} ${row.unit ?? 'MPa'} ; admissible ${fmt(row.allow, 2)} ${row.unit ?? 'MPa'} ; taux ${fmt(row.ratio, 3)}`,
+        row.coveredBy ? ` — couvert par l’éq. (${row.coveredBy})` : '',
+      ),
+    ),
+  );
+  document.body.append(backdrop);
+  document.addEventListener('keydown', onKey);
 }
 
 export function simpleTable(headers, rows, onRowClick, renderCell = (c) => c) {

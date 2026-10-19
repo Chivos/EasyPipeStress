@@ -25,6 +25,7 @@ export function renderProject(app) {
     { key: 'bendDivisionAngle', label: 'Angle maximal par élément de coude', unit: '°', type: 'number' },
     { key: 'shear', label: 'Déformation d’effort tranchant (Timoshenko)', type: 'checkbox', default: true },
     { key: 'checkThickness', label: 'Vérifier l’épaisseur minimale (tenue à la pression seule)', type: 'checkbox', default: false },
+    { key: 'allowances', label: 'Prendre en compte la tolérance de fabrication et la surépaisseur de corrosion', type: 'checkbox', default: false, title: 'Ajoute les colonnes « Tol. » et « Corr. » aux sections ; utilisées dans la vérification d’épaisseur minimale. Les contraintes des équations du code restent calculées avec l’épaisseur nominale.' },
   ];
   return h(
     'div',
@@ -75,8 +76,12 @@ function renderSections(app) {
         { key: 'id', label: 'Repère', type: 'text', width: 90 },
         { key: 'od', label: 'De', unit: 'mm', type: 'number' },
         { key: 't', label: 'e nom.', unit: 'mm', type: 'number' },
-        { key: 'millTol', label: 'Tol.', unit: '%', type: 'number', title: 'Tolérance négative de fabrication' },
-        { key: 'corrosion', label: 'Corr.', unit: 'mm', type: 'number', title: 'Surépaisseur de corrosion (épaisseur minimale)' },
+        ...(m.settings.allowances
+          ? [
+              { key: 'millTol', label: 'Tol.', unit: '%', type: 'number', title: 'Tolérance négative de fabrication (épaisseur minimale)' },
+              { key: 'corrosion', label: 'Corr.', unit: 'mm', type: 'number', title: 'Surépaisseur de corrosion (épaisseur minimale)' },
+            ]
+          : []),
         { key: 'fluidDensity', label: 'ρ fluide', unit: 'kg/m³', type: 'number' },
         { key: 'insulThk', label: 'Calorifuge', unit: 'mm', type: 'number' },
         { key: 'insulDensity', label: 'ρ calo.', unit: 'kg/m³', type: 'number' },
@@ -200,7 +205,8 @@ function nextNodeId(model, from) {
 export function renderGeometry(app) {
   const m = app.state.model;
   const q = app.state.quick;
-  const pipes = m.components.filter((c) => c.type === 'pipe');
+  const pipes = m.components.filter((c) => c.type === 'pipe' || c.type === 'valve');
+  const isValve = q.kind === 'valve';
   if (!q.from) q.from = pipes.length ? String(pipes[pipes.length - 1].n2) : String(m.nodeCoords[0]?.node ?? '10');
   const add = () => {
     const d = [parseNumber(q.dx) || 0, parseNumber(q.dy) || 0, parseNumber(q.dz) || 0];
@@ -209,8 +215,10 @@ export function renderGeometry(app) {
       const from = String(q.from).trim();
       const to = String(q.to || '').trim() || nextNodeId(mm, from);
       if (to === from) return app.toast('Nœuds de départ et d’arrivée identiques.');
-      const incoming = mm.components.filter((c) => c.type === 'pipe' && (c.n1 === from || c.n2 === from));
-      const c = components.get('pipe').create(mm, { from, to, dx: d[0], dy: d[1], dz: d[2] });
+      const incoming = mm.components.filter((c) => (c.type === 'pipe' || c.type === 'valve') && (String(c.n1) === from || String(c.n2) === from));
+      const c = isValve
+        ? components.get('valve').create(mm, { from, to, dx: d[0], dy: d[1], dz: d[2], mass: parseNumber(q.vmass) || 100 })
+        : components.get('pipe').create(mm, { from, to, dx: d[0], dy: d[1], dz: d[2] });
       c.id = newId(mm);
       mm.components.push(c);
       if (q.tee && incoming.length === 2 && !mm.components.some((x) => x.type === 'tee' && String(x.node) === from)) {
@@ -218,7 +226,7 @@ export function renderGeometry(app) {
         t.id = newId(mm);
         mm.components.push(t);
       }
-      if (q.bend && incoming.length === 1 && !mm.components.some((x) => x.type === 'bend' && x.node === from)) {
+      if (q.bend && !isValve && incoming.length === 1 && incoming[0].type === 'pipe' && !mm.components.some((x) => x.type === 'bend' && x.node === from)) {
         const prev = incoming[0];
         const dp = prev.n2 === from ? [prev.dx, prev.dy, prev.dz] : [-prev.dx, -prev.dy, -prev.dz];
         const cross = Math.hypot(dp[1] * d[2] - dp[2] * d[1], dp[2] * d[0] - dp[0] * d[2], dp[0] * d[1] - dp[1] * d[0]);
@@ -242,8 +250,17 @@ export function renderGeometry(app) {
     'div',
     {},
     section(
-      'Ajout rapide d’un tube',
-      help('Le tube part du nœud « De » (cliquer un nœud dans la vue pour le choisir). Si la direction change, un coude est inséré au nœud de départ.'),
+      'Ajout rapide',
+      help('L’élément part du nœud « De » (cliquer un nœud dans la vue pour le choisir). Pour un tube, si la direction change, un coude est inséré au nœud de départ. Pour un robinet, DX, DY, DZ donnent sa longueur (face à face) et son orientation.'),
+      h(
+        'div',
+        { class: 'toolbar' },
+        h('span', { class: 'muted' }, 'Élément :'),
+        h('select', { onchange: (e) => app.setUi(() => (q.kind = e.target.value)) }, h('option', { value: 'pipe', selected: !isValve }, 'Tube droit'), h('option', { value: 'valve', selected: isValve }, 'Robinet')),
+        isValve ? h('span', { class: 'muted' }, 'masse') : null,
+        isValve ? h('input', { type: 'text', class: 'num tiny', value: q.vmass ?? '100', oninput: (e) => (q.vmass = e.target.value) }) : null,
+        isValve ? h('small', {}, 'kg') : null,
+      ),
       h(
         'div',
         { class: 'quick' },
@@ -271,11 +288,16 @@ export function renderGeometry(app) {
         h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: q.bend, onchange: (e) => (q.bend = e.target.checked) }), ' coude au changement de direction, R ='),
         h('input', { type: 'text', class: 'num tiny', placeholder: '1,5 De', value: q.radius ?? '', oninput: (e) => (q.radius = e.target.value) }),
         h('small', {}, 'mm'),
-        h('button', { class: 'primary', onclick: add }, 'Ajouter le tube'),
+        h('button', { class: 'primary', onclick: add }, isValve ? 'Ajouter le robinet' : 'Ajouter le tube'),
       ),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: q.tee !== false, onchange: (e) => (q.tee = e.target.checked) }), ' té automatique quand un troisième tube part d’un nœud'),
     ),
     section('Tubes droits', help('T et P : température et pression intérieure du tube, utilisées pour la dilatation, les contraintes admissibles et les termes de pression du code.'), componentTable(app, 'pipe')),
+    section(
+      'Robinets',
+      help('Élément rigide entre deux nœuds : longueur (DX, DY, DZ), masse totale répartie, raideur égale à « Rigidité » × celle du tube de raccordement (10 recommandé). Matériau, température et pression repris du tube raccordé ; pas de vérification de contraintes sur le corps du robinet.'),
+      componentTable(app, 'valve'),
+    ),
     section('Coudes', help('Un coude se place au sommet de deux tubes. Ses nœuds A (début), M (milieu), B (fin) peuvent recevoir supports et masses.'), componentTable(app, 'bend')),
     section(
       'Tés',
@@ -374,11 +396,11 @@ function levelsEditor(app, lc, li) {
     'div',
     {},
     h('h4', {}, 'Niveaux de critère vérifiés (éq. 10)'),
-    help('Même spectre d’entrée pour tous les niveaux : cocher les niveaux à vérifier et donner à chacun le coefficient appliqué au séisme calculé. Les admissibles par niveau se règlent dans l’onglet Code.'),
+    help('Même spectre d’entrée pour tous les niveaux : cocher les niveaux à vérifier, leur donner un nom (repris dans le bilan et la note de calcul) et le coefficient appliqué au séisme calculé. Les admissibles par niveau se règlent dans l’onglet Code.'),
     h(
       'table',
       { class: 'grid compact levels' },
-      h('thead', {}, h('tr', {}, h('th', {}, 'Niveau'), h('th', {}, 'Vérifié'), h('th', {}, 'Coefficient sur le séisme'))),
+      h('thead', {}, h('tr', {}, h('th', {}, 'Niveau'), h('th', {}, 'Vérifié'), h('th', {}, 'Nom (bilan, rapport)'), h('th', {}, 'Coefficient sur le séisme'))),
       h(
         'tbody',
         {},
@@ -388,6 +410,7 @@ function levelsEditor(app, lc, li) {
             {},
             h('td', {}, h('b', {}, `10${r.level}`)),
             h('td', {}, h('input', { type: 'checkbox', checked: r.enabled !== false, onchange: (e) => set(r.level, 'enabled', e.target.checked) })),
+            h('td', {}, fieldInput({ type: 'text', placeholder: 'ex. SMHV' }, r.name ?? '', (v) => set(r.level, 'name', v), { focusKey: `lc${li}:lvlname${r.level}` })),
             h('td', {}, fieldInput({ type: 'number' }, r.factor, (v) => set(r.level, 'factor', v === '' ? 1 : v), { focusKey: `lc${li}:lvl${r.level}` })),
           ),
         ),

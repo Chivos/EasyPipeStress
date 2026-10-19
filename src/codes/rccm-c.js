@@ -76,6 +76,13 @@ export function componentFactors({ kind, sec, bend, P = 0, Ec, params = {}, teeT
   return { k, i, h };
 }
 
+/** Composantes locales du moment à une extrémité (torsion, flexions) et résultant, en N·m. */
+function moment(name, c, ie, end) {
+  const o = ie * 12 + (end === 0 ? 3 : 9);
+  const f = c.elemForces;
+  return { name, signed: c.signed !== false, mt: f[o] / 1000, my: f[o + 1] / 1000, mz: f[o + 2] / 1000, res: Math.hypot(f[o], f[o + 1], f[o + 2]) / 1000 };
+}
+
 function resultant(f, ie, end) {
   const o = ie * 12 + (end === 0 ? 3 : 9);
   return Math.hypot(f[o], f[o + 1], f[o + 2]);
@@ -116,7 +123,7 @@ export const rccmC = {
   thickness: {
     ref: 'RCC-M C 3641',
     formula: 'eₘ = P·Dₑ / [2(S/I + 0,4P)] + c ≤ eₙ(1 − tol) ; I = (4R/Dₑ − 1)/(4R/Dₑ − 2) à l’intrados des coudes',
-    compute(e) {
+    compute(e, model) {
       const De = e.sec.od;
       const S = materialAt(e.mat, e.Td).S;
       let I = 1;
@@ -124,10 +131,36 @@ export const rccmC = {
         const x = e.bend.radius / De;
         I = (4 * x - 1) / (4 * x - 2);
       }
-      const c = +(e.secDef.corrosion || 0);
-      const tm = (e.Pd * De) / (2 * (S / I + 0.4 * e.Pd)) + c;
-      const tAvail = e.sec.t * (1 - (+(e.secDef.millTol ?? 12.5) || 0) / 100);
-      return { tm, tAvail, detail: { I, P: e.Pd, S, c } };
+      // tolérance de fabrication et surépaisseur de corrosion : option du projet
+      const allow = model?.settings?.allowances === true;
+      const c = allow ? +(e.secDef.corrosion || 0) : 0;
+      const tol = allow ? +(e.secDef.millTol ?? 0) || 0 : 0;
+      const tp = (e.Pd * De) / (2 * (S / I + 0.4 * e.Pd));
+      const tm = tp + c;
+      const tAvail = e.sec.t * (1 - tol / 100);
+      return {
+        tm,
+        tAvail,
+        detail: { I, P: e.Pd, S, c },
+        calc: {
+          formula: 'eₘ = P·Dₑ / [2(S/I + 0,4P)] + c ≤ eₙ·(1 − tol)',
+          items: [
+            ['Diamètre extérieur Dₑ', De, 'mm'],
+            ['Pression P', e.Pd, 'MPa'],
+            ['S à T', S, 'MPa'],
+            ['Facteur d’intrados I', I, ''],
+            ['Épaisseur de pression P·Dₑ/[2(S/I + 0,4P)]', tp, 'mm'],
+            ['Surépaisseur de corrosion c', c, 'mm'],
+            ['Épaisseur minimale requise eₘ', tm, 'mm'],
+          ],
+          allow: [
+            ['Épaisseur nominale eₙ', e.sec.t, 'mm'],
+            ['Tolérance de fabrication', tol, '%'],
+            ['Épaisseur disponible eₙ·(1 − tol)', tAvail, 'mm'],
+          ],
+          note: allow ? null : 'Tolérance de fabrication et corrosion non prises en compte (option du projet désactivée).',
+        },
+      };
     },
   },
 
@@ -149,6 +182,7 @@ export const rccmC = {
     if (!weightCases.length) notes.push('Aucun cas de poids propre actif : MA = 0.');
 
     mesh.elements.forEach((e, ie) => {
+      if (e.kind === 'valve') return; // corps de robinet rigide : vérifié par le fabricant, pas par le code
       const { sec, mat } = e;
       const { od: De, t, Z } = sec;
       const atD = materialAt(mat, e.Td);
@@ -166,30 +200,85 @@ export const rccmC = {
         const compLabel = fac === local ? `Té ${node}` : e.kind === 'bend' ? `Coude ${e.bend.node}` : 'Tube';
         const base = { node, elem: e.label, ie, end, comp: compLabel, kind: fac === local ? 'tee' : e.kind };
         const MA = weightCases.reduce((s, c) => s + resultant(c.elemForces, ie, end), 0);
+        // éléments communs au détail de calcul
+        const geom = [
+          ['Diamètre extérieur Dₑ', De, 'mm'],
+          ['Épaisseur nominale eₙ', t, 'mm'],
+          ['Module de flexion Z', Z, 'mm³'],
+          ['Facteur d’intensification i', fac.i, ''],
+          ...(fac.h != null ? [['Caractéristique h', fac.h, '']] : []),
+        ];
+        const momA = weightCases.map((c) => moment(`M_A — ${c.id}`, c, ie, end));
+        const pItems = (P) => [
+          ['Pression P', P, 'MPa'],
+          ['Contrainte de pression (effet de fond) P·Dₑ/(4eₙ)', pTerm(P), 'MPa'],
+        ];
         // éq. (6) poids propre + pression
         const SL = pTerm(e.Pd) + (i75 * MA) / Z;
-        rows.push({ ...base, eq: '6', eqLabel: 'Éq. (6) poids propre + pression', case: wId ? `${wId}+P` : 'P', stress: SL, allow: k6 * Sh, ratio: SL / (k6 * Sh), detail: { i: fac.i, i75, P: e.Pd, MA, Z, S: Sh } });
+        rows.push({
+          ...base, eq: '6', eqLabel: 'Éq. (6) poids propre + pression', case: wId ? `${wId}+P` : 'P', stress: SL, allow: k6 * Sh, ratio: SL / (k6 * Sh),
+          detail: { i: fac.i, i75, P: e.Pd, MA, Z, S: Sh },
+          calc: {
+            formula: 'S_L = P·Dₑ/(4eₙ) + 0,75i·M_A/Z ≤ k₆·Sh',
+            items: [...geom, ['0,75i (≥ 1)', i75, ''], ...pItems(e.Pd), ['Moment résultant M_A', MA / 1000, 'N·m'], ['Contrainte de moment 0,75i·M_A/Z', (i75 * MA) / Z, 'MPa']],
+            moments: momA,
+            allow: [['Température T', e.Td, '°C'], ['S à T', Sh, 'MPa'], ['k₆', k6, ''], ['Admissible k₆·Sh', k6 * Sh, 'MPa']],
+          },
+        });
         // éq. (7) / (8) par cas thermique
         let SA = f * (1.25 * atC.S + 0.25 * atH.S);
-        if (params.shMinusSL && atH.S > SL) SA += f * (atH.S - SL); // S_A = f[1,25(Sc + Sh) − S_L]
+        const bonus = params.shMinusSL && atH.S > SL ? f * (atH.S - SL) : 0; // S_A = f[1,25(Sc + Sh) − S_L]
+        SA += bonus;
+        const saItems = [['Facteur de réduction f', f, ''], ['Sc (à T_réf)', atC.S, 'MPa'], ['Sh (à T)', atH.S, 'MPa'], ...(bonus ? [['Report f·(Sh − S_L)', bonus, 'MPa']] : []), ['S_A', SA, 'MPa']];
         for (const tc of thermalCases) {
           const MC = resultant(tc.elemForces, ie, end);
           const SE = (fac.i * MC) / Z;
-          rows.push({ ...base, eq: '7', eqLabel: 'Éq. (7) dilatation thermique', case: tc.id, stress: SE, allow: SA, ratio: SE / SA, detail: { i: fac.i, MC, Z, SA, f, Sc: atC.S, Sh: atH.S } });
+          rows.push({
+            ...base, eq: '7', eqLabel: 'Éq. (7) dilatation thermique', case: tc.id, stress: SE, allow: SA, ratio: SE / SA,
+            detail: { i: fac.i, MC, Z, SA, f, Sc: atC.S, Sh: atH.S },
+            calc: {
+              formula: 'S_E = i·M_C/Z ≤ S_A = f(1,25 Sc + 0,25 Sh)',
+              items: [...geom, ['Moment résultant M_C', MC / 1000, 'N·m'], ['Contrainte S_E = i·M_C/Z', SE, 'MPa']],
+              moments: [moment(`M_C — ${tc.id}`, tc, ie, end)],
+              allow: saItems,
+            },
+          });
           if (SE > SA) {
             const s8 = pTerm(e.Pd) + (i75 * MA) / Z + SE; // (6) + (7) : même pression que (6)
             const allow8 = atH.S + SA;
-            rows.push({ ...base, eq: '8', eqLabel: 'Éq. (8) = (6) + (7)', case: `${wId ? `${wId}+P+` : 'P+'}${tc.id}`, thermalCase: tc.id, stress: s8, allow: allow8, ratio: s8 / allow8, detail: { i: fac.i, i75, MA, MC, Z } });
+            rows.push({
+              ...base, eq: '8', eqLabel: 'Éq. (8) = (6) + (7)', case: `${wId ? `${wId}+P+` : 'P+'}${tc.id}`, thermalCase: tc.id, stress: s8, allow: allow8, ratio: s8 / allow8,
+              detail: { i: fac.i, i75, MA, MC, Z },
+              calc: {
+                formula: 'P·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ Sh + S_A',
+                items: [...geom, ['0,75i (≥ 1)', i75, ''], ...pItems(e.Pd), ['Contrainte 0,75i·M_A/Z', (i75 * MA) / Z, 'MPa'], ['Contrainte i·M_C/Z', SE, 'MPa']],
+                moments: [...momA, moment(`M_C — ${tc.id}`, tc, ie, end)],
+                allow: [...saItems, ['Admissible Sh + S_A', allow8, 'MPa']],
+              },
+            });
           }
         }
-        // éq. (10) séisme
+        // éq. (10) séisme, par niveau
         for (const sc of seismicCases) {
           const lim = levelLimits(params, sc.level);
           const MB = resultant(sc.elemForces, ie, end);
           const s10 = pTerm(e.P1) + (i75 * (MA + MB)) / Z;
           const allow = lim.kY ? Math.min(lim.kS * Sh, lim.kY * Sy) : lim.kS * Sh;
           const L = sc.level ?? 'D';
-          rows.push({ ...base, eq: `10${L}`, eqLabel: `Éq. (10) niveau ${L}`, case: `${wId ? `${wId}+P+` : 'P+'}${sc.id}`, stress: s10, allow, ratio: s10 / allow, detail: { i: fac.i, i75, P: e.P1, MA, MB, Z, S: Sh, Sy, factor: sc.factor } });
+          rows.push({
+            ...base, eq: `10${L}`, eqLabel: `Éq. (10) niveau ${L}${sc.levelName ? ` — ${sc.levelName}` : ''}`, case: `${wId ? `${wId}+P+` : 'P+'}${sc.id}`, stress: s10, allow, ratio: s10 / allow,
+            detail: { i: fac.i, i75, P: e.P1, MA, MB, Z, S: Sh, Sy, factor: sc.factor },
+            calc: {
+              formula: 'P·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ min(k·Sh ; k′·Sy)',
+              items: [
+                ...geom, ['0,75i (≥ 1)', i75, ''], ...pItems(e.P1),
+                ['Moment résultant M_A', MA / 1000, 'N·m'], ['Moment résultant M_B (séisme × coefficient)', MB / 1000, 'N·m'],
+                ['Coefficient du niveau sur le séisme', sc.factor ?? 1, ''], ['Contrainte 0,75i·(M_A + M_B)/Z', (i75 * (MA + MB)) / Z, 'MPa'],
+              ],
+              moments: [...momA, moment(`M_B — ${sc.id} (enveloppe)`, sc, ie, end)],
+              allow: [['Température T', e.Td, '°C'], ['S à T', Sh, 'MPa'], ['Sy à T', Sy, 'MPa'], [`k niveau ${L}`, lim.kS, ''], ...(lim.kY ? [[`k′ niveau ${L} (plafond Sy)`, lim.kY, '']] : []), ['Admissible', allow, 'MPa']],
+            },
+          });
         }
       }
     });
@@ -225,7 +314,7 @@ export const rccmC = {
         const lim = levelLimits(params, lv.level);
         out.push({
           eq: `(10${lv.level})`,
-          name: `Séisme niveau ${lv.level}`,
+          name: `Séisme niveau ${lv.level}${lv.name ? ` — ${lv.name}` : ''}`,
           loads: `${w} + P + ${num(lv.factor, 1)} × ${s.id}`,
           rule: `M_A + M_B (somme des moments résultants) ; M_B = réponse sismique ${s.method === 'static' ? 'statique équivalente' : `spectrale ${s.modal ?? 'CQC'}`}, directions ${s.directional ?? 'SRSS'}, × ${num(lv.factor, 1)}`,
           allow: `${lim.kS}·Sh${lim.kY ? ` et ${lim.kY}·Sy` : ''}`,

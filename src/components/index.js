@@ -16,10 +16,12 @@ import { bend } from './bend.js';
 import { mass } from './mass.js';
 import { support, SUPPORT_KINDS } from './support.js';
 import { tee, TEE_TYPES } from './tee.js';
+import { valve } from './valve.js';
 
 export const components = new Registry('Composant');
 components.register(pipe);
 components.register(bend);
+components.register(valve);
 components.register(tee);
 components.register(mass);
 components.register(support);

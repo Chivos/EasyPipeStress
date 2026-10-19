@@ -384,3 +384,59 @@ test('Tube : une seule température T et une seule pression P', () => {
   const e = runAnalysis(m).mesh.elements[0];
   assert.deepEqual([e.T1, e.Td, e.P1, e.Pd], [180, 180, 3, 3], 'Td/Pd anciens ignorés');
 });
+
+test('Robinet : masse répartie, raideur × facteur, dilatation, pas de vérification du corps', () => {
+  const m = setup({ density: 0, alpha: 12, maxLen: 250 });
+  m.components = ensureIds({
+    components: [
+      pipe('1', '2', 1000, 0, 0, { T1: 120 }),
+      { type: 'valve', n1: '2', n2: '3', dx: 400, dy: 0, dz: 0, mass: 200, stiffFactor: 10, section: 'S' },
+      pipe('3', '4', 1000, 0, 0, { T1: 120 }),
+      sup('1', 'anchor'),
+    ],
+  }).components;
+  m.loadCases = [{ id: 'W', type: 'weight', enabled: true }, { id: 'T1', type: 'thermal', enabled: true }];
+  const r = runAnalysis(m);
+  const v = r.mesh.elements.find((e) => e.kind === 'valve');
+  near(v.mpl.metal * v.massLength * 1000, 200, 1e-9, 'masse du robinet (kg)');
+  near(v.E, 10 * 200000, 1e-12, 'raideur × 10');
+  near(-r.cases[0].supportLoads[2], 0.2 * 9806.65, 1e-6, 'réaction = poids du robinet');
+  near(nodeDisp(r, 'T1', '4')[0], 12e-6 * 100 * 2400, 1e-6, 'dilatation libre (robinet compris)');
+  assert.ok(!r.check.rows.some((x) => x.kind === 'valve'), 'corps du robinet non vérifié');
+  m.components.push({ id: 'cb', type: 'bend', node: '2', radius: 200 });
+  m.components.find((c) => c.n1 === '2' && c.type === 'valve').dy = 400;
+  m.components.find((c) => c.n1 === '2' && c.type === 'valve').dx = 0;
+  assert.throws(() => runAnalysis(m), /robinet/);
+});
+
+test('Tolérance de fabrication et corrosion : option du projet', () => {
+  const m = setup();
+  m.sections[0].millTol = 12.5;
+  m.sections[0].corrosion = 1;
+  m.settings.checkThickness = true;
+  m.components = ensureIds({ components: [pipe('1', '2', 1000, 0, 0, { P1: 5 }), sup('1', 'anchor')] }).components;
+  m.loadCases = [{ id: 'W', type: 'weight', enabled: true }];
+  const tp = (5 * 168.3) / (2 * (100 + 0.4 * 5));
+  let row = runAnalysis(m).check.rows.find((x) => x.eq === 'e');
+  near(row.stress, tp, 1e-12, 'sans surépaisseurs');
+  near(row.allow, 7.11, 1e-12, 'épaisseur nominale');
+  m.settings.allowances = true;
+  row = runAnalysis(m).check.rows.find((x) => x.eq === 'e');
+  near(row.stress, tp + 1, 1e-12, 'avec corrosion');
+  near(row.allow, 7.11 * 0.875, 1e-12, 'avec tolérance');
+  assert.ok(row.calc.items.length > 3);
+});
+
+test('Séisme : nom des niveaux repris dans le bilan, détail de calcul complet', () => {
+  const m = setup({ density: 0, maxLen: 500 });
+  m.components = ensureIds({ components: [pipe('1', '2', 2000, 0, 0), sup('1', 'anchor'), { type: 'mass', node: '2', mass: 1000 }] }).components;
+  m.loadCases = [{ id: 'W', type: 'weight', enabled: true }, { id: 'S1', type: 'seismic', enabled: true, method: 'static', directional: 'SRSS', staticAcc: { Z: 1 }, levels: [{ level: 'D', enabled: true, factor: 1, name: 'SMS' }] }];
+  const r = runAnalysis(m);
+  const row = r.check.rows.find((x) => x.eq === '10D' && x.node === '1');
+  assert.match(row.eqLabel, /SMS/);
+  assert.match(r.cases.find((c) => c.id === 'S1-D').label, /SMS/);
+  const names = row.calc.moments.map((mo) => mo.name);
+  assert.ok(names.some((n) => n.startsWith('M_A')) && names.some((n) => n.startsWith('M_B')));
+  near(row.calc.moments.find((mo) => mo.name.startsWith('M_B')).res, 9806.65 * 2, 1e-6, 'M_B en N·m');
+  assert.ok(row.calc.items.some(([k]) => /effet de fond/.test(k)));
+});

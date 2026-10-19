@@ -25,6 +25,10 @@ export const bend = {
   mesh(comp, ctx) {
     const B = String(comp.node);
     const segs = ctx.segmentsAt(B);
+    if (segs.some((s) => s.kind === 'valve')) {
+      ctx.error(`Coude au nœud ${B} : un coude ne peut pas être placé directement contre un robinet (ajouter un tube entre les deux).`);
+      return;
+    }
     if (segs.length !== 2) {
       ctx.error(`Coude au nœud ${B} : le sommet doit relier exactement deux tubes (trouvé ${segs.length}).`);
       return;
