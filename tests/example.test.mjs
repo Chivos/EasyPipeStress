@@ -55,3 +55,27 @@ test('Analyse modale : Σ masses modales effectives = masse globale (tous modes)
     assert.ok(modal.supportedMass[d] > 0 && modal.supportedMass[d] < modal.totalMass[d]);
   }
 });
+
+test('Résultats complets en un point : combinaisons ± séisme et enveloppe', async () => {
+  const { pointResults } = await import('../src/ui/results.js');
+  const r = runAnalysis(exampleModel());
+  const k = 0;
+  const vals = (c) => Array.from({ length: 6 }, (_, d) => c.supportLoads[k * 6 + d]);
+  const { elementary, combos, env } = pointResults(r, vals, [['F', [0, 1, 2]]]);
+  const fe = r.cases.filter((c) => c.fe !== false);
+  assert.equal(elementary.length, fe.length);
+  const W = vals(r.cases.find((c) => c.id === 'W'));
+  const T = vals(r.cases.find((c) => c.id === 'T1'));
+  const S = r.cases.find((c) => !c.signed);
+  const s = vals(S).map(Math.abs);
+  const label = `W+P+T1+${S.id}`;
+  const mn = combos.find((c) => c.label === `${label} (min)`);
+  const mx = combos.find((c) => c.label === `${label} (max)`);
+  assert.ok(mn && mx, 'combinaisons W+P+T1 ± séisme présentes');
+  for (let d = 0; d < 6; d++) {
+    assert.ok(Math.abs(mn.vals[d] - (W[d] + T[d] - s[d])) < 1e-9);
+    assert.ok(Math.abs(mx.vals[d] - (W[d] + T[d] + s[d])) < 1e-9);
+    assert.ok(env.vals[d] >= Math.abs(mn.vals[d]) && env.vals[d] >= Math.abs(mx.vals[d]));
+  }
+  assert.ok(Math.abs(mx.der[0] - Math.hypot(...[0, 1, 2].map((d) => Math.abs(W[d] + T[d]) + s[d]))) < 1e-9);
+});

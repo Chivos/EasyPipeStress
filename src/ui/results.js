@@ -281,18 +281,23 @@ export function renderBottom(app) {
       return h(
         'div',
         {},
-        h('div', { class: 'toolbar' }, caseSel, h('span', { class: 'muted' }, 'Efforts exercés par la tuyauterie sur le support (repère global).')),
+        h('div', { class: 'toolbar' }, caseSel, h('span', { class: 'muted' }, 'Efforts exercés par la tuyauterie sur le support (repère global). Clic sur une ligne : tous les cas et combinaisons.')),
         simpleTable(
           ['Nœud', 'Repère', 'Type', 'FX (N)', 'FY (N)', 'FZ (N)', 'MX (N·m)', 'MY (N·m)', 'MZ (N·m)'],
-          r.mesh.supports.map((s, k) => [r.mesh.nodes[s.node].label, s.label, SUPPORT_KINDS[s.kind]?.label ?? s.kind, ...[0, 1, 2].map((d) => fmt(c.supportLoads[k * 6 + d], 0)), ...[3, 4, 5].map((d) => fmt(c.supportLoads[k * 6 + d] / 1000, 0))]),
-          (row) => app.select(row[0]),
+          r.mesh.supports.map((s, k) =>
+            Object.assign([r.mesh.nodes[s.node].label, s.label, SUPPORT_KINDS[s.kind]?.label ?? s.kind, ...[0, 1, 2].map((d) => fmt(c.supportLoads[k * 6 + d], 0)), ...[3, 4, 5].map((d) => fmt(c.supportLoads[k * 6 + d] / 1000, 0))], { k }),
+          ),
+          (row) => {
+            app.select(row[0]);
+            openSupportResults(r, row.k);
+          },
         ),
       );
     case 'forces':
       return h(
         'div',
         {},
-        h('div', { class: 'toolbar' }, caseSel, internalChk, h('span', { class: 'muted' }, 'Repère local : N axial (+ traction), Mt torsion, Mf flexion, M résultant.')),
+        h('div', { class: 'toolbar' }, caseSel, internalChk, h('span', { class: 'muted' }, 'Repère local : N axial (+ traction), Mt torsion, Mf flexion, M résultant. Clic sur une ligne : tous les cas et combinaisons.')),
         simpleTable(
           ['Élément', 'Nœud', 'N (N)', 'Vy (N)', 'Vz (N)', 'Mt (N·m)', 'Mf (N·m)', 'M rés. (N·m)'],
           r.mesh.elements.flatMap((e, ie) =>
@@ -302,10 +307,13 @@ export function renderBottom(app) {
                 const o = ie * 12 + end * 6;
                 const sg = c.signed ? (end ? 1 : -1) : 1;
                 const v = Array.from(c.elemForces.slice(o, o + 6), (x) => sg * x);
-                return [e.label, r.mesh.nodes[end ? e.n2 : e.n1].label, fmt(v[0], 0), fmt(v[1], 0), fmt(v[2], 0), fmt(v[3] / 1000, 1), fmt(Math.hypot(v[4], v[5]) / 1000, 1), fmt(Math.hypot(v[3], v[4], v[5]) / 1000, 1)];
+                return Object.assign([e.label, r.mesh.nodes[end ? e.n2 : e.n1].label, fmt(v[0], 0), fmt(v[1], 0), fmt(v[2], 0), fmt(v[3] / 1000, 1), fmt(Math.hypot(v[4], v[5]) / 1000, 1), fmt(Math.hypot(v[3], v[4], v[5]) / 1000, 1)], { ie, end });
               }),
           ),
-          (row) => app.select(row[1]),
+          (row) => {
+            app.select(row[1]);
+            openForceResults(r, row.ie, row.end);
+          },
         ),
       );
     case 'modes': {
@@ -394,24 +402,14 @@ export function modalSums(modal) {
 
 /** Fenêtre de détail d'une ligne de vérification : données, termes, moments, admissible. */
 export function openRowDetail(row) {
-  document.querySelector('.modal-backdrop')?.remove();
   const c = row.calc;
   const num = (v, unit) => (typeof v === 'number' ? fmt(v, Math.abs(v) >= 1000 || unit === 'mm³' ? 0 : unit === '' ? 3 : 2) : v);
   const kv = (items) =>
     h('table', { class: 'grid compact kv' }, h('tbody', {}, items.map(([k, v, u]) => h('tr', {}, h('td', {}, k), h('td', { class: 'num' }, num(v, u)), h('td', { class: 'muted' }, u)))));
-  const close = () => {
-    backdrop.remove();
-    document.removeEventListener('keydown', onKey);
-  };
-  const onKey = (e) => e.key === 'Escape' && close();
   const ok = (row.coveredBy ? 0 : row.ratio) <= 1;
-  const backdrop = h(
-    'div',
-    { class: 'modal-backdrop', onclick: (e) => e.target === backdrop && close() },
-    h(
-      'div',
-      { class: 'modal', role: 'dialog', 'aria-label': 'Détail du calcul' },
-      h('div', { class: 'modal-head' }, h('h3', {}, row.eqLabel), h('button', { class: 'icon', title: 'Fermer (Échap)', onclick: close }, '✕')),
+  showModal(
+    row.eqLabel,
+    [
       h('p', { class: 'muted' }, `Nœud ${row.node} — élément ${row.elem} — ${row.comp} — cas ${row.case}`),
       c?.formula ? h('p', {}, h('code', {}, c.formula)) : null,
       c?.items ? [h('h4', {}, 'Données et termes du calcul'), kv(c.items)] : null,
@@ -435,10 +433,146 @@ export function openRowDetail(row) {
         `${row.unit === 'mm' ? 'eₘ' : 'σ'} = ${fmt(row.stress, 2)} ${row.unit ?? 'MPa'} ; admissible ${fmt(row.allow, 2)} ${row.unit ?? 'MPa'} ; taux ${fmt(row.ratio, 3)}`,
         row.coveredBy ? ` — couvert par l’éq. (${row.coveredBy})` : '',
       ),
+    ],
+    { label: 'Détail du calcul' },
+  );
+}
+
+/** Fenêtre modale (fermeture : bouton, Échap ou clic hors de la fenêtre). */
+function showModal(title, body, { label = title, wide = false } = {}) {
+  document.querySelector('.modal-backdrop')?.remove();
+  const close = () => {
+    backdrop.remove();
+    document.removeEventListener('keydown', onKey);
+  };
+  const onKey = (e) => e.key === 'Escape' && close();
+  const backdrop = h(
+    'div',
+    { class: 'modal-backdrop', onclick: (e) => e.target === backdrop && close() },
+    h(
+      'div',
+      { class: `modal${wide ? ' wide' : ''}`, role: 'dialog', 'aria-label': label },
+      h('div', { class: 'modal-head' }, h('h3', {}, title), h('button', { class: 'icon', title: 'Fermer (Échap)', onclick: close }, '✕')),
+      body,
     ),
   );
   document.body.append(backdrop);
   document.addEventListener('keydown', onKey);
+}
+
+/**
+ * Résultats complets en un point (support ou extrémité d'élément) : cas
+ * élémentaires, combinaisons poids + pression, + thermique, puis ± séisme
+ * (valeurs min et max selon le signe du séisme) et enveloppe en valeur absolue.
+ * `values(c)` rend les composantes du cas c (signées, ou enveloppe ≥ 0 pour un
+ * séisme) ; `derived` : résultantes [libellé, indices des composantes].
+ */
+export function pointResults(r, values, derived = []) {
+  const fe = r.cases.filter((c) => c.fe !== false);
+  const W = fe.filter((c) => c.signed && c.type === 'weight');
+  const T = fe.filter((c) => c.signed && c.type === 'thermal');
+  const S = fe.filter((c) => !c.signed);
+  const n = fe.length ? values(fe[0]).length : 0;
+  const zero = () => new Array(n).fill(0);
+  const add = (a, b, k = 1) => a.map((v, i) => v + k * b[i]);
+  const res = (v) => derived.map(([, idx]) => Math.hypot(...idx.map((i) => v[i])));
+  const vals = new Map(fe.map((c) => [c, Array.from(values(c), (v) => (c.signed ? v : Math.abs(v)))]));
+  const elementary = fe.map((c) => ({ label: c.id, title: c.label, vals: vals.get(c), pm: !c.signed, der: res(vals.get(c)) }));
+  const hasP = r.cases.some((c) => c.type === 'pressure');
+  const wLabel = [W.map((c) => c.id).join('+'), hasP ? 'P' : ''].filter(Boolean).join('+');
+  const w = W.reduce((a, c) => add(a, vals.get(c)), zero());
+  const bases = [{ label: wLabel || '(aucun poids)', vals: w }, ...T.map((t) => ({ label: `${wLabel ? `${wLabel}+` : ''}${t.id}`, vals: add(w, vals.get(t)) }))];
+  const combos = bases.map((b) => ({ ...b, der: res(b.vals) }));
+  for (const b of bases) {
+    for (const s of S) {
+      const sv = vals.get(s);
+      const label = `${b.label}+${s.id}`;
+      // borne haute des résultantes : composantes cumulées en valeur absolue
+      const upper = res(b.vals.map((v, i) => Math.abs(v) + sv[i]));
+      combos.push({ label: `${label} (min)`, vals: add(b.vals, sv, -1), der: null, seismic: true });
+      combos.push({ label: `${label} (max)`, vals: add(b.vals, sv), der: upper, seismic: true });
+    }
+  }
+  const env = {
+    label: 'Enveloppe |max|',
+    vals: zero().map((_, i) => Math.max(...combos.map((c) => Math.abs(c.vals[i])))),
+    der: derived.map((_, j) => Math.max(...combos.map((c) => c.der?.[j] ?? 0))),
+  };
+  return { elementary, combos, env };
+}
+
+function openPointResults(title, subtitle, r, columns, values, derived, digits) {
+  const { elementary, combos, env } = pointResults(r, values, derived);
+  const heads = [...columns, ...derived.map(([l]) => l)];
+  const cell = (v, j, pm) => h('td', { class: 'num' }, v == null ? '' : `${pm && Math.abs(v) >= 0.5 * 10 ** -digits[j] ? '±' : ''}${fmt(v, digits[j])}`);
+  const line = (row, cls = '') =>
+    h('tr', { class: cls, title: row.title ?? '' }, h('td', {}, row.label), row.vals.map((v, j) => cell(v, j, row.pm)), derived.map((_, j) => cell(row.der?.[j], columns.length + j, row.pm)));
+  const section = (text) => h('tr', { class: 'section' }, h('td', { colspan: heads.length + 1 }, text));
+  showModal(
+    title,
+    [
+      h('p', { class: 'muted' }, subtitle),
+      h(
+        'div',
+        { class: 'grid-wrap' },
+        h(
+          'table',
+          { class: 'grid compact result' },
+          h('thead', {}, h('tr', {}, th('Cas / combinaison'), heads.map((t) => th(t, true)))),
+          h(
+            'tbody',
+            {},
+            section('Cas élémentaires'),
+            elementary.map((row) => line(row)),
+            section('Combinaisons'),
+            combos.map((row) => line(row, row.seismic ? 'seismic' : '')),
+            line(env, 'total'),
+          ),
+        ),
+      ),
+      h(
+        'p',
+        { class: 'help' },
+        'Séisme : réponse enveloppe non signée (±). Pour chaque combinaison avec séisme, min = combinaison − |séisme| et max = combinaison + |séisme|, composante par composante. ',
+        derived.length ? 'Résultantes avec séisme : borne haute obtenue en cumulant les composantes en valeur absolue (affichée sur la ligne max). ' : '',
+        'La pression ne crée pas d’effort dans le modèle de poutre (pas d’effet de fond).',
+      ),
+    ],
+    { label: 'Résultats au nœud', wide: true },
+  );
+}
+
+/** Efforts sur un support, tous cas et combinaisons (repère global). */
+export function openSupportResults(r, k) {
+  const sup = r.mesh.supports[k];
+  const kind = SUPPORT_KINDS[sup.kind]?.label ?? sup.kind;
+  openPointResults(
+    `Support ${sup.label || ''} — nœud ${r.mesh.nodes[sup.node].label}`.replace('  ', ' '),
+    `${kind} — efforts exercés par la tuyauterie sur le support, repère global.`,
+    r,
+    ['FX (N)', 'FY (N)', 'FZ (N)', 'MX (N·m)', 'MY (N·m)', 'MZ (N·m)'],
+    (c) => Array.from({ length: 6 }, (_, d) => c.supportLoads[k * 6 + d] / (d < 3 ? 1 : 1000)),
+    [['F rés. (N)', [0, 1, 2]], ['M rés. (N·m)', [3, 4, 5]]],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+  );
+}
+
+/** Efforts internes à une extrémité d'élément, tous cas et combinaisons (repère local). */
+export function openForceResults(r, ie, end) {
+  const e = r.mesh.elements[ie];
+  openPointResults(
+    `Efforts internes — élément ${e.label}, nœud ${r.mesh.nodes[end ? e.n2 : e.n1].label}`,
+    'Repère local de l’élément : N axial (+ traction), Vy, Vz tranchants, Mt torsion, My, Mz flexion.',
+    r,
+    ['N (N)', 'Vy (N)', 'Vz (N)', 'Mt (N·m)', 'My (N·m)', 'Mz (N·m)'],
+    (c) => {
+      const o = ie * 12 + end * 6;
+      const sg = c.signed ? (end ? 1 : -1) : 1;
+      return Array.from({ length: 6 }, (_, d) => (sg * c.elemForces[o + d]) / (d < 3 ? 1 : 1000));
+    },
+    [['Mf (N·m)', [4, 5]], ['M rés. (N·m)', [3, 4, 5]]],
+    [0, 0, 0, 1, 1, 1, 1, 1],
+  );
 }
 
 // Colonnes de repères (toujours alignées à gauche, même si le repère est numérique).
