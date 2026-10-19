@@ -8,6 +8,7 @@ import { renderResultsPanel, renderBottom, BOTTOM_TABS, buildScene, displayCases
 import { buildReport } from './ui/report.js';
 import { exampleModel, emptyModel, normalizeModel } from './core/model.js';
 import { initSplitters, initGridKeys } from './ui/layout.js';
+import { openExportDialog } from './ui/export.js';
 import { buildMesh } from './core/mesher.js';
 import { runAnalysis } from './analysis.js';
 import { codes } from './codes/index.js';
@@ -306,6 +307,11 @@ function init() {
   });
   $('#btn-run').addEventListener('click', run);
   $('#btn-report').addEventListener('click', openReport);
+  $('#btn-xlsx').addEventListener('click', () => {
+    if (!state.result) run(); // calcul préalable si nécessaire
+    if (state.result) openExportDialog(state);
+    else toast('Calcul impossible : voir les erreurs du modèle.');
+  });
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') run();
   });
