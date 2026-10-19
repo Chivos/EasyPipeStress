@@ -64,7 +64,7 @@ src/
              materials.js   tables matériaux fonction de T
              sections.js    caractéristiques des tubes
   components/               composants modélisables (registre)
-             pipe.js  bend.js  tee.js  mass.js  support.js
+             pipe.js  bend.js  valve.js  tee.js  mass.js  support.js
   fem/       beam3d.js      élément de poutre 3D Timoshenko
              system.js      assemblage, statique, réponses, analyse modale
              spectral.js    spectres, CQC/SRSS, combinaisons directionnelles

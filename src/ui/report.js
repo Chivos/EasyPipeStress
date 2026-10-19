@@ -32,6 +32,7 @@ export function buildReport(state, snapshot) {
         ['Axe vertical', m.settings.vertical],
         ['Température de référence', `${m.settings.tRef} °C`],
         ['Modélisation', `Poutres 3D ${m.settings.shear !== false ? 'Timoshenko' : 'Euler-Bernoulli'}, longueur max. ${m.settings.meshMaxLength} mm, coudes discrétisés (≤ ${m.settings.bendDivisionAngle}° par élément) avec facteur de flexibilité`],
+        ['Tolérance de fabrication et corrosion', m.settings.allowances ? 'prises en compte (épaisseur minimale)' : 'non prises en compte'],
         ['Épaisseur minimale (pression seule)', m.settings.checkThickness ? `vérifiée${r?.code?.thickness ? ` (${r.code.thickness.ref})` : ''}` : 'non vérifiée'],
         ['Supports', 'Linéaires bilatéraux, rigidité de pénalité 10¹⁰ N/mm / 10¹⁴ N·mm/rad'],
         ['Code', r?.code?.label ?? m.code.id],
@@ -40,7 +41,11 @@ export function buildReport(state, snapshot) {
     ),
   );
   parts.push('<h3>Sections</h3>');
-  parts.push(table(['Repère', 'De (mm)', 'e (mm)', 'Tol. (%)', 'Corr. (mm)', 'ρ fluide', 'Calorifuge (mm)', 'ρ calo.'], m.sections.map((s) => [s.id, s.od, s.t, s.millTol, s.corrosion, s.fluidDensity, s.insulThk, s.insulDensity])));
+  parts.push(
+    m.settings.allowances
+      ? table(['Repère', 'De (mm)', 'e (mm)', 'Tol. (%)', 'Corr. (mm)', 'ρ fluide', 'Calorifuge (mm)', 'ρ calo.'], m.sections.map((s) => [s.id, s.od, s.t, s.millTol, s.corrosion, s.fluidDensity, s.insulThk, s.insulDensity]))
+      : table(['Repère', 'De (mm)', 'e (mm)', 'ρ fluide', 'Calorifuge (mm)', 'ρ calo.'], m.sections.map((s) => [s.id, s.od, s.t, s.fluidDensity, s.insulThk, s.insulDensity])),
+  );
   parts.push('<h3>Matériaux</h3>');
   for (const mat of m.materials) {
     parts.push(`<p><b>${esc(mat.id)}</b> — ${esc(mat.name)} — ρ = ${mat.density} kg/m³, ν = ${mat.nu}</p>`);
@@ -108,7 +113,7 @@ export function buildReport(state, snapshot) {
 const levelsText = (lc) =>
   `niveaux ${seismicLevels(lc)
     .filter((x) => x.enabled !== false)
-    .map((x) => `${x.level} (× ${x.factor === '' || x.factor == null ? 1 : x.factor})`)
+    .map((x) => `${x.level}${x.name ? ` ${x.name}` : ''} (× ${x.factor === '' || x.factor == null ? 1 : x.factor})`)
     .join(', ')}`;
 
 function loadParams(lc, vertical) {

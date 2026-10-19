@@ -53,7 +53,20 @@ extrémités des trois éléments qui aboutissent au nœud, le plus pénalisant
 - i = 0,9/h^(2/3) ≥ 1, ou valeur imposée par l'utilisateur ;
 - facteur des charges primaires 0,75·i ≥ 1.
 
-### 1.4 Supports
+### 1.4 Robinets
+
+Le robinet est un élément de poutre « rigide » entre deux nœuds, de longueur
+égale à son face-à-face : sa masse totale est répartie sur sa longueur (poids
+propre et inertie sismique), sa raideur vaut un facteur (10 par défaut) fois
+celle du tube de raccordement, et il se dilate à la température du tube
+raccordé. Ce facteur suit la pratique des logiciels de flexibilité : un corps
+de robinet est beaucoup plus raide que le tube, mais une raideur « infinie »
+dégraderait le conditionnement numérique sans changer les résultats (au-delà
+de ×10, la souplesse du robinet devient négligeable devant celle du reste de la
+ligne). Le corps du robinet n'est pas vérifié au titre du code (il relève de
+la qualification du fabricant) ; les extrémités des tubes raccordés le sont.
+
+### 1.5 Supports
 
 Chaque support est un ensemble de ressorts linéaires orientés (translation ou
 rotation). Un blocage rigide est un ressort de pénalité (10¹⁰ N/mm,
@@ -65,7 +78,7 @@ est de l'ordre du rapport raideur structurelle / raideur de pénalité (< 10⁻�
 Types : ancrage (6 DDL), appui vertical, guide latéral, appui + guide, butée
 axiale, ressort vertical, blocage personnalisé par DDL globaux.
 
-### 1.5 Résolution
+### 1.6 Résolution
 
 - Renumérotation des nœuds par Cuthill-McKee inverse (réduction du profil).
 - Factorisation de Cholesky en profil (« skyline ») de la matrice de raideur.
@@ -132,7 +145,10 @@ plancher, ASME III Annexe N-1225 / pratique RCC-M), combinaison directionnelle.
 Notations : Dₑ diamètre extérieur, eₙ épaisseur nominale, Z module de flexion,
 M moment résultant √(Mx² + My² + Mz²) à chaque extrémité d'élément, S contrainte
 admissible de base (à la température T du tube), Sy limite d'élasticité, Sc et Sh
-valeurs de S à froid et à chaud, P pression intérieure. Pour rester simple,
+valeurs de S à froid et à chaud, P pression intérieure. Les contraintes sont
+calculées avec l'épaisseur nominale ; la tolérance de fabrication et la
+surépaisseur de corrosion (option du projet) n'interviennent que dans la
+vérification d'épaisseur minimale. Pour rester simple,
 chaque tube porte une seule température T et une seule pression P, utilisées à
 la fois pour la dilatation et comme conditions de calcul du code.
 
@@ -244,7 +260,7 @@ statique rigide), coefficients CQC, facteurs k et i des coudes.
 - Pas d'effet de Bourdon ni de poussée de pression sur compensateurs.
 - Pas de mouvements sismiques différentiels (SAM, éq. 10a) ni de spectres
   multiples.
-- Réductions, brides et robinets rigides à ajouter comme composants (avec
+- Réductions et brides à ajouter comme composants (avec
   leurs SIF et indices B).
 - Codes à ajouter : RCC-M classe 1 (B 3600, indices C, K, analyse en fatigue),
   classe 3 (D 3600), EN 13480-3, ASME B31.1 / B31.3.

@@ -14,7 +14,7 @@ import { components } from '../components/index.js';
 import { resolveCoordinates } from './model.js';
 import { pipeSection } from './sections.js';
 import { materialAt } from './materials.js';
-import { densityToInternal, AXES } from './units.js';
+import { densityToInternal, kgToT, AXES } from './units.js';
 import { vec } from './linalg.js';
 import { elementFrame } from '../fem/beam3d.js';
 
@@ -52,6 +52,7 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
   const ctxBase = {
     up,
     settings,
+    model,
     error: (m) => errors.push(m),
     warn: (m) => warnings.push(m),
     section: (id) => sections.get(id),
@@ -179,9 +180,11 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
     const hot = materialAt(mat, p.T1);
     if (hot.outOfRange) warnings.push(`Matériau ${mat.id} : température ${p.T1} °C hors de la table (extrapolation constante).`);
     const f = factors({ kind: seg.kind, sec: sp, bend: p.bend, P: p.P1, Ec: cold.E, params: model.code?.params ?? {} });
-    const metal = densityToInternal(mat.density) * sp.A;
-    const fluid = densityToInternal(+sec.fluidDensity || 0) * sp.Ai;
-    const insul = densityToInternal(+sec.insulDensity || 0) * sp.Ains;
+    const valve = p.valve ?? null;
+    // robinet : masse totale répartie sur la longueur, sans fluide ni calorifuge
+    const metal = valve ? kgToT(valve.mass) / L : densityToInternal(mat.density) * sp.A;
+    const fluid = valve ? 0 : densityToInternal(+sec.fluidDensity || 0) * sp.Ai;
+    const insul = valve ? 0 : densityToInternal(+sec.insulDensity || 0) * sp.Ains;
     elements.push({
       index: elements.length,
       n1,
@@ -197,12 +200,13 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
       matId: mat.id,
       mat,
       nu: +mat.nu || 0.3,
-      E: cold.E,
+      E: cold.E * (valve ? valve.stiffFactor : 1), // robinet : raideur = facteur × tube
       T1: p.T1,
       P1: p.P1,
       Td: p.Td,
       Pd: p.Pd,
       bend: p.bend ?? null,
+      valve,
       factors: f,
       endFactors: [null, null], // facteurs locaux d'extrémité (té), prioritaires sur `factors`
       massLength: re.massLength,

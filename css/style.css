@@ -18,6 +18,7 @@
   --view-text: #1a202c;
   --view-muted: #9aa5b5;
   --view-deformed: #d35400;
+  --view-valve: #6a4c93;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -41,6 +42,7 @@
     --view-text: #e5e9f0;
     --view-muted: #5c6b7f;
     --view-deformed: #ff9f43;
+    --view-valve: #b197fc;
     color-scheme: dark;
   }
 }
@@ -60,6 +62,7 @@
   --view-pipe: #b8c4d4;
   --view-text: #e5e9f0;
   --view-muted: #5c6b7f;
+  --view-valve: #b197fc;
   color-scheme: dark;
 }
 
@@ -200,3 +203,9 @@ svg.spark text { font-size: 9px; fill: var(--muted); }
   .quick { grid-template-columns: repeat(3, 1fr); }
 }
 tr.total td { font-weight: 600; border-top: 2px solid var(--border); }
+.modal-backdrop { position: fixed; inset: 0; background: rgb(0 0 0 / 0.45); display: flex; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
+.modal { background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 10px; max-width: 720px; width: 100%; max-height: 90vh; overflow: auto; padding: 14px 18px; box-shadow: 0 10px 40px rgb(0 0 0 / 0.3); }
+.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.modal-head h3 { margin: 0; font-size: 16px; }
+.modal h4 { margin: 14px 0 6px; font-size: 13px; }
+.modal table.kv td:first-child { width: 60%; }

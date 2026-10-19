@@ -156,7 +156,7 @@ export class Viewer {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const css = getComputedStyle(canvas);
     const col = (name, fb) => css.getPropertyValue(name).trim() || fb;
-    const C = { bg: col('--view-bg', '#fff'), pipe: col('--view-pipe', '#4a5568'), text: col('--view-text', '#1a202c'), muted: col('--view-muted', '#8a94a6'), deformed: col('--view-deformed', '#d35400'), sel: col('--accent', '#0b7285') };
+    const C = { bg: col('--view-bg', '#fff'), pipe: col('--view-pipe', '#4a5568'), text: col('--view-text', '#1a202c'), muted: col('--view-muted', '#8a94a6'), deformed: col('--view-deformed', '#d35400'), valve: col('--view-valve', '#6a4c93'), sel: col('--accent', '#0b7285') };
     ctx.fillStyle = C.bg;
     ctx.fillRect(0, 0, w, hgt);
     const sc = this.scene;
@@ -202,6 +202,10 @@ export class Viewer {
       ctx.strokeStyle = ghost ? C.muted : colors?.[ie] ?? C.pipe;
       ctx.globalAlpha = ghost ? 0.45 : 1;
       ctx.lineWidth = Math.max(2.5, Math.min(14, e.sec.od * pxPerMm));
+      if (e.kind === 'valve') {
+        drawValve(ctx, a, b, ghost ? C.muted : colors?.[ie] ?? C.valve, Math.max(6, Math.min(18, 1.6 * e.sec.od * pxPerMm)));
+        return;
+      }
       ctx.beginPath();
       ctx.moveTo(a[0], a[1]);
       ctx.lineTo(b[0], b[1]);
@@ -441,6 +445,43 @@ export class Viewer {
   snapshot() {
     return this.canvas.toDataURL('image/png');
   }
+}
+
+/** Symbole de robinet : deux triangles opposés par la pointe, au milieu de l'élément. */
+function drawValve(ctx, a, b, color, w) {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const l = Math.hypot(dx, dy);
+  const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const n = l > 1e-6 ? [-dy / l, dx / l] : [0, 1];
+  // si l'élément est vu de bout, un simple cercle
+  if (l < 4) {
+    ctx.beginPath();
+    ctx.arc(m[0], m[1], w / 2, 0, 2 * Math.PI);
+    ctx.fillStyle = color;
+    ctx.fill();
+    return;
+  }
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
+  for (const p of [a, b]) {
+    ctx.beginPath();
+    ctx.moveTo(p[0] + n[0] * w, p[1] + n[1] * w);
+    ctx.lineTo(p[0] - n[0] * w, p[1] - n[1] * w);
+    ctx.lineTo(m[0], m[1]);
+    ctx.closePath();
+    ctx.globalAlpha = 0.85;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  // tige de manœuvre
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(m[0], m[1]);
+  ctx.lineTo(m[0] + n[0] * w * 1.4, m[1] + n[1] * w * 1.4);
+  ctx.moveTo(m[0] + n[0] * w * 1.4 - (dx / l) * w * 0.6, m[1] + n[1] * w * 1.4 - (dy / l) * w * 0.6);
+  ctx.lineTo(m[0] + n[0] * w * 1.4 + (dx / l) * w * 0.6, m[1] + n[1] * w * 1.4 + (dy / l) * w * 0.6);
+  ctx.stroke();
 }
 
 /** Points de la déformée d'un élément (interpolation cubique d'Hermite). */
