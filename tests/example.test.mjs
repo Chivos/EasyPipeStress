@@ -79,3 +79,10 @@ test('Résultats complets en un point : combinaisons ± séisme et enveloppe', a
   }
   assert.ok(Math.abs(mx.der[0] - Math.hypot(...[0, 1, 2].map((d) => Math.abs(W[d] + T[d]) + s[d]))) < 1e-9);
 });
+
+test('Chargement : paramètres de code obsolètes supprimés', () => {
+  const raw = JSON.parse(JSON.stringify(exampleModel()));
+  raw.code.params = { ...raw.code.params, levelB_kY: '', k6: 2, shMinusSL: true };
+  const m = normalizeModel(raw);
+  assert.deepEqual(Object.keys(m.code.params).sort(), ['cycles', 'pressureCorrection']);
+});
