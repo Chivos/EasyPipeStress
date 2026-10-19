@@ -38,7 +38,21 @@ Le facteur est fourni par le **code de vérification** actif (les formules
 d'EN 13480-3 ou d'ASME B31.3 diffèrent), ce qui garantit la cohérence entre
 analyse et dépouillement.
 
-### 1.3 Supports
+### 1.3 Tés
+
+Le té est placé au nœud de jonction de trois tubes ; il ne modifie ni la
+géométrie ni la raideur (k = 1). Son facteur d'intensification de contraintes
+(RCC-M C 3680, ASME NC-3673.2, d'après les essais de Markl [3]) s'applique aux
+extrémités des trois éléments qui aboutissent au nœud, le plus pénalisant
+étant retenu si l'élément porte déjà un facteur (coude) :
+
+- té forgé à souder (B16.9) : h = 4,4·eₙ/r ;
+- té de fabrication renforcé : h = (eₙ + e_r/2)^(5/2) / (eₙ^(3/2)·r) ;
+- té de fabrication non renforcé : h = eₙ/r ;
+- i = 0,9/h^(2/3) ≥ 1, ou valeur imposée par l'utilisateur ;
+- indice primaire B₂ = 0,75·i ≥ 1.
+
+### 1.4 Supports
 
 Chaque support est un ensemble de ressorts linéaires orientés (translation ou
 rotation). Un blocage rigide est un ressort de pénalité (10¹⁰ N/mm,
@@ -50,7 +64,7 @@ est de l'ordre du rapport raideur structurelle / raideur de pénalité (< 10⁻�
 Types : ancrage (6 DDL), appui vertical, guide latéral, appui + guide, butée
 axiale, ressort vertical, blocage personnalisé par DDL globaux.
 
-### 1.4 Résolution
+### 1.5 Résolution
 
 - Renumérotation des nœuds par Cuthill-McKee inverse (réduction du profil).
 - Factorisation de Cholesky en profil (« skyline ») de la matrice de raideur.
@@ -111,7 +125,7 @@ valeurs de S à froid et à chaud.
 
 | Réf. | Critère | Formule (formulation par défaut « 0,75 i ») |
 |---|---|---|
-| C 3641 | Épaisseur minimale | eₘ = P·Dₑ / [2(S/I + 0,4·P)] + c ≤ eₙ·(1 − tol) ; I = (4R/Dₑ − 1)/(4R/Dₑ − 2) à l'intrados des coudes |
+| C 3641 | Épaisseur minimale (tenue à la pression seule, option du projet désactivée par défaut) | eₘ = P·Dₑ / [2(S/I + 0,4·P)] + c ≤ eₙ·(1 − tol) ; I = (4R/Dₑ − 1)/(4R/Dₑ − 2) à l'intrados des coudes |
 | (6) | Poids propre + pression | S_L = P·Dₑ/(4eₙ) + 0,75i·M_A/Z ≤ k₆·Sh (k₆ = 1,0 par défaut) |
 | (7) | Dilatation thermique | S_E = i·M_C/Z ≤ S_A = f·(1,25·Sc + 0,25·Sh) [+ (Sh − S_L), option] |
 | (8) | (6) + (7), si (7) non satisfaite | P_max·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ Sh + S_A |
@@ -152,7 +166,7 @@ statique rigide), coefficients CQC, facteurs k et i des coudes.
 - Pas d'effet de Bourdon ni de poussée de pression sur compensateurs.
 - Pas de mouvements sismiques différentiels (SAM, éq. 10a) ni de spectres
   multiples.
-- Tés, réductions, brides et robinets rigides à ajouter comme composants (avec
+- Réductions, brides et robinets rigides à ajouter comme composants (avec
   leurs SIF et indices B).
 - Codes à ajouter : RCC-M classe 1 (B 3600, indices C, K, analyse en fatigue),
   classe 3 (D 3600), EN 13480-3, ASME B31.1 / B31.3.

@@ -192,7 +192,7 @@ test('Mécanisme détecté', () => {
 
 test('RCC-M C : équations (6), (7), (8), (10) sur une console', () => {
   const m = setup({ density: 0, maxLen: 500 });
-  m.code.params = { ...m.code.params, b2Method: '0.75i', thickness: false };
+  m.code.params = { ...m.code.params, b2Method: '0.75i' };
   m.components = ensureIds({ components: [pipe('1', '2', 2000, 0, 0, { P1: 5, Pd: 5, T1: 150, Td: 150 }), sup('1', 'anchor'), { type: 'mass', node: '2', mass: 1000 }] }).components;
   m.loadCases = [
     { id: 'W', type: 'weight', enabled: true },
@@ -211,4 +211,45 @@ test('RCC-M C : équations (6), (7), (8), (10) sur une console', () => {
   const row10 = r.check.rows.find((x) => x.eq === '10' && x.node === '1');
   near(row10.stress, (5 * 168.3) / (4 * 7.11) + (2 * MA) / sp.Z, 1e-3, 'éq. (10)');
   near(row10.allow, 2.4 * 100, 1e-12, 'admissible niveau D');
+});
+
+test('Té : SIF forgé 0,9/h^(2/3) (h = 4,4 e/r) appliqué aux trois branches', () => {
+  const sec = pipeSection({ od: 168.3, t: 7.11 });
+  const f = componentFactors({ kind: 'tee', teeType: 'welding', sec });
+  near(f.i, 0.9 / ((4.4 * 7.11) / sec.rm) ** (2 / 3), 1e-12, 'i forgé');
+  near(componentFactors({ kind: 'tee', teeType: 'unreinforced', sec }).i, 0.9 / (7.11 / sec.rm) ** (2 / 3), 1e-12, 'i non renforcé');
+  assert.equal(componentFactors({ kind: 'tee', teeType: 'user', sif: 2.5, sec }).i, 2.5);
+
+  const m = setup({ alpha: 12, maxLen: 500 });
+  m.components = ensureIds({
+    components: [
+      pipe('1', '2', 2000, 0, 0, { T1: 200 }),
+      pipe('2', '3', 2000, 0, 0, { T1: 200 }),
+      pipe('2', '4', 0, 1500, 0, { T1: 200 }),
+      { type: 'tee', node: '2', teeType: 'unreinforced' },
+      sup('1', 'anchor'),
+      sup('3', 'anchor'),
+      sup('4', 'anchor'),
+    ],
+  }).components;
+  m.loadCases = [{ id: 'T1', type: 'thermal', enabled: true }];
+  const r = runAnalysis(m);
+  assert.equal(r.mesh.tees.length, 1);
+  const rows7 = r.check.rows.filter((x) => x.eq === '7' && x.node === '2');
+  assert.equal(rows7.length, 3, 'trois extrémités au nœud du té');
+  for (const row of rows7) {
+    assert.equal(row.comp, 'Té 2');
+    near(row.detail.i, componentFactors({ kind: 'tee', teeType: 'unreinforced', sec }).i, 1e-12, 'i appliqué');
+  }
+  assert.ok(r.check.rows.filter((x) => x.eq === '7' && x.node === '1').every((x) => x.detail.i === 1));
+});
+
+test('Épaisseur minimale : désactivée par défaut, activable dans le projet', () => {
+  const m = setup();
+  m.components = ensureIds({ components: [pipe('1', '2', 1000, 0, 0, { Pd: 5, P1: 5 }), sup('1', 'anchor')] }).components;
+  m.loadCases = [{ id: 'W', type: 'weight', enabled: true }];
+  assert.ok(!runAnalysis(m).check.rows.some((x) => x.eq === 'e'));
+  m.settings.checkThickness = true;
+  const row = runAnalysis(m).check.rows.find((x) => x.eq === 'e');
+  near(row.stress, (5 * 168.3) / (2 * (100 + 0.4 * 5)), 1e-12, 'e_m');
 });

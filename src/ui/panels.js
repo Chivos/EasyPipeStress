@@ -23,6 +23,7 @@ export function renderProject(app) {
     { key: 'meshMaxLength', label: 'Longueur maximale d’élément', unit: 'mm', type: 'number', title: 'Discrétisation des tubes droits (précision du poids réparti et de l’analyse modale)' },
     { key: 'bendDivisionAngle', label: 'Angle maximal par élément de coude', unit: '°', type: 'number' },
     { key: 'shear', label: 'Déformation d’effort tranchant (Timoshenko)', type: 'checkbox', default: true },
+    { key: 'checkThickness', label: 'Vérifier l’épaisseur minimale (tenue à la pression seule, C 3641)', type: 'checkbox', default: false },
   ];
   return h(
     'div',
@@ -211,6 +212,11 @@ export function renderGeometry(app) {
       const c = components.get('pipe').create(mm, { from, to, dx: d[0], dy: d[1], dz: d[2] });
       c.id = newId(mm);
       mm.components.push(c);
+      if (q.tee && incoming.length === 2 && !mm.components.some((x) => x.type === 'tee' && String(x.node) === from)) {
+        const t = components.get('tee').create(mm, { node: from });
+        t.id = newId(mm);
+        mm.components.push(t);
+      }
       if (q.bend && incoming.length === 1 && !mm.components.some((x) => x.type === 'bend' && x.node === from)) {
         const prev = incoming[0];
         const dp = prev.n2 === from ? [prev.dx, prev.dy, prev.dz] : [-prev.dx, -prev.dy, -prev.dz];
@@ -266,9 +272,15 @@ export function renderGeometry(app) {
         h('small', {}, 'mm'),
         h('button', { class: 'primary', onclick: add }, 'Ajouter le tube'),
       ),
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: q.tee !== false, onchange: (e) => (q.tee = e.target.checked) }), ' té automatique quand un troisième tube part d’un nœud'),
     ),
     section('Tubes droits', help('T service / P max : conditions de fonctionnement (dilatation, éq. 9, 11). T calc. / P calc. : conditions de calcul (éq. 8, épaisseur) ; vides = valeurs de service.'), componentTable(app, 'pipe')),
     section('Coudes', help('Un coude se place au sommet de deux tubes. Ses nœuds A (début), M (milieu), B (fin) peuvent recevoir supports et masses.'), componentTable(app, 'bend')),
+    section(
+      'Tés',
+      help('Un té se place au nœud de jonction de trois tubes (créer la dérivation en ajoutant un tube depuis un nœud qui en relie déjà deux). Son facteur d’intensification i s’applique aux extrémités des trois branches au nœud.'),
+      componentTable(app, 'tee'),
+    ),
   );
 }
 
@@ -443,13 +455,14 @@ export function renderCode(app) {
         h(
           'tbody',
           {},
-          eqRow('C 3641', 'Épaisseur minimale', 'eₘ = P·Dₑ / [2(S/I + 0,4P)] + c ≤ eₙ(1 − tol)'),
+          eqRow('C 3641', 'Épaisseur minimale (option du projet)', 'eₘ = P·Dₑ / [2(S/I + 0,4P)] + c ≤ eₙ(1 − tol)'),
           eqRow('(6)', 'Poids propre + pression', 'S_L = P·Dₑ/(4eₙ) + 0,75i·M_A/Z ≤ k₆·S_h   (0,75i ≥ 1)'),
           eqRow('(7)', 'Dilatation thermique', 'S_E = i·M_C/Z ≤ S_A = f(1,25 S_c + 0,25 S_h) [+ (S_h − S_L) en option]'),
           eqRow('(8)', '(6) + (7), si (7) non satisfaite', 'P_max·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ S_h + S_A'),
           eqRow('(10)', 'Séisme (permanentes + occasionnelles)', 'P_max·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ k·S_h  (B : 1,2 — C : 1,8 — D : 2,4 par défaut, plafond k·Sy optionnel)'),
         ),
       ),
+      help('Tés : i = 0,9/h^⅔ ≥ 1 avec h = 4,4eₙ/r (forgé), (eₙ + e_r/2)^(5/2)/(eₙ^(3/2)·r) (fabrication renforcé), eₙ/r (non renforcé) ; B₂ = 0,75i ≥ 1.'),
       help('Option « indices B₁, B₂ » : P·Dₑ/(4eₙ) devient B₁·P·Dₑ/(2eₙ) et 0,75i devient B₂ (coude : B₁ = −0,1 + 0,4h, B₂ = 1,30/h^⅔ ≥ 1). Coudes : h = eₙR/r², k = 1,65/h, i = 0,9/h^⅔ (≥ 1).'),
       help('Les coefficients des admissibles (k₆, niveaux B/C/D, plafonds Sy) sont modifiables ci-dessus : les caler sur l’édition du RCC-M et les fiches de modification applicables au projet.'),
     ),

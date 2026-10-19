@@ -183,6 +183,7 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
       Pd: p.Pd,
       bend: p.bend ?? null,
       factors: f,
+      endFactors: [null, null], // facteurs locaux d'extrémité (té), prioritaires sur `factors`
       massLength: re.massLength,
       mpl: { metal, fluid, insul }, // masse linéique (t/mm)
     });
@@ -192,6 +193,7 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
   const springs = [];
   const supports = [];
   const pointMasses = [];
+  const tees = [];
   const nodeElems = nodes.map(() => []);
   for (const e of elements) {
     nodeElems[e.n1].push(e);
@@ -220,12 +222,22 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
     addSpring: (s) => springs.push(s),
     addSupport: (s) => supports.push(s) - 1,
     addPointMass: (m) => pointMasses.push(m),
+    elementsAt: (i) => nodeElems[i],
+    /** Facteurs locaux (té…) appliqués aux extrémités des éléments aboutissant au nœud. */
+    addNodeFactors(i, desc) {
+      for (const e of nodeElems[i]) {
+        const end = e.n1 === i ? 0 : 1;
+        e.endFactors[end] = factors({ ...desc, sec: e.sec, P: e.P1, Ec: e.E, params: model.code?.params ?? {} });
+        e.endFactors[end].component = desc.kind;
+      }
+      tees.push({ node: i, ...desc });
+    },
   };
   for (const c of byPhase('point')) components.get(c.type).mesh(c, pointCtx);
   for (const c of model.components) if (!components.has(c.type)) warnings.push(`Composant de type inconnu « ${c.type} » ignoré.`);
 
   if (!elements.length) errors.push('Le modèle ne contient aucun élément de tuyauterie.');
-  const mesh = { nodes, nodeIndex, elements, springs, supports, pointMasses, corners, up, nodeElems, errors, warnings };
+  const mesh = { nodes, nodeIndex, elements, springs, supports, pointMasses, tees, corners, up, nodeElems, errors, warnings };
   if (errors.length && !tolerant) throw new ModelError(errors, warnings);
   return mesh;
 }

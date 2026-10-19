@@ -15,6 +15,10 @@
 // NB-3680) : B1·P·De/(2eₙ), B2 = 1,30/h^(2/3) ≥ 1 pour les coudes.
 // Moments : moment résultant √(Mx²+My²+Mz²) aux extrémités de chaque élément.
 // Facteurs des coudes : h = e·R/r² ; k = 1,65/h ≥ 1 ; i = 0,9/h^(2/3) ≥ 1.
+// Tés (C 3683 / NC-3673.2, i = 0,9/h^(2/3) ≥ 1, k = 1) : forgé h = 4,4e/r,
+// fabrication renforcé h = (e + e_r/2)^(5/2)/(e^(3/2)·r), non renforcé h = e/r ;
+// le SIF du té s'applique aux extrémités des trois éléments qui aboutissent au nœud.
+// Épaisseur minimale (tenue à la pression seule) : vérifiée si l'option du projet est cochée.
 // Correction de pression (option) : k/[1 + 6(P/E)(r/e)^(7/3)(R/r)^(1/3)],
 // i/[1 + 3,25(P/E)(r/e)^(5/2)(R/r)^(2/3)].
 
@@ -24,7 +28,6 @@ export const DEFAULT_PARAMS = {
   cycles: 7000,
   b2Method: '0.75i',
   pressureCorrection: false,
-  thickness: true,
   k6: 1.0,
   shMinusSL: false,
   levelB_kS: 1.2,
@@ -52,8 +55,19 @@ export function rangeReductionFactor(N) {
  * Facteurs k, i, B1, B2 d'un élément (appelé par le mailleur). B1 est exprimé
  * pour le terme B1·P·De/(2eₙ) : formulation 0,75 i ⇒ B1 = 0,5 (soit P·De/4eₙ).
  */
-export function componentFactors({ kind, sec, bend, P = 0, Ec, params = {} }) {
+export function componentFactors({ kind, sec, bend, P = 0, Ec, params = {}, teeType, pad = 0, sif = null }) {
   const legacy = (params.b2Method ?? DEFAULT_PARAMS.b2Method) === '0.75i';
+  if (kind === 'tee') {
+    const T = sec.t;
+    const r = sec.rm;
+    let h;
+    if (teeType === 'reinforced') h = (T + pad / 2) ** 2.5 / (T ** 1.5 * r);
+    else if (teeType === 'unreinforced') h = T / r;
+    else h = (4.4 * T) / r;
+    const i = teeType === 'user' && sif >= 1 ? sif : Math.max(1, 0.9 / h ** (2 / 3));
+    // pas d'indice B2 tabulé ici pour les tés : B2 = 0,75 i ≥ 1 dans les deux formulations
+    return { k: 1, i, B1: 0.5, B2: Math.max(1, 0.75 * i), h: teeType === 'user' ? null : h };
+  }
   if (kind !== 'bend' || !bend) return { k: 1, i: 1, B1: 0.5, B2: 1.0, h: null };
   const r = sec.rm;
   const t = sec.t;
@@ -99,7 +113,6 @@ export const rccmC = {
     { key: 'levelD_kS', label: 'Éq. (10) niveau D : k × Sh', type: 'number' },
     { key: 'levelD_kY', label: 'Éq. (10) niveau D : plafond k × Sy (vide = sans)', type: 'number' },
     { key: 'pressureCorrection', label: 'Correction de pression sur k et i des coudes', type: 'checkbox' },
-    { key: 'thickness', label: 'Vérifier l’épaisseur minimale (C 3641)', type: 'checkbox', default: true },
   ],
   componentFactors,
 
@@ -121,18 +134,21 @@ export const rccmC = {
     if (!weightCases.length) notes.push('Aucun cas de poids propre actif : MA = 0.');
 
     mesh.elements.forEach((e, ie) => {
-      const { sec, factors: fac, mat } = e;
+      const { sec, mat } = e;
       const { od: De, t, Z } = sec;
       const atD = materialAt(mat, e.Td);
       const atH = materialAt(mat, Math.max(e.T1, e.Td));
       const atC = materialAt(mat, tRef);
       const Sh = atD.S;
       const Sy = atD.Sy;
-      const compLabel = e.kind === 'bend' ? `Coude ${e.bend.node}` : 'Tube';
-      const pTerm = (P) => (fac.B1 * P * De) / (2 * t);
       for (const end of [0, 1]) {
+        // facteurs de l'extrémité : le plus pénalisant entre l'élément et un té au nœud
+        const local = e.endFactors?.[end];
+        const fac = local && local.i >= e.factors.i ? local : e.factors;
+        const pTerm = (P) => (fac.B1 * P * De) / (2 * t);
         const node = mesh.nodes[end === 0 ? e.n1 : e.n2].label;
-        const base = { node, elem: e.label, ie, end, comp: compLabel, kind: e.kind };
+        const compLabel = fac === local ? `Té ${node}` : e.kind === 'bend' ? `Coude ${e.bend.node}` : 'Tube';
+        const base = { node, elem: e.label, ie, end, comp: compLabel, kind: fac === local ? 'tee' : e.kind };
         const MA = weightCases.reduce((s, c) => s + resultant(c.elemForces, ie, end), 0);
         // éq. (6) poids propre + pression
         const SL = pTerm(e.Pd) + (fac.B2 * MA) / Z;
@@ -160,7 +176,8 @@ export const rccmC = {
         }
       }
       // épaisseur minimale (une ligne par élément)
-      if (params.thickness !== false && e.Pd > 0) {
+      if (model.settings?.checkThickness === true && e.Pd > 0) {
+        const compLabel = e.kind === 'bend' ? `Coude ${e.bend.node}` : 'Tube';
         let I = 1;
         if (e.kind === 'bend') {
           const x = e.bend.radius / De;
