@@ -41,19 +41,36 @@ export function buildScene(state) {
     const c = displayCases(result).find((x) => x.id === arg);
     if (c) {
       const umax = maxDisp(c.u);
+      const at = maxDispNode(mesh, c.u);
+      const digits = umax >= 10 ? 1 : 2;
       if (c.signed) {
-        scene.displacement = { u: c.u, signed: true, scale: umax > 0 ? ((0.06 * size) / umax) * display.scale : 0 };
+        const scale = umax > 0 ? ((0.06 * size) / umax) * display.scale : 0;
+        scene.displacement = { u: c.u, signed: true, scale, colorOf: dispColor, colorMax: umax };
+        scene.legend = {
+          title: `Déplacement total — ${c.id}`,
+          gradient: { max: umax, unit: 'mm', colorOf: dispColor, digits },
+          notes: [`max ${fmt(umax, digits)} mm au nœud ${at}`, `déformée amplifiée ×${fmtScale(scale)}`],
+        };
       } else {
         scene.elementColors = mesh.elements.map((e) => dispColor(Math.max(nodeDisp(c.u, e.n1), nodeDisp(c.u, e.n2)) / (umax || 1)));
-        scene.legend = { title: `Enveloppe |u| (max ${fmt(umax, 1)} mm)`, items: [[dispColor(0.1), 'faible'], [dispColor(0.5), 'moyen'], [dispColor(1), 'maximal']] };
+        scene.legend = {
+          title: `Enveloppe |u| — ${c.id}`,
+          gradient: { max: umax, unit: 'mm', colorOf: dispColor, digits },
+          notes: [`max ${fmt(umax, digits)} mm au nœud ${at}`, 'valeurs non signées : pas de déformée'],
+        };
       }
     }
   } else if (kind === 'mode' && result.modal) {
     const md = result.modal.modes[+arg];
     if (md) {
       const umax = maxDisp(md.phi);
-      scene.displacement = { u: md.phi, signed: true, scale: ((0.08 * size) / (umax || 1)) * display.scale };
+      scene.displacement = { u: md.phi, signed: true, scale: ((0.08 * size) / (umax || 1)) * display.scale, colorOf: dispColor, colorMax: umax };
       scene.animate = display.animate;
+      scene.legend = {
+        title: `Mode ${+arg + 1} — ${fmt(md.freq, 2)} Hz`,
+        gradient: { max: 1, unit: '', colorOf: dispColor, digits: 2 },
+        notes: ['amplitude relative (mode normé)', `maximum au nœud ${maxDispNode(mesh, md.phi)}`],
+      };
     }
   } else if (kind === 'ratio' && result.check) {
     const per = new Float64Array(mesh.elements.length);
@@ -68,6 +85,19 @@ export function buildScene(state) {
   return scene;
 }
 
+function maxDispNode(mesh, u) {
+  let best = 0;
+  let label = '–';
+  mesh.nodes.forEach((n, i) => {
+    const v = nodeDisp(u, i);
+    if (v > best) {
+      best = v;
+      label = n.label;
+    }
+  });
+  return label;
+}
+const fmtScale = (s) => (s >= 100 ? Math.round(s).toString() : s >= 1 ? s.toFixed(1) : s.toPrecision(2));
 const nodeDisp = (u, i) => Math.hypot(u[i * 6], u[i * 6 + 1], u[i * 6 + 2]);
 function maxDisp(u) {
   let m = 0;
@@ -134,13 +164,17 @@ export function renderResultsPanel(app) {
   }
   if (r.modal) {
     const tot = r.modal.totalMass;
-    let cum = [0, 0, 0];
+    const sums = modalSums(r.modal);
+    const shown = r.modal.modes.slice(0, 12);
+    const pct = (v, d) => fmt((100 * v) / (tot[d] || 1), 1);
     const seis = r.cases.find((c) => c.info?.method === 'spectral');
     out.push(
       h(
         'section',
         { class: 'card' },
         h('h3', {}, 'Analyse modale'),
+        h('p', {}, h('b', {}, `Masse globale du système : ${fmt(tot[0] * 1000, 0)} kg`), h('small', { class: 'muted' }, ` (tube, fluide, calorifuge et masses ponctuelles)`)),
+        h('p', { class: 'muted' }, 'Les % sont les masses modales effectives (masses participantes) de chaque mode, rapportées à la masse globale, pour chaque direction d’excitation.'),
         seis ? h('p', { class: 'muted' }, `${seis.info.modesUsed} mode(s) sous ${seis.info.cutoff} Hz retenus ; ${Object.entries(seis.info.directions).map(([d, v]) => `${d} : ${fmt(100 * v.captured, 0)} % de masse modale`).join(', ')}.`) : null,
         h(
           'table',
@@ -149,17 +183,21 @@ export function renderResultsPanel(app) {
           h(
             'tbody',
             {},
-            r.modal.modes.slice(0, 12).map((md, k) => {
-              cum = cum.map((c, d) => c + md.effMass[d]);
-              return h(
+            shown.map((md, k) =>
+              h(
                 'tr',
                 {},
                 h('td', {}, k + 1),
                 h('td', { class: 'num' }, fmt(md.freq, 2)),
-                [0, 1, 2].map((d) => h('td', { class: 'num' }, fmt((100 * md.effMass[d]) / (tot[d] || 1), 1))),
+                [0, 1, 2].map((d) => h('td', { class: 'num' }, pct(md.effMass[d], d))),
                 h('td', {}, h('button', { class: 'small ghost', onclick: () => app.setDisplay(`mode:${k}`) }, 'voir')),
-              );
-            }),
+              ),
+            ),
+            r.modal.modes.length > shown.length
+              ? h('tr', {}, h('td', { colspan: 6, class: 'muted' }, `… ${r.modal.modes.length - shown.length} autres modes (onglet « Modes propres »)`))
+              : null,
+            h('tr', { class: 'total' }, h('td', {}, `Σ ${r.modal.modes.length} modes`), h('td', {}), [0, 1, 2].map((d) => h('td', { class: 'num' }, pct(sums.eff[d], d))), h('td', {})),
+            h('tr', { class: 'muted' }, h('td', { colspan: 2 }, 'Masse sur supports rigides'), [0, 1, 2].map((d) => h('td', { class: 'num' }, pct(sums.supported[d], d))), h('td', {})),
           ),
         ),
       ),
@@ -247,17 +285,23 @@ export function renderBottom(app) {
       if (!r.modal) return h('p', { class: 'muted pad' }, 'Pas d’analyse modale (aucun cas sismique spectral actif).');
       const tot = r.modal.totalMass;
       const cum = [0, 0, 0];
+      const sums = modalSums(r.modal);
+      const pct = (v, d) => fmt((100 * v) / (tot[d] || 1), 1);
+      const totalRow = ['Σ', '', '', '', '', '', ...sums.eff.map(pct), ...sums.eff.map(pct)];
+      totalRow.total = true;
+      const supRow = ['Supports rigides', '', '', '', '', '', ...sums.supported.map(pct), '', '', ''];
+      supRow.total = true;
       return h(
         'div',
         {},
-        h('p', { class: 'muted' }, `Masse totale (t) : X ${fmt(tot[0], 3)}, Y ${fmt(tot[1], 3)}, Z ${fmt(tot[2], 3)} — modes normés à la masse.`),
+        h('p', {}, h('b', {}, `Masse globale du système : ${fmt(tot[0] * 1000, 0)} kg`), h('span', { class: 'muted' }, ' — %X, %Y, %Z : masse modale effective (participante) de chaque mode rapportée à la masse globale ; ΣX… : cumul. La masse portée par les supports rigides ne participe à aucun mode : elle est prise en compte par la correction de masse manquante.')),
         simpleTable(
           ['Mode', 'f (Hz)', 'T (s)', 'Γx', 'Γy', 'Γz', '%X', '%Y', '%Z', 'ΣX %', 'ΣY %', 'ΣZ %'],
           r.modal.modes.map((md, k) => {
             md.effMass.forEach((v, d) => (cum[d] += v));
-            return [k + 1, fmt(md.freq, 3), fmt(1 / md.freq, 4), ...md.gamma.map((g) => fmt(g, 4)), ...md.effMass.map((v, d) => fmt((100 * v) / (tot[d] || 1), 1)), ...cum.map((v, d) => fmt((100 * v) / (tot[d] || 1), 1))];
-          }),
-          (row) => app.setDisplay(`mode:${row[0] - 1}`),
+            return [k + 1, fmt(md.freq, 3), fmt(1 / md.freq, 4), ...md.gamma.map((g) => fmt(g, 4)), ...md.effMass.map(pct), ...cum.map(pct)];
+          }).concat([totalRow, supRow]),
+          (row) => !row.total && app.setDisplay(`mode:${row[0] - 1}`),
         ),
       );
     }
@@ -306,6 +350,13 @@ function detailText(x) {
   return parts.join(' · ');
 }
 
+/** Sommes des masses modales effectives (tous modes calculés) et masse sur supports rigides. */
+export function modalSums(modal) {
+  const eff = [0, 0, 0];
+  for (const md of modal.modes) md.effMass.forEach((v, d) => (eff[d] += v));
+  return { eff, supported: modal.supportedMass ?? [0, 0, 0] };
+}
+
 export function simpleTable(headers, rows, onRowClick, renderCell = (c) => c) {
   return h(
     'div',
@@ -317,7 +368,7 @@ export function simpleTable(headers, rows, onRowClick, renderCell = (c) => c) {
       h(
         'tbody',
         {},
-        rows.map((row) => h('tr', { class: onRowClick ? 'clickable' : '', onclick: onRowClick ? () => onRowClick(row) : undefined }, row.map((cell) => h('td', { class: typeof cell === 'string' && /^-?[\d.]/.test(cell) ? 'num' : '' }, renderCell(cell))))),
+        rows.map((row) => h('tr', { class: row.total ? 'total' : onRowClick ? 'clickable' : '', onclick: onRowClick ? () => onRowClick(row) : undefined }, row.map((cell) => h('td', { class: typeof cell === 'string' && /^-?[\d.]/.test(cell) ? 'num' : '' }, renderCell(cell))))),
       ),
     ),
   );

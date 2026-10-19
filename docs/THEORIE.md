@@ -94,6 +94,11 @@ tred2/tql2 [5]), puis étendus à tous les DDL par φ = K⁻¹·M·φ·ω². Ils
 
 ### 3.2 Réponse spectrale
 
+Par défaut, les deux directions horizontales (déduites de l'axe vertical du
+projet) partagent un même spectre et un même facteur : une seule saisie pour
+l'horizontal, une pour le vertical ; l'option peut être décochée pour saisir un
+spectre par direction.
+
 Pour chaque direction d'excitation (X, Y, Z) :
 
 1. réponse du mode i : qᵢ = Γᵢ·Sa(fᵢ)/ωᵢ², avec interpolation log-log du

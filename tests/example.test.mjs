@@ -43,3 +43,15 @@ test('Méthode sismique statique équivalente', () => {
   assert.equal(S.signed, false);
   assert.ok(Math.max(...S.supportLoads) > 0);
 });
+
+test('Analyse modale : Σ masses modales effectives = masse globale (tous modes)', () => {
+  const m = exampleModel();
+  m.loadCases.find((c) => c.type === 'seismic').maxModes = 10000;
+  const { modal } = runAnalysis(m);
+  const eff = [0, 0, 0];
+  for (const md of modal.modes) md.effMass.forEach((v, d) => (eff[d] += v));
+  for (let d = 0; d < 3; d++) {
+    assert.ok(Math.abs(eff[d] / modal.totalMass[d] - 1) < 1e-6, `direction ${d}`);
+    assert.ok(modal.supportedMass[d] > 0 && modal.supportedMass[d] < modal.totalMass[d]);
+  }
+});

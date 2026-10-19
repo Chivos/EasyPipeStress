@@ -5,6 +5,7 @@ import { buildMesh } from './core/mesher.js';
 import { FeSystem } from './fem/system.js';
 import { loadTypes } from './loads/index.js';
 import { codes } from './codes/index.js';
+import { summarize, thicknessRows } from './codes/common.js';
 
 export function runAnalysis(model) {
   const t0 = Date.now();
@@ -27,7 +28,16 @@ export function runAnalysis(model) {
     }
   }
   const modal = cases.find((c) => c.modal)?.modal ?? null;
-  const check = code ? code.check({ model, mesh, cases }) : null;
+  let check = code ? code.check({ model, mesh, cases }) : null;
+  // épaisseur minimale (pression seule) : option du projet, formule fournie par le code
+  if (check && model.settings.checkThickness === true) {
+    if (code.thickness) {
+      const rows = [...thicknessRows(code, { model, mesh }), ...check.rows];
+      check = { ...check, rows, summary: summarize(rows) };
+    } else {
+      warnings.push(`Le code « ${code.label} » ne fournit pas de formule d’épaisseur minimale : vérification non faite.`);
+    }
+  }
   return { mesh, sys, cases, modal, check, code, warnings, elapsed: Date.now() - t0 };
 }
 

@@ -2,7 +2,8 @@
 //
 // Équations implémentées (numérotation RCC-M ; coefficients des admissibles
 // paramétrables pour s'adapter à l'édition applicable) :
-//  C 3641.1  épaisseur minimale   e_m = P·De / (2(S/I + y·P)) + c,  y = 0,4
+//  C 3641.1  épaisseur minimale (méthode `thickness`, appelée si l'option du
+//            projet est cochée) : e_m = P·De / (2(S/I + y·P)) + c,  y = 0,4
 //  éq. (6)   poids propre + pression (charges permanentes)
 //            S_L = B1·Pc·De/eₙ + B2·MA/Z ≤ k6·Sh
 //  éq. (7)   dilatation thermique  S_E = i·MC/Z ≤ S_A = f(1,25 Sc + 0,25 Sh) [+ (Sh − S_L)]
@@ -18,11 +19,11 @@
 // Tés (C 3683 / NC-3673.2, i = 0,9/h^(2/3) ≥ 1, k = 1) : forgé h = 4,4e/r,
 // fabrication renforcé h = (e + e_r/2)^(5/2)/(e^(3/2)·r), non renforcé h = e/r ;
 // le SIF du té s'applique aux extrémités des trois éléments qui aboutissent au nœud.
-// Épaisseur minimale (tenue à la pression seule) : vérifiée si l'option du projet est cochée.
 // Correction de pression (option) : k/[1 + 6(P/E)(r/e)^(7/3)(R/r)^(1/3)],
 // i/[1 + 3,25(P/E)(r/e)^(5/2)(R/r)^(2/3)].
 
 import { materialAt } from '../core/materials.js';
+import { summarize } from './common.js';
 
 export const DEFAULT_PARAMS = {
   cycles: 7000,
@@ -117,6 +118,29 @@ export const rccmC = {
   componentFactors,
 
   /**
+   * Épaisseur minimale par tenue à la pression seule (C 3641.1, intrados des
+   * coudes C 3642) : e_m = P·De / (2(S/I + y·P)) + c, y = 0,4, comparée à
+   * l'épaisseur nominale diminuée de la tolérance de fabrication.
+   */
+  thickness: {
+    ref: 'RCC-M C 3641',
+    formula: 'eₘ = P·Dₑ / [2(S/I + 0,4P)] + c ≤ eₙ(1 − tol) ; I = (4R/Dₑ − 1)/(4R/Dₑ − 2) à l’intrados des coudes',
+    compute(e) {
+      const De = e.sec.od;
+      const S = materialAt(e.mat, e.Td).S;
+      let I = 1;
+      if (e.kind === 'bend') {
+        const x = e.bend.radius / De;
+        I = (4 * x - 1) / (4 * x - 2);
+      }
+      const c = +(e.secDef.corrosion || 0);
+      const tm = (e.Pd * De) / (2 * (S / I + 0.4 * e.Pd)) + c;
+      const tAvail = e.sec.t * (1 - (+(e.secDef.millTol ?? 12.5) || 0) / 100);
+      return { tm, tAvail, detail: { I, P: e.Pd, S, c } };
+    },
+  },
+
+  /**
    * @returns { rows, summary, notes }
    * rows : { eq, eqLabel, node, elem, comp, case, stress, allow, ratio, detail }
    */
@@ -175,19 +199,6 @@ export const rccmC = {
           rows.push({ ...base, eq: '10', eqLabel: `Éq. (10) séisme niveau ${sc.level ?? 'D'}`, case: `${wId ? `${wId}+P+` : 'P+'}${sc.id}`, stress: s10, allow, ratio: s10 / allow, detail: { B1: fac.B1, B2: fac.B2, P: e.P1, MA, MB, Z, S: Sh, Sy } });
         }
       }
-      // épaisseur minimale (une ligne par élément)
-      if (model.settings?.checkThickness === true && e.Pd > 0) {
-        const compLabel = e.kind === 'bend' ? `Coude ${e.bend.node}` : 'Tube';
-        let I = 1;
-        if (e.kind === 'bend') {
-          const x = e.bend.radius / De;
-          I = (4 * x - 1) / (4 * x - 2); // intrados (C 3642 / NC-3642.1)
-        }
-        const c = +(e.secDef.corrosion || 0);
-        const tm = (e.Pd * De) / (2 * (Sh / I + 0.4 * e.Pd)) + c;
-        const tAvail = t * (1 - (+(e.secDef.millTol ?? 12.5) || 0) / 100);
-        rows.push({ node: mesh.nodes[e.n1].label, elem: e.label, ie, end: null, comp: compLabel, kind: e.kind, eq: 'e', eqLabel: 'C 3641 épaisseur minimale', case: 'Pd', stress: tm, allow: tAvail, ratio: tm / tAvail, unit: 'mm', detail: { I, P: e.Pd, S: Sh, c } });
-      }
     });
 
     // éq. (7) satisfaite via (8) : un point est acceptable si (7) OU (8) l'est
@@ -201,17 +212,3 @@ export const rccmC = {
     return { rows, summary, notes, f };
   },
 };
-
-function summarize(rows) {
-  const groups = new Map();
-  for (const r of rows) {
-    const key = `${r.eqLabel}|${r.case}`;
-    const g = groups.get(key);
-    const eff = r.coveredBy ? 0 : r.ratio;
-    if (!g || eff > g.effRatio) groups.set(key, { ...r, effRatio: eff });
-  }
-  const order = { e: 0, 6: 1, 7: 2, 8: 3, 10: 4 };
-  const list = [...groups.values()].sort((a, b) => (order[a.eq] ?? 9) - (order[b.eq] ?? 9));
-  const ok = list.every((g) => g.effRatio <= 1 + 1e-9);
-  return { ok, governing: list, maxRatio: Math.max(0, ...list.map((g) => g.effRatio)) };
-}

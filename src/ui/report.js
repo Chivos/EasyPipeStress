@@ -3,7 +3,8 @@
 import { fmt } from '../core/units.js';
 import { components } from '../components/index.js';
 import { SUPPORT_KINDS } from '../components/support.js';
-import { displayCases } from './results.js';
+import { displayCases, modalSums } from './results.js';
+import { spectrumFor } from '../loads/seismic.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const table = (headers, rows) => `<table><thead><tr>${headers.map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
@@ -31,7 +32,7 @@ export function buildReport(state, snapshot) {
         ['Axe vertical', m.settings.vertical],
         ['Température de référence', `${m.settings.tRef} °C`],
         ['Modélisation', `Poutres 3D ${m.settings.shear !== false ? 'Timoshenko' : 'Euler-Bernoulli'}, longueur max. ${m.settings.meshMaxLength} mm, coudes discrétisés (≤ ${m.settings.bendDivisionAngle}° par élément) avec facteur de flexibilité`],
-        ['Épaisseur minimale (pression seule)', m.settings.checkThickness ? 'vérifiée (C 3641)' : 'non vérifiée'],
+        ['Épaisseur minimale (pression seule)', m.settings.checkThickness ? `vérifiée${r?.code?.thickness ? ` (${r.code.thickness.ref})` : ''}` : 'non vérifiée'],
         ['Supports', 'Linéaires bilatéraux, rigidité de pénalité 10¹⁰ N/mm / 10¹⁴ N·mm/rad'],
         ['Code', r?.code?.label ?? m.code.id],
         ...Object.entries(m.code.params).map(([k, v]) => [k, String(v)]),
@@ -53,7 +54,7 @@ export function buildReport(state, snapshot) {
     parts.push(table(def.fields.map((f) => f.label + (f.unit ? ` (${f.unit})` : '')), rows.map((c) => def.fields.map((f) => (f.key === 'kind' ? SUPPORT_KINDS[c.kind]?.label ?? c.kind : c[f.key] ?? '')))));
   }
   parts.push('<h2>3. Chargements</h2>');
-  parts.push(table(['Id', 'Libellé', 'Type', 'Actif', 'Paramètres'], m.loadCases.map((lc) => [lc.id, lc.label, lc.type, lc.enabled === false ? 'non' : 'oui', loadParams(lc)])));
+  parts.push(table(['Id', 'Libellé', 'Type', 'Actif', 'Paramètres'], m.loadCases.map((lc) => [lc.id, lc.label, lc.type, lc.enabled === false ? 'non' : 'oui', loadParams(lc, m.settings.vertical)])));
 
   if (r) {
     parts.push('<h2>4. Résultats</h2>');
@@ -61,7 +62,19 @@ export function buildReport(state, snapshot) {
     if (r.modal) {
       parts.push('<h3>Modes propres</h3>');
       const tot = r.modal.totalMass;
-      parts.push(table(['Mode', 'f (Hz)', '%X', '%Y', '%Z'], r.modal.modes.slice(0, 30).map((md, k) => [k + 1, fmt(md.freq, 2), ...md.effMass.map((v, d) => fmt((100 * v) / (tot[d] || 1), 1))])));
+      const sums = modalSums(r.modal);
+      const pct = (v, d) => fmt((100 * v) / (tot[d] || 1), 1);
+      parts.push(`<p>Masse globale du système : <b>${fmt(tot[0] * 1000, 0)} kg</b>. %X, %Y, %Z : masse modale effective (participante) de chaque mode rapportée à la masse globale.</p>`);
+      parts.push(
+        table(
+          ['Mode', 'f (Hz)', '%X', '%Y', '%Z'],
+          [
+            ...r.modal.modes.map((md, k) => [k + 1, fmt(md.freq, 2), ...md.effMass.map(pct)]),
+            [`Σ ${r.modal.modes.length} modes`, '', ...sums.eff.map(pct)],
+            ['Masse sur supports rigides', '', ...sums.supported.map(pct)],
+          ],
+        ),
+      );
     }
     for (const c of displayCases(r)) {
       parts.push(`<h3>Efforts sur supports — ${esc(c.id)} ${esc(c.label)}${c.signed ? '' : ' (enveloppe)'}</h3>`);
@@ -87,7 +100,7 @@ export function buildReport(state, snapshot) {
   </style></head><body><button onclick="print()" style="float:right">Imprimer / PDF</button>${parts.join('\n')}</body></html>`;
 }
 
-function loadParams(lc) {
+function loadParams(lc, vertical) {
   switch (lc.type) {
     case 'weight':
       return `fluide ${lc.fluid !== false ? 'oui' : 'non'}, calorifuge ${lc.insulation !== false ? 'oui' : 'non'}`;
@@ -96,7 +109,7 @@ function loadParams(lc) {
     case 'seismic':
       return lc.method === 'static'
         ? `statique équivalente, niveau ${lc.level}, accélérations ${['X', 'Y', 'Z'].map((d) => `${d} ${lc.staticAcc?.[d] ?? 0} g`).join(', ')}, ${lc.directional}`
-        : `spectrale, niveau ${lc.level}, ξ = ${lc.damping} %, coupure ${lc.cutoff} Hz, ${lc.modal}, ${lc.directional}, masse manquante ${lc.missingMass !== false ? 'oui' : 'non'}, facteurs ${['X', 'Y', 'Z'].map((d) => `${d} ${fmt(lc.spectra?.[d]?.factor ?? 0, 2)}`).join(', ')}`;
+        : `spectrale, niveau ${lc.level}, ξ = ${lc.damping} %, coupure ${lc.cutoff} Hz, ${lc.modal}, ${lc.directional}, masse manquante ${lc.missingMass !== false ? 'oui' : 'non'}, ${lc.sameHorizontal !== false ? 'spectre horizontal commun, ' : ''}facteurs ${['X', 'Y', 'Z'].map((d) => `${d} ${fmt(spectrumFor(lc, d, vertical)?.factor ?? 0, 2)}`).join(', ')}`;
     default:
       return '';
   }

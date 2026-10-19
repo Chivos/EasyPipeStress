@@ -165,7 +165,15 @@ export class FeSystem {
       });
       modes.push({ omega, freq: omega / (2 * Math.PI), phi, gamma, effMass: gamma.map((g) => g * g) });
     }
-    this._modal = { maxModes, modes, mass: m, totalMass };
+    // masse portée directement par les supports rigides (ne participe à aucun mode)
+    const supportedMass = [0, 1, 2].map((d) => {
+      const fixed = new Set();
+      for (const s of this.mesh.springs) if (!s.rot && s.k >= 1e9 && Math.abs(s.dir[d]) > 0.999) fixed.add(s.node);
+      let sum = 0;
+      for (const node of fixed) sum += m[node * 6 + d];
+      return sum;
+    });
+    this._modal = { maxModes, modes, mass: m, totalMass, supportedMass };
     return this._modal;
   }
 }

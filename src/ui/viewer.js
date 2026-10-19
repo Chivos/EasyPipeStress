@@ -213,15 +213,23 @@ export class Viewer {
     if (ghost) {
       const amp = disp.scale * (sc.animate ? Math.sin(performance.now() / 300) : 1);
       mesh.elements.forEach((e, ie) => {
-        ctx.strokeStyle = colors?.[ie] ?? C.deformed;
         ctx.lineWidth = Math.max(2, Math.min(10, e.sec.od * pxPerMm * 0.8));
-        ctx.beginPath();
         const pts = deformedPoints(e, P, disp.u, amp, e.kind === 'bend' ? 2 : 8);
-        pts.forEach((p, k) => {
-          const s = this.toScreen(p);
-          if (k) ctx.lineTo(s[0], s[1]);
-          else ctx.moveTo(s[0], s[1]);
-        });
+        const scr = pts.map((p) => this.toScreen(p));
+        if (disp.colorOf && disp.colorMax > 0) {
+          // couleur continue selon le déplacement total interpolé le long de l'élément
+          for (let k = 1; k < scr.length; k++) {
+            ctx.strokeStyle = disp.colorOf((pts.mags[k - 1] + pts.mags[k]) / 2 / disp.colorMax);
+            ctx.beginPath();
+            ctx.moveTo(scr[k - 1][0], scr[k - 1][1]);
+            ctx.lineTo(scr[k][0], scr[k][1]);
+            ctx.stroke();
+          }
+          return;
+        }
+        ctx.strokeStyle = colors?.[ie] ?? C.deformed;
+        ctx.beginPath();
+        scr.forEach((s, k) => (k ? ctx.lineTo(s[0], s[1]) : ctx.moveTo(s[0], s[1])));
         ctx.stroke();
       });
     }
@@ -355,6 +363,7 @@ export class Viewer {
   }
 
   drawLegend(ctx, C, w, legend) {
+    if (legend.gradient) return this.drawGradientLegend(ctx, C, w, legend);
     const x = w - 190;
     const y = 14;
     ctx.fillStyle = C.bg;
@@ -371,6 +380,44 @@ export class Viewer {
       ctx.fillStyle = C.text;
       ctx.fillText(text, x + 20, y + 29 + k * 18);
     });
+  }
+
+  /** Barre de couleur graduée (valeurs continues) + lignes d'information. */
+  drawGradientLegend(ctx, C, w, legend) {
+    const { max, unit, colorOf, digits = 1 } = legend.gradient;
+    const notes = legend.notes ?? [];
+    const W = 230;
+    const x = w - W - 4;
+    const y = 12;
+    const barW = 18;
+    const barH = 120;
+    const H = 30 + barH + notes.length * 16;
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = C.bg;
+    ctx.fillRect(x - 8, y - 6, W, H);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = C.text;
+    ctx.font = 'bold 12px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(legend.title, x, y + 8);
+    const top = y + 18;
+    for (let k = 0; k < barH; k++) {
+      ctx.fillStyle = colorOf(1 - k / (barH - 1));
+      ctx.fillRect(x, top + k, barW, 1);
+    }
+    ctx.strokeStyle = C.muted;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, top + 0.5, barW, barH);
+    ctx.font = '11px system-ui, sans-serif';
+    for (let t = 0; t <= 4; t++) {
+      const v = (max * (4 - t)) / 4;
+      const yy = top + (barH * t) / 4;
+      ctx.fillStyle = C.text;
+      ctx.fillRect(x + barW, yy, 4, 1);
+      ctx.fillText(`${v.toFixed(digits)}${unit ? ` ${unit}` : ''}`, x + barW + 8, yy + 4);
+    }
+    ctx.fillStyle = C.text;
+    notes.forEach((n, k) => ctx.fillText(n, x, top + barH + 16 + k * 16));
   }
 
   pick(e) {
@@ -409,6 +456,7 @@ export function deformedPoints(e, P, u, amp, nseg) {
   const p1 = P[e.n1];
   const p2 = P[e.n2];
   const out = [];
+  out.mags = [];
   for (let k = 0; k <= nseg; k++) {
     const x = k / nseg;
     const N1 = 1 - 3 * x * x + 2 * x ** 3;
@@ -419,6 +467,7 @@ export function deformedPoints(e, P, u, amp, nseg) {
     const dv = N1 * ul[1] + N2 * ul[5] + N3 * ul[7] + N4 * ul[11];
     const dw = N1 * ul[2] - N2 * ul[4] + N3 * ul[8] - N4 * ul[10];
     const g = [R[0] * du + R[3] * dv + R[6] * dw, R[1] * du + R[4] * dv + R[7] * dw, R[2] * du + R[5] * dv + R[8] * dw];
+    out.mags.push(Math.hypot(g[0], g[1], g[2]));
     out.push([p1[0] + x * (p2[0] - p1[0]) + amp * g[0], p1[1] + x * (p2[1] - p1[1]) + amp * g[1], p1[2] + x * (p2[2] - p1[2]) + amp * g[2]]);
   }
   return out;

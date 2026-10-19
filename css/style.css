@@ -199,3 +199,4 @@ svg.spark text { font-size: 9px; fill: var(--muted); }
   .form .row, .form .row.check { grid-template-columns: 1fr 130px; }
   .quick { grid-template-columns: repeat(3, 1fr); }
 }
+tr.total td { font-weight: 600; border-top: 2px solid var(--border); }

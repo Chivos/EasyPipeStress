@@ -9,6 +9,7 @@ import { loadTypes } from '../loads/index.js';
 import { codes } from '../codes/index.js';
 import { newId } from '../core/model.js';
 import { DEFAULT_SPECTRUM } from '../core/model.js';
+import { seismicAxes } from '../loads/seismic.js';
 
 const section = (title, ...content) => h('section', { class: 'card' }, h('h3', {}, title), ...content);
 const help = (...t) => h('p', { class: 'help' }, ...t);
@@ -23,7 +24,7 @@ export function renderProject(app) {
     { key: 'meshMaxLength', label: 'Longueur maximale d’élément', unit: 'mm', type: 'number', title: 'Discrétisation des tubes droits (précision du poids réparti et de l’analyse modale)' },
     { key: 'bendDivisionAngle', label: 'Angle maximal par élément de coude', unit: '°', type: 'number' },
     { key: 'shear', label: 'Déformation d’effort tranchant (Timoshenko)', type: 'checkbox', default: true },
-    { key: 'checkThickness', label: 'Vérifier l’épaisseur minimale (tenue à la pression seule, C 3641)', type: 'checkbox', default: false },
+    { key: 'checkThickness', label: 'Vérifier l’épaisseur minimale (tenue à la pression seule, formule du code retenu)', type: 'checkbox', default: false },
   ];
   return h(
     'div',
@@ -380,12 +381,15 @@ function seismicEditor(app, lc, li) {
     h(
       'div',
       { class: 'spectra' },
-      ['X', 'Y', 'Z'].map((d) => {
+      spectrumBlocks(lc, app.state.model.settings.vertical).map(({ title, dirs }) => {
+        const d = dirs[0];
         const sp = lc.spectra[d] ?? { factor: 0, points: [] };
+        // une saisie partagée est recopiée dans toutes les directions du bloc
+        const write = (mm, val) => dirs.forEach((x) => (mm.loadCases[li].spectra[x] = structuredClone(val)));
         return h(
           'div',
           { class: 'spectrum' },
-          h('div', { class: 'toolbar' }, h('b', {}, `Direction ${d}`), h('span', { class: 'muted' }, '× facteur'), fieldInput({ type: 'number' }, round(sp.factor, 4), (v) => app.update((mm) => { mm.loadCases[li].spectra[d] = { ...sp, factor: v === '' ? 0 : v }; }), { focusKey: `lc${li}:fac${d}` })),
+          h('div', { class: 'toolbar' }, h('b', {}, title), h('span', { class: 'muted' }, '× facteur'), fieldInput({ type: 'number' }, round(sp.factor, 4), (v) => app.update((mm) => write(mm, { ...sp, factor: v === '' ? 0 : v })), { focusKey: `lc${li}:fac${d}` })),
           h('textarea', {
             rows: 6,
             dataset: { focus: `lc${li}:sp${d}` },
@@ -396,7 +400,7 @@ function seismicEditor(app, lc, li) {
                   .split('\n')
                   .map((l) => l.trim().replace(/,/g, '.').split(/[\s;\t]+/).map(Number))
                   .filter((p) => p.length >= 2 && p.every(Number.isFinite));
-                mm.loadCases[li].spectra[d] = { ...sp, points: pts };
+                write(mm, { ...sp, points: pts });
               }),
           }),
           spectrumSvg(sp.points ?? []),
@@ -404,6 +408,15 @@ function seismicEditor(app, lc, li) {
       }),
     ),
   );
+}
+
+function spectrumBlocks(lc, vertical) {
+  const { horizontal, vertical: v } = seismicAxes(vertical);
+  if (lc.sameHorizontal === false) return ['X', 'Y', 'Z'].map((d) => ({ title: `Direction ${d}`, dirs: [d] }));
+  return [
+    { title: `Horizontal (${horizontal.join(' et ')})`, dirs: horizontal },
+    { title: `Vertical (${v})`, dirs: [v] },
+  ];
 }
 
 const round = (v, d) => (typeof v === 'number' ? +v.toFixed(d) : v);
@@ -455,7 +468,7 @@ export function renderCode(app) {
         h(
           'tbody',
           {},
-          eqRow('C 3641', 'Épaisseur minimale (option du projet)', 'eₘ = P·Dₑ / [2(S/I + 0,4P)] + c ≤ eₙ(1 − tol)'),
+          code?.thickness ? eqRow(code.thickness.ref, 'Épaisseur minimale — tenue à la pression seule (option de l’onglet Projet)', code.thickness.formula) : null,
           eqRow('(6)', 'Poids propre + pression', 'S_L = P·Dₑ/(4eₙ) + 0,75i·M_A/Z ≤ k₆·S_h   (0,75i ≥ 1)'),
           eqRow('(7)', 'Dilatation thermique', 'S_E = i·M_C/Z ≤ S_A = f(1,25 S_c + 0,25 S_h) [+ (S_h − S_L) en option]'),
           eqRow('(8)', '(6) + (7), si (7) non satisfaite', 'P_max·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ S_h + S_A'),
