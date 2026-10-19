@@ -6,14 +6,28 @@ import { fmt } from '../core/units.js';
 import { combineSigned } from '../analysis.js';
 import { SUPPORT_KINDS } from '../components/support.js';
 
+// Échelle « 4 plages » des taux de travail
+const BANDS = [
+  [0.5, '#2f9e44', '< 0,5'],
+  [0.8, '#d4a017', '0,5 – 0,8'],
+  [1.0, '#e8590c', '0,8 – 1,0'],
+  [Infinity, '#c2185b', '> 1,0 (non conforme)'],
+];
 export function ratioColor(r) {
   if (!Number.isFinite(r)) return '#888';
-  if (r > 1) return '#c2185b';
-  const hue = 120 * (1 - Math.min(1, r));
-  return `hsl(${hue.toFixed(0)}, 70%, 42%)`;
+  return BANDS.find(([max]) => r <= max)[1];
 }
 
-const RATIO_LEGEND = { title: 'Taux de travail', items: [[ratioColor(0.2), '< 0,5'], [ratioColor(0.65), '0,5 – 0,8'], [ratioColor(0.9), '0,8 – 1,0'], ['#c2185b', '> 1,0 (non conforme)']] };
+/** Échelle continue « jet » (bleu → cyan → vert → jaune → rouge) sur [0, 1]. */
+export function jetColor(t) {
+  const x = Math.max(0, Math.min(1, t));
+  const c = (v) => Math.round(255 * Math.max(0, Math.min(1, v)));
+  return `rgb(${c(1.5 - Math.abs(4 * x - 3))},${c(1.5 - Math.abs(4 * x - 2))},${c(1.5 - Math.abs(4 * x - 1))})`;
+}
+const ratioJet = (r) => (r > 1 ? '#c2185b' : jetColor(r));
+
+const RATIO_LEGEND = { title: 'Taux de travail', items: BANDS.map(([, color, text]) => [color, text]) };
+const RATIO_JET_LEGEND = { title: 'Taux de travail', gradient: { max: 1, unit: '', colorOf: jetColor, digits: 2 }, notes: ['> 1,0 : magenta (non conforme)'] };
 
 /** Cas affichables (cas EF + combinaison de service W + T). */
 export function displayCases(result) {
@@ -29,11 +43,24 @@ export function displayCases(result) {
   return list;
 }
 
+/** Élément(s) ou nœud du composant en cours d'édition, à mettre en évidence. */
+function highlightOf(state, mesh) {
+  const id = state.highlight;
+  if (!id || !mesh) return null;
+  const comp = state.model.components.find((c) => c.id === id);
+  if (!comp) return null;
+  if (comp.node != null && comp.n1 == null) {
+    const i = mesh.nodeIndex.get(String(comp.node).trim());
+    return i === undefined ? null : { node: i };
+  }
+  return { comp: id };
+}
+
 /** Description de la scène 3D selon le mode d'affichage choisi. */
 export function buildScene(state) {
   const { result, preview, display } = state;
   const mesh = result?.mesh ?? preview;
-  const scene = { mesh, selected: state.selected, labels: display.labels, showAllNodes: display.showAll, render: display.render };
+  const scene = { mesh, selected: state.selected, labels: display.labels, showAllNodes: display.showAll, render: display.render, highlight: highlightOf(state, mesh) };
   if (!result || !mesh) return scene;
   const [kind, arg] = display.mode.split(':');
   const size = modelSize(mesh);
@@ -79,8 +106,9 @@ export function buildScene(state) {
       const v = r.coveredBy ? 0 : r.ratio;
       if (v > per[r.ie]) per[r.ie] = v;
     }
-    scene.elementColors = Array.from(per, (v, ie) => (mesh.elements[ie].kind === 'valve' ? null : ratioColor(v)));
-    scene.legend = RATIO_LEGEND;
+    const jet = display.ratioMap === 'jet';
+    scene.elementColors = Array.from(per, (v, ie) => (mesh.elements[ie].kind === 'valve' ? null : jet ? ratioJet(v) : ratioColor(v)));
+    scene.legend = jet ? RATIO_JET_LEGEND : RATIO_LEGEND;
   }
   return scene;
 }

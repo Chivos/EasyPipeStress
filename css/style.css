@@ -19,6 +19,7 @@
   --view-muted: #9aa5b5;
   --view-deformed: #d35400;
   --view-valve: #6a4c93;
+  --view-halo: #a5dde3;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -43,6 +44,7 @@
     --view-muted: #5c6b7f;
     --view-deformed: #ff9f43;
     --view-valve: #b197fc;
+    --view-halo: #1d5961;
     color-scheme: dark;
   }
 }
@@ -63,6 +65,7 @@
   --view-text: #e5e9f0;
   --view-muted: #5c6b7f;
   --view-valve: #b197fc;
+  --view-halo: #1d5961;
   color-scheme: dark;
 }
 
@@ -90,7 +93,7 @@ aside { display: flex; flex-direction: column; min-height: 0; background: var(--
 #view-wrap { position: relative; min-height: 0; }
 #view { width: 100%; height: 100%; display: block; background: var(--view-bg); touch-action: none; cursor: grab; }
 #view:active { cursor: grabbing; }
-.overlay { position: absolute; top: 8px; left: 8px; right: 200px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; pointer-events: none; }
+.overlay { position: absolute; top: 8px; left: 8px; right: 250px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; pointer-events: none; }
 .overlay > * { pointer-events: auto; }
 .overlay select { max-width: 280px; }
 .hint { position: absolute; bottom: 6px; right: 10px; color: var(--muted); font-size: 11px; pointer-events: none; }
