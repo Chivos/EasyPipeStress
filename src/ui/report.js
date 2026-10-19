@@ -5,6 +5,7 @@ import { components } from '../components/index.js';
 import { SUPPORT_KINDS } from '../components/support.js';
 import { displayCases, modalSums } from './results.js';
 import { spectrumFor, seismicLevels } from '../loads/seismic.js';
+import { codes } from '../codes/index.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const table = (headers, rows) => `<table><thead><tr>${headers.map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
@@ -36,7 +37,12 @@ export function buildReport(state, snapshot) {
         ['Épaisseur minimale (pression seule)', m.settings.checkThickness ? `vérifiée${r?.code?.thickness ? ` (${r.code.thickness.ref})` : ''}` : 'non vérifiée'],
         ['Supports', 'Linéaires bilatéraux, rigidité de pénalité 10¹⁰ N/mm / 10¹⁴ N·mm/rad'],
         ['Code', r?.code?.label ?? m.code.id],
-        ...Object.entries(m.code.params).map(([k, v]) => [k, String(v)]),
+        // paramètres déclarés par le code, avec leur libellé (les clés obsolètes
+        // d'anciens projets ne sont pas reprises)
+        ...(codes.get(m.code.id)?.params ?? []).map((f) => {
+          const v = m.code.params?.[f.key];
+          return [f.label, f.type === 'checkbox' ? (v ? 'oui' : 'non') : String(v ?? '')];
+        }),
       ],
     ),
   );

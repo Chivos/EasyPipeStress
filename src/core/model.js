@@ -120,6 +120,8 @@ export function normalizeModel(raw) {
   m.meta = { ...base.meta, ...(raw.meta ?? {}) };
   m.settings = { ...base.settings, ...(raw.settings ?? {}) };
   m.code = { ...base.code, ...(raw.code ?? {}), params: { ...base.code.params, ...(raw.code?.params ?? {}) } };
+  // paramètres retirés du code (anciens projets) : supprimés
+  if (m.code.id === base.code.id) for (const k of Object.keys(m.code.params)) if (!(k in base.code.params)) delete m.code.params[k];
   m.components = raw.components ?? [];
   m.nodeCoords = raw.nodeCoords ?? base.nodeCoords;
   m.loadCases = raw.loadCases ?? base.loadCases;
