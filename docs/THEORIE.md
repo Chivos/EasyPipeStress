@@ -21,6 +21,12 @@ vertical global (ou un axe horizontal si l'élément est vertical) ; z = x ∧ y
 
 ### 1.2 Coudes
 
+Le rayon R est soit saisi, soit déduit du type de coude : 1,5·Dₑ (par défaut),
+ou coude normalisé ASME B16.9 d'après le NPS du tube (petit rayon 1D, grand
+rayon 1,5D, 3D), ou coude cintré 5D. Les sections normalisées (diamètres et
+épaisseurs ASME B36.10M et B36.19M) sont proposées par le catalogue de l'onglet
+Projet.
+
 Le sommet d'intersection des tangentes est remplacé par un arc de rayon R,
 discrétisé en cordes (au plus 10° par élément par défaut, nombre pair pour disposer d'un
 nœud milieu). Les nœuds créés sont nommés `<sommet>A`, `<sommet>M`,

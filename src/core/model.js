@@ -101,9 +101,9 @@ export function exampleModel() {
   // dérivation DN100 vers un troisième piquage, par un té forgé au nœud 15
   m.components.push({ type: 'pipe', n1: '15', n2: '55', dx: 0, dy: -2500, dz: 0, ...base, section: 'DN100-40S' });
   m.components.push({ type: 'pipe', n1: '55', n2: '60', dx: 0, dy: 0, dz: -2500, ...base, section: 'DN100-40S' });
-  m.components.push({ type: 'bend', node: '55', radius: 152, t: '', divisions: '' });
+  m.components.push({ type: 'bend', node: '55', radiusType: 'LR', radius: '', t: '', divisions: '' });
   m.components.push({ type: 'tee', node: '15', teeType: 'welding', pad: '', sif: '', label: 'Té DN150×100' });
-  for (const node of ['20', '30', '40']) m.components.push({ type: 'bend', node, radius: 229, t: '', divisions: '' });
+  for (const node of ['20', '30', '40']) m.components.push({ type: 'bend', node, radiusType: 'LR', radius: '', t: '', divisions: '' });
   m.components.push({ type: 'valve', n1: '45', n2: '46', dx: 400, dy: 0, dz: 0, mass: 180, stiffFactor: 10, section: 'DN150-40S', label: 'Robinet DN150' });
   m.components.push({ type: 'mass', node: '35', mass: 25, label: 'Instrument' });
   m.components.push({ type: 'support', node: '10', kind: 'anchor', stiffness: '', dofs: '', imposed: '', label: 'Piquage A' });

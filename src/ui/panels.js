@@ -10,6 +10,8 @@ import { codes } from '../codes/index.js';
 import { newId } from '../core/model.js';
 import { DEFAULT_SPECTRUM } from '../core/model.js';
 import { seismicAxes, seismicLevels, defaultLevels, LEVELS } from '../loads/seismic.js';
+import { PIPE_SIZES, schedulesOf } from '../core/pipeCatalog.js';
+import { fmt } from '../core/units.js';
 
 const section = (title, ...content) => h('section', { class: 'card' }, h('h3', {}, title), ...content);
 const help = (...t) => h('p', { class: 'help' }, ...t);
@@ -96,8 +98,46 @@ function renderSections(app) {
           if (k === 'id') for (const c of mm.components) if (c.section === old) c.section = v;
         }),
       onDelete: (i) => app.update((mm) => mm.sections.splice(i, 1)),
-      onAdd: () => app.update((mm) => mm.sections.push({ ...structuredClone(mm.sections[mm.sections.length - 1] ?? { od: 114.3, t: 6.02, millTol: 12.5, corrosion: 0, fluidDensity: 1000, insulThk: 0, insulDensity: 0 }), id: `SEC${mm.sections.length + 1}` })),
+      onAdd: () => app.update((mm) => mm.sections.push({ ...structuredClone(mm.sections[mm.sections.length - 1] ?? SECTION_DEFAULTS), id: `SEC${mm.sections.length + 1}` })),
     }),
+    catalogPicker(app),
+  );
+}
+
+const SECTION_DEFAULTS = { od: 114.3, t: 6.02, millTol: 12.5, corrosion: 0, fluidDensity: 1000, insulThk: 0, insulDensity: 0 };
+
+/** Ajout d'une section normalisée ASME B36.10M (acier carbone) ou B36.19M (inoxydable). */
+function catalogPicker(app) {
+  const cat = (app.state.pipeCatalog ??= { std: 'B36.10M', nps: '6', sch: '40' });
+  const size = PIPE_SIZES.find((x) => x.nps === cat.nps) ?? PIPE_SIZES[0];
+  const scheds = schedulesOf(cat.std, size);
+  if (!scheds.some(([k]) => k === cat.sch)) cat.sch = (scheds.find(([k]) => k === 'STD' || k === '40S') ?? scheds[0])?.[0];
+  const t = scheds.find(([k]) => k === cat.sch)?.[1];
+  const set = (k) => (e) => app.setUi(() => (cat[k] = e.target.value));
+  const add = () =>
+    app.update((mm) => {
+      const label = cat.std === 'B36.19M' ? cat.sch : `Sch${cat.sch}`;
+      let id = `DN${size.dn}-${label}`;
+      for (let k = 2; mm.sections.some((x) => x.id === id); k++) id = `DN${size.dn}-${label}-${k}`;
+      const last = mm.sections[mm.sections.length - 1] ?? SECTION_DEFAULTS;
+      mm.sections.push({
+        ...structuredClone(SECTION_DEFAULTS),
+        // fluide, calorifuge, tolérances : repris de la dernière section
+        ...Object.fromEntries(['millTol', 'corrosion', 'fluidDensity', 'insulThk', 'insulDensity'].map((k) => [k, last[k] ?? SECTION_DEFAULTS[k]])),
+        id,
+        name: `DN${size.dn} (NPS ${size.nps}) ${cat.std === 'B36.19M' ? cat.sch : `Sch ${cat.sch}`} — ASME ${cat.std} (${fmt(size.od, 1)} × ${fmt(t, 2)})`,
+        od: size.od,
+        t,
+      });
+    });
+  return h(
+    'div',
+    { class: 'toolbar catalog' },
+    h('span', { class: 'muted' }, 'Catalogue :'),
+    h('select', { title: 'Norme', onchange: set('std') }, ['B36.10M', 'B36.19M'].map((x) => h('option', { value: x, selected: x === cat.std }, x === 'B36.10M' ? 'ASME B36.10M (acier carbone)' : 'ASME B36.19M (inoxydable)'))),
+    h('select', { title: 'Diamètre nominal', onchange: set('nps') }, PIPE_SIZES.map((x) => h('option', { value: x.nps, selected: x.nps === size.nps }, `DN${x.dn} — NPS ${x.nps} (${fmt(x.od, 1)})`))),
+    h('select', { title: 'Schedule (épaisseur)', onchange: set('sch') }, scheds.map(([k, e]) => h('option', { value: k, selected: k === cat.sch }, `${cat.std === 'B36.19M' ? k : `Sch ${k}`} — ${fmt(e, 2)} mm`))),
+    h('button', { class: 'small', onclick: add, disabled: !(t > 0) }, 'Ajouter la section'),
   );
 }
 
