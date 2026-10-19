@@ -213,7 +213,9 @@ export class Viewer {
     };
     const arcs = this.bendArcs(mesh);
     const hlSpec = sc.highlight;
-    const isHl = (e) => hlSpec?.comp != null && e.comp === hlSpec.comp;
+    // composant en cours d'édition (comp) ou élément(s) d'une ligne de résultats (elems)
+    const isHl = (e) => (hlSpec?.comp != null && e.comp === hlSpec.comp) || !!hlSpec?.elems?.has(e.index);
+    const hlColor = (e) => isHl(e) && !hlSpec.keepColor; // résultats : la couleur du taux est conservée
     const amp = ghost ? disp.scale * (sc.animate ? Math.sin(performance.now() / 300) : 1) : 0;
     const useDisp = disp?.colorOf && disp.colorMax > 0;
     // points (3D) et couleurs d'un élément, dans le sens de parcours demandé
@@ -236,7 +238,7 @@ export class Viewer {
         const ts = a > 0.02 ? [0, a, 1 - a, 1] : [0, 1];
         pts = ts.map((t) => vec.add(P[e.n1], vec.scale(vec.sub(P[e.n2], P[e.n1]), t)));
       }
-      const hl = isHl(e);
+      const hl = hlColor(e);
       const segColors = Array.from({ length: pts.length - 1 }, (_, k) =>
         hl ? C.sel : ghost ? (useDisp ? disp.colorOf((mags[k] + mags[k + 1]) / 2 / disp.colorMax) : colors?.[ie] ?? C.deformed) : colors?.[ie] ?? C.pipe,
       );
@@ -261,7 +263,7 @@ export class Viewer {
       ctx.globalAlpha = 1;
     }
     // Mise en évidence du composant en cours d'édition : halo sous le tracé
-    if (hlSpec?.comp) {
+    if (hlSpec?.comp || hlSpec?.elems?.size) {
       ctx.strokeStyle = C.halo; // teinte opaque : pas de surépaisseur aux recouvrements
       for (const e of mesh.elements) {
         if (!isHl(e)) continue;
@@ -298,7 +300,7 @@ export class Viewer {
     mesh.elements.forEach((e, ie) => {
       if (e.kind !== 'valve') return;
       if (!ghost) {
-        valveShape(P[e.n1], P[e.n2], e.sec.od, isHl(e) ? C.sel : colors?.[ie] ?? C.valve);
+        valveShape(P[e.n1], P[e.n2], e.sec.od, hlColor(e) ? C.sel : colors?.[ie] ?? C.valve);
         return;
       }
       const pts = deformedPoints(e, P, disp.u, amp, 1);
@@ -367,7 +369,7 @@ export class Viewer {
     });
 
     // Nœud du composant ponctuel en cours d'édition (support, masse, té…)
-    if (hlSpec?.node != null) {
+    if (hlSpec?.node != null && !hlSpec.keepColor) {
       const q = S[hlSpec.node];
       const r = (solid ? (odAtNode(hlSpec.node) * pxPerMm) / 2 : 4) + 12;
       ctx.fillStyle = C.sel;
@@ -425,6 +427,38 @@ export class Viewer {
     ];
 
     this.drawTriad(ctx, C, hgt);
+    // Point d'une ligne de résultats survolée : repère marqué et nom du nœud, au premier plan
+    if (hlSpec?.keepColor && hlSpec.node != null && S[hlSpec.node]) {
+      const q = S[hlSpec.node];
+      const r = (solid ? (odAtNode(hlSpec.node) * pxPerMm) / 2 : 4) + 10;
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = C.bg;
+      ctx.beginPath();
+      ctx.arc(q[0], q[1], r, 0, 2 * Math.PI);
+      ctx.stroke();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = C.sel;
+      ctx.stroke();
+      ctx.fillStyle = C.sel;
+      ctx.beginPath();
+      ctx.arc(q[0], q[1], 3.5, 0, 2 * Math.PI);
+      ctx.fill();
+      const text = `Nœud ${mesh.nodes[hlSpec.node].label}`;
+      ctx.font = 'bold 12px system-ui, sans-serif';
+      const tw = ctx.measureText(text).width;
+      const bx = q[0] + r * 0.75 + 6;
+      const by = q[1] - r * 0.75 - 22;
+      ctx.fillStyle = C.sel;
+      ctx.beginPath();
+      ctx.roundRect?.(bx, by, tw + 12, 20, 4) ?? ctx.rect(bx, by, tw + 12, 20);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, bx + 6, by + 10);
+      ctx.textBaseline = 'alphabetic';
+    }
+
     if (sc.legend) this.drawLegend(ctx, C, w, sc.legend);
   }
 

@@ -47,6 +47,11 @@ export function displayCases(result) {
 function highlightOf(state, mesh) {
   const id = state.highlight;
   if (!id || !mesh) return null;
+  // ligne de tableau de résultats : élément(s) et nœud désignés directement
+  if (typeof id === 'object') {
+    const node = id.node != null ? mesh.nodeIndex.get(String(id.node)) : undefined;
+    return { elems: new Set(id.elems ?? []), node, keepColor: true };
+  }
   const comp = state.model.components.find((c) => c.id === id);
   if (!comp) return null;
   if (comp.node != null && comp.n1 == null) {
@@ -175,7 +180,7 @@ export function renderResultsPanel(app) {
             s.governing.map((g) =>
               h(
                 'tr',
-                { class: 'clickable', title: 'Détail du calcul', onclick: () => (app.select(g.node), openRowDetail(g)) },
+                { class: 'clickable', title: 'Détail du calcul', onclick: () => (app.select(g.node), openRowDetail(g)), onmouseenter: () => app.highlight(rowHighlight(g)), onmouseleave: () => app.highlight(null) },
                 h('td', {}, g.eqLabel),
                 h('td', {}, g.case),
                 h('td', {}, g.node),
@@ -275,6 +280,8 @@ export function renderBottom(app) {
             .filter(({ n }) => nodeOk(n.label))
             .map(({ n, i }) => [n.label, ...[0, 1, 2].map((d) => fmt(c.u[i * 6 + d], 2)), ...[3, 4, 5].map((d) => fmt((c.u[i * 6 + d] * 180) / Math.PI, 3))]),
           (row) => app.select(row[0]),
+          undefined,
+          (row) => app.highlight(row ? { node: row[0] } : null),
         ),
       );
     case 'supports':
@@ -291,6 +298,8 @@ export function renderBottom(app) {
             app.select(row[0]);
             openSupportResults(r, row.k);
           },
+          undefined,
+          (row) => app.highlight(row ? { node: row[0] } : null),
         ),
       );
     case 'forces':
@@ -314,6 +323,8 @@ export function renderBottom(app) {
             app.select(row[1]);
             openForceResults(r, row.ie, row.end);
           },
+          undefined,
+          (row) => app.highlight(row ? { elems: [row.ie], node: row[1] } : null),
         ),
       );
     case 'modes': {
@@ -376,9 +387,13 @@ function codeTable(app, r, nodeOk, internalChk) {
         openRowDetail(row.src);
       },
       (cell) => (cell && typeof cell === 'object' && 'ratio' in cell ? h('span', { class: 'pill', style: { background: ratioColor(cell.covered ? 0 : cell.ratio) } }, fmt(cell.ratio, 2), cell.covered ? ` (${cell.covered} ok)` : '') : cell),
+      (row) => app.highlight(row ? rowHighlight(row.src) : null),
     ),
   );
 }
+
+/** Mise en évidence d'une ligne de vérification : élément et nœud du point vérifié. */
+const rowHighlight = (x) => ({ elems: x.ie != null ? [x.ie] : [], node: x.node });
 
 function detailText(x) {
   const d = x.detail ?? {};
@@ -601,7 +616,7 @@ function numericColumns(headers, rows) {
   });
 }
 
-export function simpleTable(headers, rows, onRowClick, renderCell = (c) => c) {
+export function simpleTable(headers, rows, onRowClick, renderCell = (c) => c, onHover = null) {
   const num = numericColumns(headers, rows);
   return h(
     'div',
@@ -613,7 +628,18 @@ export function simpleTable(headers, rows, onRowClick, renderCell = (c) => c) {
       h(
         'tbody',
         {},
-        rows.map((row) => h('tr', { class: row.total ? 'total' : onRowClick ? 'clickable' : '', onclick: onRowClick ? () => onRowClick(row) : undefined }, row.map((cell, j) => h('td', { class: num[j] ? 'num' : '' }, renderCell(cell))))),
+        rows.map((row) =>
+          h(
+            'tr',
+            {
+              class: row.total ? 'total' : onRowClick ? 'clickable' : '',
+              onclick: onRowClick ? () => onRowClick(row) : undefined,
+              onmouseenter: onHover ? () => onHover(row) : undefined,
+              onmouseleave: onHover ? () => onHover(null) : undefined,
+            },
+            row.map((cell, j) => h('td', { class: num[j] ? 'num' : '' }, renderCell(cell))),
+          ),
+        ),
       ),
     ),
   );
