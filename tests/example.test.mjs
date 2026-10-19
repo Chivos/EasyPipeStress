@@ -39,7 +39,7 @@ test('Méthode sismique statique équivalente', () => {
   const s = m.loadCases.find((c) => c.type === 'seismic');
   s.method = 'static';
   const r = runAnalysis(m);
-  const S = r.cases.find((c) => c.id === s.id);
+  const S = r.cases.find((c) => c.base === s.id);
   assert.equal(S.signed, false);
   assert.ok(Math.max(...S.supportLoads) > 0);
 });

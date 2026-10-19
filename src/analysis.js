@@ -6,6 +6,7 @@ import { FeSystem } from './fem/system.js';
 import { loadTypes } from './loads/index.js';
 import { codes } from './codes/index.js';
 import { summarize, thicknessRows } from './codes/common.js';
+import { seismicLevels } from './loads/seismic.js';
 
 export function runAnalysis(model) {
   const t0 = Date.now();
@@ -19,7 +20,28 @@ export function runAnalysis(model) {
     if (lc.enabled === false) continue;
     const type = loadTypes.get(lc.type);
     const r = type.run(ctx, lc);
-    cases.push({ id: lc.id, label: lc.label || type.label, type: lc.type, level: lc.level, fe: r.fe !== false, ...r });
+    if (lc.type === 'seismic') {
+      // un cas par niveau de critère : même réponse, mise à l'échelle par le coefficient du niveau
+      for (const lv of seismicLevels(lc).filter((x) => x.enabled !== false)) {
+        const k = Number.isFinite(+lv.factor) && lv.factor !== '' ? +lv.factor : 1;
+        const scale = (a) => a.map((v) => v * k);
+        cases.push({
+          ...r,
+          id: `${lc.id}-${lv.level}`,
+          label: `${lc.label || type.label} niveau ${lv.level} (× ${k})`,
+          type: lc.type,
+          level: lv.level,
+          factor: k,
+          base: lc.id,
+          fe: true,
+          u: scale(r.u),
+          elemForces: scale(r.elemForces),
+          supportLoads: scale(r.supportLoads),
+        });
+      }
+    } else {
+      cases.push({ id: lc.id, label: lc.label || type.label, type: lc.type, level: lc.level, fe: r.fe !== false, ...r });
+    }
     if (r.info?.method === 'spectral' && r.modal) {
       const last = r.modal.modes[r.modal.modes.length - 1];
       if (last && last.freq < (r.info.cutoff ?? 33) && r.modal.modes.length >= (+lc.maxModes || 60)) {

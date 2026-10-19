@@ -12,7 +12,7 @@ export function summarize(rows) {
     const eff = r.coveredBy ? 0 : r.ratio;
     if (!g || eff > g.effRatio) groups.set(key, { ...r, effRatio: eff });
   }
-  const rank = (eq) => (eq === 'e' ? -1 : Number.isFinite(+eq) ? +eq : 1e9);
+  const rank = (eq) => (eq === 'e' ? -1 : Number.isFinite(parseFloat(eq)) ? parseFloat(eq) : 1e9);
   const list = [...groups.values()].sort((a, b) => rank(a.eq) - rank(b.eq));
   const ok = list.every((g) => g.effRatio <= 1 + 1e-9);
   return { ok, governing: list, maxRatio: Math.max(0, ...list.map((g) => g.effRatio)) };

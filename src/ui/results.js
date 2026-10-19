@@ -340,9 +340,9 @@ function codeTable(app, r, nodeOk, internalChk) {
 function detailText(x) {
   const d = x.detail ?? {};
   const parts = [];
-  if (d.B1 !== undefined) parts.push(`B1 ${fmt(d.B1, 3)}`);
-  if (d.B2 !== undefined) parts.push(`B2 ${fmt(d.B2, 3)}`);
   if (d.i !== undefined) parts.push(`i ${fmt(d.i, 3)}`);
+  if (d.i75 !== undefined) parts.push(`0,75i ${fmt(d.i75, 3)}`);
+  if (d.factor !== undefined && d.factor !== 1) parts.push(`séisme × ${fmt(d.factor, 2)}`);
   if (d.MA !== undefined) parts.push(`MA ${fmt(d.MA / 1000, 0)} N·m`);
   if (d.MB !== undefined) parts.push(`MB ${fmt(d.MB / 1000, 0)} N·m`);
   if (d.MC !== undefined) parts.push(`MC ${fmt(d.MC / 1000, 0)} N·m`);

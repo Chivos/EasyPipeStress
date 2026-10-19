@@ -5,7 +5,7 @@ entièrement dans le navigateur : modélisation 3D, calcul par éléments finis 
 poutres, chargements poids propre, pression, dilatation thermique et séisme
 (spectral ou statique), puis dépouillement selon le **RCC-M, sous-section C
 (classe 2), §C 3650** : équations (6) poids propre + pression, (7) dilatation,
-(8) = (6) + (7) et (10) séisme.
+(8) = (6) + (7) et (10B), (10C), (10D) séisme par niveau de critère.
 
 Aucune installation ni serveur de calcul : c'est une page statique (modules
 JavaScript natifs, sans dépendance ni étape de compilation), publiée sur
@@ -23,11 +23,12 @@ exportables/importables en JSON.
 2. **Supports & masses** : ancrages, appuis, guides, butées, ressorts, blocages
    personnalisés, déplacements imposés de piquage ; masses ponctuelles.
 3. **Chargements** : poids (fluide, calorifuge), pression, dilatation, séisme
-   (niveau B/C/D, spectre horizontal commun aux deux directions horizontales et
+   (niveaux B, C, D vérifiés avec un coefficient chacun sur le même séisme,
+   spectre horizontal commun aux deux directions horizontales et
    spectre vertical, ou un spectre par direction, CQC/SRSS, masse manquante,
    100-40-40/SRSS, ou statique équivalente).
 4. **Code** : paramètres du RCC-M C (nombre de cycles, coefficients des
-   admissibles par équation et par niveau, indices 0,75i ou B₁/B₂,
+   admissibles par équation et par niveau, tableau du cumul des chargements,
    correction de pression des coudes). La vérification d'épaisseur minimale
    par tenue à la pression seule est une option de l'onglet Projet (désactivée
    par défaut).
@@ -100,7 +101,7 @@ des descripteurs `fields`.
   `{ signed, u, elemForces, supportLoads, info }`.
 - **Nouveau code** (RCC-M B/D, EN 13480-3, B31.3…) : `src/codes/xxx.js`
   exportant `{ id, label, params, componentFactors, check, thickness }`. `componentFactors`
-  fournit k, i, B₁, B₂ au mailleur ; `check({ model, mesh, cases })` renvoie les
+  fournit les facteurs k et i au mailleur ; `check({ model, mesh, cases })` renvoie les
   lignes de vérification et la synthèse ; `thickness` (facultatif) fournit la
   formule d'épaisseur minimale par tenue à la pression seule, appliquée quand
   l'option du projet est cochée.

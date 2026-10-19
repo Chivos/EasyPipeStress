@@ -14,6 +14,19 @@ import { spectrumAt, zpa, combineModal, combineDirectional, srss2 } from '../fem
 
 const DIRS = ['X', 'Y', 'Z'];
 
+/**
+ * Niveaux de critère vérifiés pour ce séisme : même spectre d'entrée, un
+ * coefficient multiplicateur par niveau. La réponse étant linéaire vis-à-vis
+ * du spectre, le calcul est fait une fois et mis à l'échelle par niveau.
+ * Compatibilité : un ancien cas à niveau unique (`level`) donne un seul niveau.
+ */
+export const LEVELS = ['B', 'C', 'D'];
+export function seismicLevels(lc) {
+  if (Array.isArray(lc.levels) && lc.levels.length) return lc.levels;
+  return [{ level: lc.level ?? 'D', enabled: true, factor: 1 }];
+}
+export const defaultLevels = () => LEVELS.map((level) => ({ level, enabled: true, factor: 1 }));
+
 /** Directions horizontales et verticale, selon l'axe vertical du projet. */
 export function seismicAxes(vertical = 'Z') {
   const v = DIRS.includes(vertical) ? vertical : 'Z';
@@ -36,7 +49,6 @@ export const seismic = {
   label: 'Séisme',
   description: 'Effets d’inertie du séisme, par analyse spectrale (recommandée) ou statique équivalente.',
   fields: [
-    { key: 'level', label: 'Niveau de critère', type: 'select', options: () => ['B', 'C', 'D'] },
     { key: 'method', label: 'Méthode', type: 'select', options: () => ['spectral', 'static'], optionLabel: (v) => (v === 'spectral' ? 'Spectrale (modale)' : 'Statique équivalente') },
     { key: 'damping', label: 'Amortissement', unit: '%', type: 'number' },
     { key: 'cutoff', label: 'Fréquence de coupure', unit: 'Hz', type: 'number' },
@@ -46,7 +58,7 @@ export const seismic = {
     { key: 'sameHorizontal', label: 'Même spectre pour les deux directions horizontales', type: 'checkbox', default: true },
     { key: 'missingMass', label: 'Correction de masse manquante (ZPA)', type: 'checkbox', default: true },
   ],
-  create: () => ({ type: 'seismic', label: 'Séisme', enabled: true }),
+  create: () => ({ type: 'seismic', label: 'Séisme', enabled: true, levels: defaultLevels() }),
 
   run(ctx, lc) {
     const { sys } = ctx;

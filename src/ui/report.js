@@ -4,7 +4,7 @@ import { fmt } from '../core/units.js';
 import { components } from '../components/index.js';
 import { SUPPORT_KINDS } from '../components/support.js';
 import { displayCases, modalSums } from './results.js';
-import { spectrumFor } from '../loads/seismic.js';
+import { spectrumFor, seismicLevels } from '../loads/seismic.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const table = (headers, rows) => `<table><thead><tr>${headers.map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
@@ -55,6 +55,11 @@ export function buildReport(state, snapshot) {
   }
   parts.push('<h2>3. Chargements</h2>');
   parts.push(table(['Id', 'Libellé', 'Type', 'Actif', 'Paramètres'], m.loadCases.map((lc) => [lc.id, lc.label, lc.type, lc.enabled === false ? 'non' : 'oui', loadParams(lc, m.settings.vertical)])));
+  const code = r?.code;
+  if (code?.combinations) {
+    parts.push('<h3>Cumul des chargements</h3>');
+    parts.push(table(['Éq.', 'Cumul', 'Chargements', 'Règle', 'Admissible'], code.combinations({ model: m }).map((c) => [c.eq, c.name, c.loads, c.rule, c.allow])));
+  }
 
   if (r) {
     parts.push('<h2>4. Résultats</h2>');
@@ -100,6 +105,12 @@ export function buildReport(state, snapshot) {
   </style></head><body><button onclick="print()" style="float:right">Imprimer / PDF</button>${parts.join('\n')}</body></html>`;
 }
 
+const levelsText = (lc) =>
+  `niveaux ${seismicLevels(lc)
+    .filter((x) => x.enabled !== false)
+    .map((x) => `${x.level} (× ${x.factor === '' || x.factor == null ? 1 : x.factor})`)
+    .join(', ')}`;
+
 function loadParams(lc, vertical) {
   switch (lc.type) {
     case 'weight':
@@ -108,8 +119,8 @@ function loadParams(lc, vertical) {
       return `T service par tube, déplacements imposés ${lc.imposed !== false ? 'oui' : 'non'}`;
     case 'seismic':
       return lc.method === 'static'
-        ? `statique équivalente, niveau ${lc.level}, accélérations ${['X', 'Y', 'Z'].map((d) => `${d} ${lc.staticAcc?.[d] ?? 0} g`).join(', ')}, ${lc.directional}`
-        : `spectrale, niveau ${lc.level}, ξ = ${lc.damping} %, coupure ${lc.cutoff} Hz, ${lc.modal}, ${lc.directional}, masse manquante ${lc.missingMass !== false ? 'oui' : 'non'}, ${lc.sameHorizontal !== false ? 'spectre horizontal commun, ' : ''}facteurs ${['X', 'Y', 'Z'].map((d) => `${d} ${fmt(spectrumFor(lc, d, vertical)?.factor ?? 0, 2)}`).join(', ')}`;
+        ? `statique équivalente, ${levelsText(lc)}, accélérations ${['X', 'Y', 'Z'].map((d) => `${d} ${lc.staticAcc?.[d] ?? 0} g`).join(', ')}, ${lc.directional}`
+        : `spectrale, ${levelsText(lc)}, ξ = ${lc.damping} %, coupure ${lc.cutoff} Hz, ${lc.modal}, ${lc.directional}, masse manquante ${lc.missingMass !== false ? 'oui' : 'non'}, ${lc.sameHorizontal !== false ? 'spectre horizontal commun, ' : ''}facteurs ${['X', 'Y', 'Z'].map((d) => `${d} ${fmt(spectrumFor(lc, d, vertical)?.factor ?? 0, 2)}`).join(', ')}`;
     default:
       return '';
   }
