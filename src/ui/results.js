@@ -41,19 +41,36 @@ export function buildScene(state) {
     const c = displayCases(result).find((x) => x.id === arg);
     if (c) {
       const umax = maxDisp(c.u);
+      const at = maxDispNode(mesh, c.u);
+      const digits = umax >= 10 ? 1 : 2;
       if (c.signed) {
-        scene.displacement = { u: c.u, signed: true, scale: umax > 0 ? ((0.06 * size) / umax) * display.scale : 0 };
+        const scale = umax > 0 ? ((0.06 * size) / umax) * display.scale : 0;
+        scene.displacement = { u: c.u, signed: true, scale, colorOf: dispColor, colorMax: umax };
+        scene.legend = {
+          title: `Déplacement total — ${c.id}`,
+          gradient: { max: umax, unit: 'mm', colorOf: dispColor, digits },
+          notes: [`max ${fmt(umax, digits)} mm au nœud ${at}`, `déformée amplifiée ×${fmtScale(scale)}`],
+        };
       } else {
         scene.elementColors = mesh.elements.map((e) => dispColor(Math.max(nodeDisp(c.u, e.n1), nodeDisp(c.u, e.n2)) / (umax || 1)));
-        scene.legend = { title: `Enveloppe |u| (max ${fmt(umax, 1)} mm)`, items: [[dispColor(0.1), 'faible'], [dispColor(0.5), 'moyen'], [dispColor(1), 'maximal']] };
+        scene.legend = {
+          title: `Enveloppe |u| — ${c.id}`,
+          gradient: { max: umax, unit: 'mm', colorOf: dispColor, digits },
+          notes: [`max ${fmt(umax, digits)} mm au nœud ${at}`, 'valeurs non signées : pas de déformée'],
+        };
       }
     }
   } else if (kind === 'mode' && result.modal) {
     const md = result.modal.modes[+arg];
     if (md) {
       const umax = maxDisp(md.phi);
-      scene.displacement = { u: md.phi, signed: true, scale: ((0.08 * size) / (umax || 1)) * display.scale };
+      scene.displacement = { u: md.phi, signed: true, scale: ((0.08 * size) / (umax || 1)) * display.scale, colorOf: dispColor, colorMax: umax };
       scene.animate = display.animate;
+      scene.legend = {
+        title: `Mode ${+arg + 1} — ${fmt(md.freq, 2)} Hz`,
+        gradient: { max: 1, unit: '', colorOf: dispColor, digits: 2 },
+        notes: ['amplitude relative (mode normé)', `maximum au nœud ${maxDispNode(mesh, md.phi)}`],
+      };
     }
   } else if (kind === 'ratio' && result.check) {
     const per = new Float64Array(mesh.elements.length);
@@ -68,6 +85,19 @@ export function buildScene(state) {
   return scene;
 }
 
+function maxDispNode(mesh, u) {
+  let best = 0;
+  let label = '–';
+  mesh.nodes.forEach((n, i) => {
+    const v = nodeDisp(u, i);
+    if (v > best) {
+      best = v;
+      label = n.label;
+    }
+  });
+  return label;
+}
+const fmtScale = (s) => (s >= 100 ? Math.round(s).toString() : s >= 1 ? s.toFixed(1) : s.toPrecision(2));
 const nodeDisp = (u, i) => Math.hypot(u[i * 6], u[i * 6 + 1], u[i * 6 + 2]);
 function maxDisp(u) {
   let m = 0;
