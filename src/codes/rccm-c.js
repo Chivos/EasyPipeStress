@@ -1,15 +1,16 @@
 // RCC-M, Section I, sous-section C (matériels de classe 2) — tuyauteries, C 3650.
 //
 // Équations implémentées (numérotation RCC-M ; coefficients des admissibles
-// paramétrables pour s'adapter à l'édition applicable). Formulation de la
+// fixés par le code, non modifiables). Formulation de la
 // classe 2 par le facteur d'intensification i (les indices B1/B2 relèvent de la
 // classe 1, sous-section B, et ne sont pas utilisés ici) :
-//  éq. (6)   poids propre + pression       S_L = P·De/(4eₙ) + 0,75i·MA/Z ≤ k6·Sh
-//  éq. (7)   dilatation thermique          S_E = i·MC/Z ≤ S_A = f(1,25 Sc + 0,25 Sh) [+ f(Sh − S_L)]
+//  éq. (6)   poids propre + pression       S_L = P·De/(4eₙ) + 0,75i·MA/Z ≤ 1,0·Sh
+//  éq. (7)   dilatation thermique          S_E = i·MC/Z ≤ S_A = f(1,25 Sc + 0,25 Sh)
 //  éq. (8)   (6) + (7), si (7) non satisfaite :
 //            P·De/(4eₙ) + 0,75i·MA/Z + i·MC/Z ≤ Sh + S_A
 //  éq. (10)  séisme, pour chaque niveau de critère B, C, D (même spectre, coefficient
-//            propre au niveau) : P·De/(4eₙ) + 0,75i·(MA + MB)/Z ≤ k·Sh
+//            propre au niveau) : P·De/(4eₙ) + 0,75i·(MA + MB)/Z ≤ k·Sh,
+//            k = 1,2 (B), 1,8 (C), 2,4 (D)
 //  avec 0,75i ≥ 1. Moments : moment résultant √(Mx²+My²+Mz²) aux extrémités.
 //  Épaisseur minimale (méthode `thickness`, si l'option du projet est cochée) :
 //            C 3641.1  e_m = P·De / (2(S/I + y·P)) + c,  y = 0,4
@@ -27,12 +28,11 @@ import { seismicLevels } from '../loads/seismic.js';
 export const DEFAULT_PARAMS = {
   cycles: 7000,
   pressureCorrection: false,
-  k6: 1.0,
-  shMinusSL: false,
-  levelB_kS: 1.2,
-  levelC_kS: 1.8,
-  levelD_kS: 2.4,
 };
+
+/** Coefficients des admissibles fixés par le code : éq. (6) et éq. (10) par niveau. */
+export const K6 = 1.0;
+export const LEVEL_K = { B: 1.2, C: 1.8, D: 2.4 };
 
 /** Facteur de réduction f en fonction du nombre de cycles thermiques équivalents. */
 export function rangeReductionFactor(N) {
@@ -87,10 +87,8 @@ function resultant(f, ie, end) {
 
 const num = (v, d) => (v === '' || v == null || !Number.isFinite(+v) ? d : +v);
 
-export function levelLimits(params, level) {
-  const p = { ...DEFAULT_PARAMS, ...params };
-  const L = ['B', 'C', 'D'].includes(level) ? level : 'D';
-  return { kS: num(p[`level${L}_kS`], DEFAULT_PARAMS[`level${L}_kS`]) };
+export function levelLimits(level) {
+  return { kS: LEVEL_K[level] ?? LEVEL_K.D };
 }
 
 export const rccmC = {
@@ -100,11 +98,6 @@ export const rccmC = {
   defaults: DEFAULT_PARAMS,
   params: [
     { key: 'cycles', label: 'Nombre de cycles thermiques équivalents N', type: 'number', title: 'Détermine le facteur de réduction f de SA' },
-    { key: 'k6', label: 'Éq. (6) : admissible = k × Sh, k =', type: 'number' },
-    { key: 'shMinusSL', label: 'Éq. (7) : ajouter (Sh − S_L) à S_A', type: 'checkbox', title: 'Report de la marge de l’éq. (6) sur l’admissible de dilatation' },
-    { key: 'levelB_kS', label: 'Éq. (10) niveau B : k × Sh', type: 'number' },
-    { key: 'levelC_kS', label: 'Éq. (10) niveau C : k × Sh', type: 'number' },
-    { key: 'levelD_kS', label: 'Éq. (10) niveau D : k × Sh', type: 'number' },
     { key: 'pressureCorrection', label: 'Correction de pression sur k et i des coudes', type: 'checkbox' },
   ],
   componentFactors,
@@ -166,7 +159,6 @@ export const rccmC = {
     const params = { ...DEFAULT_PARAMS, ...(model.code?.params ?? {}) };
     const tRef = +model.settings.tRef || 20;
     const f = rangeReductionFactor(+params.cycles || 7000);
-    const k6 = num(params.k6, 1);
     const weightCases = cases.filter((c) => c.type === 'weight' && c.fe !== false);
     const thermalCases = cases.filter((c) => c.type === 'thermal');
     const seismicCases = cases.filter((c) => c.type === 'seismic');
@@ -210,20 +202,18 @@ export const rccmC = {
         // éq. (6) poids propre + pression
         const SL = pTerm(e.Pd) + (i75 * MA) / Z;
         rows.push({
-          ...base, eq: '6', eqLabel: 'Éq. (6) poids propre + pression', case: wId ? `${wId}+P` : 'P', stress: SL, allow: k6 * Sh, ratio: SL / (k6 * Sh),
+          ...base, eq: '6', eqLabel: 'Éq. (6) poids propre + pression', case: wId ? `${wId}+P` : 'P', stress: SL, allow: K6 * Sh, ratio: SL / (K6 * Sh),
           detail: { i: fac.i, i75, P: e.Pd, MA, Z, S: Sh },
           calc: {
-            formula: 'S_L = P·Dₑ/(4eₙ) + 0,75i·M_A/Z ≤ k₆·Sh',
+            formula: 'S_L = P·Dₑ/(4eₙ) + 0,75i·M_A/Z ≤ 1,0·Sh',
             items: [...geom, ['0,75i (≥ 1)', i75, ''], ...pItems(e.Pd), ['Moment résultant M_A', MA / 1000, 'N·m'], ['Contrainte de moment 0,75i·M_A/Z', (i75 * MA) / Z, 'MPa']],
             moments: momA,
-            allow: [['Température T', e.Td, '°C'], ['S à T', Sh, 'MPa'], ['k₆', k6, ''], ['Admissible k₆·Sh', k6 * Sh, 'MPa']],
+            allow: [['Température T', e.Td, '°C'], ['S à T', Sh, 'MPa'], ['Admissible 1,0·Sh', K6 * Sh, 'MPa']],
           },
         });
         // éq. (7) / (8) par cas thermique
-        let SA = f * (1.25 * atC.S + 0.25 * atH.S);
-        const bonus = params.shMinusSL && atH.S > SL ? f * (atH.S - SL) : 0; // S_A = f[1,25(Sc + Sh) − S_L]
-        SA += bonus;
-        const saItems = [['Facteur de réduction f', f, ''], ['Sc (à T_réf)', atC.S, 'MPa'], ['Sh (à T)', atH.S, 'MPa'], ...(bonus ? [['Report f·(Sh − S_L)', bonus, 'MPa']] : []), ['S_A', SA, 'MPa']];
+        const SA = f * (1.25 * atC.S + 0.25 * atH.S);
+        const saItems = [['Facteur de réduction f', f, ''], ['Sc (à T_réf)', atC.S, 'MPa'], ['Sh (à T)', atH.S, 'MPa'], ['S_A', SA, 'MPa']];
         for (const tc of thermalCases) {
           const MC = resultant(tc.elemForces, ie, end);
           const SE = (fac.i * MC) / Z;
@@ -254,7 +244,7 @@ export const rccmC = {
         }
         // éq. (10) séisme, par niveau
         for (const sc of seismicCases) {
-          const lim = levelLimits(params, sc.level);
+          const lim = levelLimits(sc.level);
           const MB = resultant(sc.elemForces, ie, end);
           const s10 = pTerm(e.P1) + (i75 * (MA + MB)) / Z;
           const allow = lim.kS * Sh;
@@ -284,20 +274,19 @@ export const rccmC = {
     const summary = summarize(rows);
     notes.push('Moments résultants aux extrémités des éléments ; SIF du coude appliqué sur les éléments du coude.');
     notes.push('Éq. (8) évaluée seulement aux points où l’éq. (7) n’est pas satisfaite.');
-    notes.push('Coefficients des admissibles et valeurs matériaux à confirmer dans l’édition RCC-M applicable (onglet Code).');
+    notes.push('Valeurs matériaux indicatives à confirmer dans l’édition RCC-M applicable.');
     return { rows, summary, notes, f };
   },
 
   /** Description des cumuls de chargements utilisés par chaque équation. */
   combinations({ model }) {
-    const params = { ...DEFAULT_PARAMS, ...(model.code?.params ?? {}) };
     const active = model.loadCases.filter((c) => c.enabled !== false);
     const W = active.filter((c) => c.type === 'weight').map((c) => c.id);
     const T = active.filter((c) => c.type === 'thermal').map((c) => c.id);
     const S = active.filter((c) => c.type === 'seismic');
     const w = W.join(' + ') || '(aucun poids)';
     const out = [
-      { eq: '(6)', name: 'Poids propre + pression', loads: `${w} ; pression P`, rule: 'M_A = moment résultant du poids propre ; terme de pression P·Dₑ/(4eₙ)', allow: `${num(params.k6, 1)}·Sh` },
+      { eq: '(6)', name: 'Poids propre + pression', loads: `${w} ; pression P`, rule: 'M_A = moment résultant du poids propre ; terme de pression P·Dₑ/(4eₙ)', allow: `${K6}·Sh` },
     ];
     for (const t of T) {
       out.push({ eq: '(7)', name: 'Dilatation thermique', loads: `${t} (étendue depuis l’état froid, déplacements imposés compris)`, rule: 'M_C = moment résultant de l’étendue de dilatation, sans poids ni pression', allow: 'S_A = f(1,25 Sc + 0,25 Sh)' });
@@ -305,7 +294,7 @@ export const rccmC = {
     }
     for (const s of S) {
       for (const lv of seismicLevels(s).filter((x) => x.enabled !== false)) {
-        const lim = levelLimits(params, lv.level);
+        const lim = levelLimits(lv.level);
         out.push({
           eq: `(10${lv.level})`,
           name: `Séisme niveau ${lv.level}`,

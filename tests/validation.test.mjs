@@ -366,15 +366,15 @@ test('Gupta (RG 1.92 rév. 3) : coefficients α et invariance pour un oscillateu
   near(runAnalysis(m).cases[0].supportLoads[4], base, 1e-9, 'moment de base');
 });
 
-test('RCC-M C : S_A avec report (Sh − S_L) multiplié par f', () => {
+test('RCC-M C : S_A = f(1,25 Sc + 0,25 Sh), admissibles fixes (anciens paramètres ignorés)', () => {
   const m = setup({ alpha: 12 });
-  m.code.params = { ...m.code.params, cycles: 1e6, shMinusSL: true };
+  m.code.params = { ...m.code.params, cycles: 1e6, shMinusSL: true, k6: 2, levelD_kS: 9 };
   m.components = ensureIds({ components: [pipe('1', '2', 3000, 0, 0, { T1: 100 }), pipe('2', '3', 0, 2000, 0, { T1: 100 }), sup('1', 'anchor'), sup('3', 'anchor')] }).components;
   m.loadCases = [{ id: 'T1', type: 'thermal', enabled: true }];
   const r = runAnalysis(m);
   const row = r.check.rows.find((x) => x.eq === '7');
-  const sl = r.check.rows.find((x) => x.eq === '6' && x.ie === row.ie && x.end === row.end).stress;
-  near(row.allow, 0.5 * (1.25 * 100 + 0.25 * 100) + 0.5 * (100 - sl), 1e-12, 'S_A');
+  near(row.allow, 0.5 * (1.25 * 100 + 0.25 * 100), 1e-12, 'S_A');
+  near(r.check.rows.find((x) => x.eq === '6').allow, 100, 1e-12, 'éq. (6) : 1,0·Sh');
 });
 
 test('Tube : une seule température T et une seule pression P', () => {
