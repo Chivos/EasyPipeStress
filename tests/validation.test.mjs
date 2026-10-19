@@ -458,3 +458,43 @@ test('Analyse modale : Lanczos identique à la résolution complète', async () 
   const c = new FeSystem(mesh).modal({ maxModes: 60, method: 'lanczos', fmax: 15 });
   assert.ok(c.modes.length < 30 && c.modes[c.modes.length - 1].freq > 15 && c.modes[c.modes.length - 2].freq <= 15);
 });
+
+// Références : méthode des forces indépendante (intégration des énergies de
+// flexion EI/k, torsion GJ et effort normal EA le long de la fibre moyenne, coudes
+// sur l'arc exact), ligne encastrée aux deux extrémités, ΔT = 200 °C, α = 12e-6.
+function thermalFrame(withBends) {
+  const m = setup({ alpha: 12, maxLen: 250 });
+  m.components = ensureIds({
+    components: [
+      pipe('1', '2', 4000, 0, 0, { T1: 220 }),
+      pipe('2', '3', 0, 3000, 0, { T1: 220 }),
+      pipe('3', '4', 0, 0, 2500, { T1: 220 }),
+      ...(withBends ? [{ type: 'bend', node: '2', radiusType: 'LR' }, { type: 'bend', node: '3', radiusType: 'LR' }] : []),
+      sup('1', 'anchor'),
+      sup('4', 'anchor'),
+    ],
+  }).components;
+  m.loadCases = [{ id: 'T1', type: 'thermal', enabled: true }];
+  const r = runAnalysis(m);
+  const T = r.cases[0];
+  return (lab) => {
+    const ni = r.mesh.nodeIndex.get(lab);
+    let mx = 0;
+    r.mesh.elements.forEach((e, ie) => {
+      for (const end of [0, 1]) if ((end ? e.n2 : e.n1) === ni) mx = Math.max(mx, Math.hypot(...T.elemForces.slice(ie * 12 + end * 6 + 3, ie * 12 + end * 6 + 6)));
+    });
+    return mx;
+  };
+}
+
+test('Dilatation, cadre 3D bi-encastré : moments = méthode des forces (flexion + torsion)', () => {
+  const M = thermalFrame(false);
+  const ref = { 1: 5566793, 2: 5443025, 3: 3558930, 4: 5926494 };
+  for (const [n, v] of Object.entries(ref)) near(M(n), v, 2e-3, `M nœud ${n}`);
+});
+
+test('Dilatation, cadre 3D avec coudes LR : moments = méthode des forces sur l’arc (k = 1,65/h)', () => {
+  const M = thermalFrame(true);
+  const ref = { 1: 4497883, '2A': 2920531, '2M': 3120691, '2B': 2991377, '3A': 2162906, '3M': 2274956, '3B': 2114218, 4: 4457442 };
+  for (const [n, v] of Object.entries(ref)) near(M(n), v, 2e-3, `M nœud ${n}`);
+});

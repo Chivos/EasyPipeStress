@@ -244,6 +244,8 @@ Vérifications numériques (tests automatiques) :
 | Tube bridé, dilatation | E·A·α·ΔT | < 10⁻⁴ |
 | Dilatation libre, T_réf ≠ 20 °C | ᾱ(T)(T−20) − ᾱ(T_réf)(T_réf−20) | < 10⁻⁹ |
 | Coude 90°, flexion hors plan + torsion | Castigliano avec I/k | < 0,5 % (10°/élément) |
+| Cadre 3D bi-encastré, dilatation (moments aux nœuds) | méthode des forces (EI, GJ, EA) | < 10⁻⁴ |
+| Cadre 3D à deux coudes LR, dilatation | méthode des forces sur l'arc exact, EI/k | < 0,1 % |
 | Fréquence propre d'une console | 1,875²/2π·√(EI/mL⁴) | < 0,5 % |
 | Oscillateur simple, spectre plat | m·Sa·L | < 10⁻⁴ |
 | Masse manquante, modes tronqués | réponse statique rigide | < 10⁻⁶ |
