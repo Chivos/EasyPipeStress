@@ -177,7 +177,12 @@ export function componentTable(app, type, { emptyText } = {}) {
     model: m,
     focusPrefix: type,
     empty: emptyText,
-    rowAttrs: (row) => ({ class: sel && (row.node === sel || row.n1 === sel || row.n2 === sel) ? 'sel' : '' }),
+    rowAttrs: (row) => ({
+      class: sel && (row.node === sel || row.n1 === sel || row.n2 === sel) ? 'sel' : '',
+      // saisie dans la ligne : mise en évidence du composant dans la vue
+      onfocusin: () => app.highlight(row.id),
+      onfocusout: (e) => !e.currentTarget.contains(e.relatedTarget) && app.highlight(null),
+    }),
     onEdit: (i, k, v) =>
       app.update((mm) => {
         const c = mm.components.find((x) => x.id === rows[i].id);

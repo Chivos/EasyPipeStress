@@ -44,7 +44,8 @@ const state = {
   selected: null,
   matSel: null,
   quick: { from: '', to: '', dx: '', dy: '', dz: '', bend: true, tee: true, radius: '', len: '1000' },
-  display: { mode: 'geom', scale: 1, labels: true, showAll: false, animate: true, render: '3d' },
+  display: { mode: 'geom', scale: 1, labels: true, showAll: false, animate: true, render: '3d', ratioMap: 'bands' },
+  highlight: null,
   filter: { eq: 'all', internal: false, sort: true, failOnly: false, case: null, all: false },
 };
 
@@ -73,6 +74,12 @@ const app = {
     state.selected = label;
     if (label && state.tab === 'geometry') state.quick.from = label;
     queueRender();
+  },
+  /** Mise en évidence d'un composant dans la vue (sans reconstruire les panneaux). */
+  highlight(id) {
+    if (state.highlight === id) return;
+    state.highlight = id;
+    viewer.setScene(buildScene(state));
   },
   setDisplay(mode) {
     state.display.mode = mode;
@@ -191,7 +198,15 @@ function renderViewToolbar() {
       ? h('label', { class: 'check', title: 'Amplification de la déformée' }, '×', h('input', { type: 'range', min: -1.5, max: 1.5, step: 0.1, value: Math.log10(d.scale), oninput: (e) => { d.scale = 10 ** +e.target.value; viewer.setScene(buildScene(state)); } }))
       : null,
     d.mode.startsWith('mode') ? h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: d.animate, onchange: (e) => app.setUi(() => (d.animate = e.target.checked)) }), ' animer') : null,
-    h('select', { title: 'Rendu', onchange: (e) => app.setUi(() => (d.render = e.target.value)) }, h('option', { value: '3d', selected: d.render !== 'wire' }, '3D'), h('option', { value: 'wire', selected: d.render === 'wire' }, 'Filaire')),
+    d.mode.startsWith('ratio')
+      ? h(
+          'select',
+          { title: 'Échelle de couleur des taux', onchange: (e) => app.setUi(() => (d.ratioMap = e.target.value)) },
+          h('option', { value: 'bands', selected: d.ratioMap !== 'jet' }, '4 plages'),
+          h('option', { value: 'jet', selected: d.ratioMap === 'jet' }, 'Continue (jet)'),
+        )
+      : null,
+    h('label', { class: 'check', title: 'Rendu volumique (décoché : filaire)' }, h('input', { type: 'checkbox', checked: d.render !== 'wire', onchange: (e) => app.setUi(() => (d.render = e.target.checked ? '3d' : 'wire')) }), ' 3D'),
     h('span', { class: 'sep' }),
     ...[
       ['iso', 'Iso'],

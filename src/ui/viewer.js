@@ -156,7 +156,7 @@ export class Viewer {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const css = getComputedStyle(canvas);
     const col = (name, fb) => css.getPropertyValue(name).trim() || fb;
-    const C = { bg: col('--view-bg', '#fff'), pipe: col('--view-pipe', '#4a5568'), text: col('--view-text', '#1a202c'), muted: col('--view-muted', '#8a94a6'), deformed: col('--view-deformed', '#d35400'), valve: col('--view-valve', '#6a4c93'), sel: col('--accent', '#0b7285') };
+    const C = { bg: col('--view-bg', '#fff'), pipe: col('--view-pipe', '#4a5568'), text: col('--view-text', '#1a202c'), muted: col('--view-muted', '#8a94a6'), deformed: col('--view-deformed', '#d35400'), valve: col('--view-valve', '#6a4c93'), halo: col('--view-halo', '#a5dde3'), sel: col('--accent', '#0b7285') };
     ctx.fillStyle = C.bg;
     ctx.fillRect(0, 0, w, hgt);
     const sc = this.scene;
@@ -212,6 +212,8 @@ export class Viewer {
       else drawValve(ctx, this.toScreen(pa), this.toScreen(pb), color, 9);
     };
     const arcs = this.bendArcs(mesh);
+    const hlSpec = sc.highlight;
+    const isHl = (e) => hlSpec?.comp != null && e.comp === hlSpec.comp;
     const amp = ghost ? disp.scale * (sc.animate ? Math.sin(performance.now() / 300) : 1) : 0;
     const useDisp = disp?.colorOf && disp.colorMax > 0;
     // points (3D) et couleurs d'un élément, dans le sens de parcours demandé
@@ -227,8 +229,9 @@ export class Viewer {
       } else {
         pts = Array.from({ length: nseg + 1 }, (_, k) => (arc ? arc.at(k / nseg) : vec.add(P[e.n1], vec.scale(vec.sub(P[e.n2], P[e.n1]), k / nseg))));
       }
+      const hl = isHl(e);
       const segColors = Array.from({ length: nseg }, (_, k) =>
-        ghost ? (useDisp ? disp.colorOf((mags[k] + mags[k + 1]) / 2 / disp.colorMax) : colors?.[ie] ?? C.deformed) : colors?.[ie] ?? C.pipe,
+        hl ? C.sel : ghost ? (useDisp ? disp.colorOf((mags[k] + mags[k + 1]) / 2 / disp.colorMax) : colors?.[ie] ?? C.deformed) : colors?.[ie] ?? C.pipe,
       );
       if (rev) {
         pts.reverse();
@@ -250,6 +253,18 @@ export class Viewer {
       }
       ctx.globalAlpha = 1;
     }
+    // Mise en évidence du composant en cours d'édition : halo sous le tracé
+    if (hlSpec?.comp) {
+      ctx.strokeStyle = C.halo; // teinte opaque : pas de surépaisseur aux recouvrements
+      for (const e of mesh.elements) {
+        if (!isHl(e)) continue;
+        const scr = elemTrace(e, e.index, false).pts.map((q) => this.toScreen(q));
+        ctx.lineWidth = (solid ? Math.max(1.2, e.sec.od * pxPerMm) * (e.kind === 'valve' ? 1.6 : 1) : 2.5) + 14;
+        ctx.beginPath();
+        scr.forEach((q, i) => (i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])));
+        ctx.stroke();
+      }
+    }
     for (const chain of this.tubeChains(mesh)) {
       const pts = [];
       const segColors = [];
@@ -259,6 +274,7 @@ export class Viewer {
         segColors.push(...t.segColors);
       });
       const od = chain[0].e.sec.od;
+      trimPolyline(pts, segColors, chain.trim[0], chain.trim[1]);
       const scr = pts.map((p) => this.toScreen(p));
       if (solid) prims.push(this.chainPrim(scr, segColors, od));
       else {
@@ -275,7 +291,7 @@ export class Viewer {
     mesh.elements.forEach((e, ie) => {
       if (e.kind !== 'valve') return;
       if (!ghost) {
-        valveShape(P[e.n1], P[e.n2], e.sec.od, colors?.[ie] ?? C.valve);
+        valveShape(P[e.n1], P[e.n2], e.sec.od, isHl(e) ? C.sel : colors?.[ie] ?? C.valve);
         return;
       }
       const pts = deformedPoints(e, P, disp.u, amp, 1);
@@ -284,52 +300,68 @@ export class Viewer {
     prims.sort((a, b) => b.depth - a.depth);
     for (const pr of prims) pr.draw(ctx);
 
-    // Supports
+    // Supports : flèches dont la pointe touche la paroi du tube, une par sens
+    // bloqué (blocage bilatéral = deux flèches opposées) ; blocage axial =
+    // flèches parallèles au tube ; point fixe = disque rouge dans le plan de
+    // section ; blocage partiel en rotation = disque jaune.
     const springsByNode = new Map();
     for (const s of mesh.springs) {
       if (!springsByNode.has(s.node)) springsByNode.set(s.node, []);
       springsByNode.get(s.node).push(s);
     }
+    const minPx = 14; // longueur minimale lisible d'une flèche (px)
     mesh.supports.forEach((sup) => {
       const p = P[sup.node];
-      const s0 = S[sup.node];
-      const color = SUPPORT_COLORS[sup.kind] ?? '#555';
-      ctx.strokeStyle = color;
-      ctx.fillStyle = color;
-      ctx.lineWidth = 2.5;
+      const od = odAtNode(sup.node) || 100;
+      const R = od / 2;
+      const axis = this.nodeAxis(mesh, sup.node);
       const springs = (springsByNode.get(sup.node) ?? []).filter((s) => mesh.supports[s.support] === sup);
-      // symboles à l'échelle du tube en 3D (taille minimale lisible), fixes en filaire
-      const size = solid ? Math.max(7, 0.9 * odAtNode(sup.node) * pxPerMm) : 7;
-      if (sup.kind === 'anchor' || springs.some((s) => s.rot)) {
-        ctx.fillRect(s0[0] - size, s0[1] - size, 2 * size, 2 * size);
+      const color = SUPPORT_COLORS[sup.kind] ?? '#555';
+      const fullAnchor = sup.kind === 'anchor' || springs.filter((s) => s.rot).length >= 3;
+      if (fullAnchor) {
+        this.drawDisc(ctx, p, axis, 1.0 * od, '#d62828', '#7a1010');
         return;
       }
-      for (const sp of springs) {
-        const q = this.toScreen(vec.add(p, sp.dir));
-        let d = [q[0] - s0[0], q[1] - s0[1]];
-        const l = Math.hypot(d[0], d[1]);
-        if (l < 1e-9) {
-          ctx.beginPath();
-          ctx.arc(s0[0], s0[1], 6, 0, 2 * Math.PI);
-          ctx.stroke();
+      if (springs.some((s) => s.rot)) this.drawDisc(ctx, p, axis, 0.85 * od, '#f2c200', '#8a6d00');
+      // longueur de flèche : 1,5 De à l'échelle, avec un minimum en pixels
+      const L = Math.max(1.5 * od, minPx / pxPerMm);
+      for (const sp of springs.filter((x) => !x.rot)) {
+        const d = sp.dir;
+        if (Math.abs(vec.dot(d, axis)) > 0.9) {
+          // blocage axial : deux flèches parallèles au tube, de part et d'autre du nœud,
+          // décalées hors du tube, pointes vers le plan du nœud
+          let off = vec.sub(mesh.up, vec.scale(axis, vec.dot(mesh.up, axis)));
+          if (vec.norm(off) < 1e-6) off = Math.abs(axis[0]) < 0.9 ? vec.cross(axis, [1, 0, 0]) : vec.cross(axis, [0, 1, 0]);
+          off = vec.scale(vec.unit(off), R + 0.35 * od);
+          for (const sg of [-1, 1]) {
+            const tip = vec.add(vec.add(p, off), vec.scale(axis, sg * 0.15 * od));
+            const tail = vec.add(tip, vec.scale(axis, sg * L));
+            this.drawArrow(ctx, tail, tip, color, od);
+          }
           continue;
         }
-        d = [d[0] / l, d[1] / l];
-        const L = 2.2 * size;
-        ctx.beginPath();
-        ctx.moveTo(s0[0] - d[0] * L, s0[1] - d[1] * L);
-        ctx.lineTo(s0[0] + d[0] * L, s0[1] + d[1] * L);
-        ctx.stroke();
         for (const sg of [-1, 1]) {
-          const ex = s0[0] + sg * d[0] * L;
-          const ey = s0[1] + sg * d[1] * L;
-          ctx.beginPath();
-          ctx.moveTo(ex - d[1] * 5, ey + d[0] * 5);
-          ctx.lineTo(ex + d[1] * 5, ey - d[0] * 5);
-          ctx.stroke();
+          const tip = vec.add(p, vec.scale(d, sg * R));
+          const tail = vec.add(tip, vec.scale(d, sg * L));
+          this.drawArrow(ctx, tail, tip, color, od);
         }
       }
     });
+
+    // Nœud du composant ponctuel en cours d'édition (support, masse, té…)
+    if (hlSpec?.node != null) {
+      const q = S[hlSpec.node];
+      const r = (solid ? (odAtNode(hlSpec.node) * pxPerMm) / 2 : 4) + 12;
+      ctx.fillStyle = C.sel;
+      ctx.globalAlpha = 0.22;
+      ctx.beginPath();
+      ctx.arc(q[0], q[1], r, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = C.sel;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
 
     // Masses ponctuelles
     for (const pm of mesh.pointMasses) {
@@ -487,7 +519,7 @@ export class Viewer {
     return {
       depth,
       draw: (ctx) => {
-        ctx.lineCap = 'round';
+        ctx.lineCap = 'butt'; // extrémités franches (coupe du tube) ; raccords internes continus
         ctx.lineJoin = 'round';
         // couleur de base (opaque) : tronçons de même couleur regroupés
         const base = (width) => {
@@ -542,6 +574,24 @@ export class Viewer {
     const elems = mesh.elements.filter((e) => e.kind !== 'valve');
     const at = new Map();
     for (const e of elems) for (const n of [e.n1, e.n2]) (at.get(n) ?? at.set(n, []).get(n)).push(e);
+    // Tés : le collecteur est la paire d'éléments la plus colinéaire au nœud ; les
+    // dérivations sont arrêtées à la paroi du collecteur (raccord net à l'écran).
+    const branchTrim = new Map();
+    const runPair = new Map(); // nœud de té → [élément, élément] du collecteur
+    for (const [node, list] of at) {
+      if (list.length < 3) continue;
+      const pn = mesh.nodes[node];
+      const dirs = list.map((e) => {
+        const o = mesh.nodes[e.n1 === node ? e.n2 : e.n1];
+        return vec.unit([o.x - pn.x, o.y - pn.y, o.z - pn.z]);
+      });
+      let best = [0, 1];
+      let bd = Infinity;
+      for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) if (vec.dot(dirs[i], dirs[j]) < bd) (bd = vec.dot(dirs[i], dirs[j])), (best = [i, j]);
+      const runR = Math.max(list[best[0]].sec.od, list[best[1]].sec.od) / 2;
+      runPair.set(node, [list[best[0]], list[best[1]]]);
+      list.forEach((e, k) => !best.includes(k) && branchTrim.set(`${e.index}:${node}`, 0.97 * runR));
+    }
     const used = new Set();
     const list = [];
     const walk = (e, node) => {
@@ -549,8 +599,13 @@ export class Viewer {
       let cur = e;
       for (;;) {
         const nb = at.get(node) ?? [];
-        if (nb.length !== 2) break;
-        const next = nb[0] === cur ? nb[1] : nb[0];
+        let next;
+        if (nb.length === 2) next = nb[0] === cur ? nb[1] : nb[0];
+        else if (runPair.get(node)?.includes(cur)) {
+          // le collecteur traverse le té d'un seul tenant
+          const pair = runPair.get(node);
+          next = pair[0] === cur ? pair[1] : pair[0];
+        } else break;
         if (used.has(next) || Math.abs(next.sec.od - cur.sec.od) > 1e-6) break;
         used.add(next);
         const rev = next.n2 === node;
@@ -565,7 +620,13 @@ export class Viewer {
       used.add(e);
       const fwd = walk(e, e.n2);
       const back = walk(e, e.n1).map(({ e: x, rev }) => ({ e: x, rev: !rev })).reverse();
-      list.push([...back, { e, rev: false }, ...fwd]);
+      const chain = [...back, { e, rev: false }, ...fwd];
+      const first = chain[0];
+      const last = chain[chain.length - 1];
+      const startNode = first.rev ? first.e.n2 : first.e.n1;
+      const endNode = last.rev ? last.e.n1 : last.e.n2;
+      chain.trim = [branchTrim.get(`${first.e.index}:${startNode}`) ?? 0, branchTrim.get(`${last.e.index}:${endNode}`) ?? 0];
+      list.push(chain);
     }
     this._chains = { mesh, list };
     return list;
@@ -654,9 +715,111 @@ export class Viewer {
     };
   }
 
+  /** Axe du tube au nœud (moyenne des éléments qui y aboutissent). */
+  nodeAxis(mesh, i) {
+    let a = [0, 0, 0];
+    for (const e of mesh.nodeElems?.[i] ?? []) {
+      let x = e.R.slice(0, 3);
+      if (vec.dot(x, a) < 0) x = vec.scale(x, -1);
+      a = vec.add(a, x);
+    }
+    return vec.norm(a) > 0 ? vec.unit(a) : [1, 0, 0];
+  }
+
+  /** Flèche 3D projetée (tige + pointe), pointe en `tip`. */
+  drawArrow(ctx, tail3, tip3, color, od) {
+    const a = this.toScreen(tail3);
+    const b = this.toScreen(tip3);
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const l = Math.hypot(dx, dy);
+    const s = this.frame.s;
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    if (l < 3) {
+      // flèche vue de bout : pastille
+      ctx.beginPath();
+      ctx.arc(b[0], b[1], Math.max(3, 0.15 * od * s), 0, 2 * Math.PI);
+      ctx.fill();
+      return;
+    }
+    const ux = dx / l;
+    const uy = dy / l;
+    const head = Math.min(l * 0.45, Math.max(7, 0.45 * od * s));
+    const half = head * 0.45;
+    const bx = b[0] - ux * head;
+    const by = b[1] - uy * head;
+    ctx.lineCap = 'round';
+    ctx.lineWidth = Math.max(1.8, 0.09 * od * s);
+    ctx.beginPath();
+    ctx.moveTo(a[0], a[1]);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(b[0], b[1]);
+    ctx.lineTo(bx - uy * half, by + ux * half);
+    ctx.lineTo(bx + uy * half, by - ux * half);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  /** Disque dans le plan de section du tube (normal à l'axe), rayon r. */
+  drawDisc(ctx, c, axis, r, fill, stroke) {
+    let e1 = Math.abs(axis[0]) < 0.9 ? vec.cross(axis, [1, 0, 0]) : vec.cross(axis, [0, 1, 0]);
+    e1 = vec.unit(e1);
+    const e2 = vec.cross(axis, e1);
+    const rr = Math.max(r, 6 / this.frame.s);
+    const pts = Array.from({ length: 36 }, (_, k) => {
+      const t = (2 * Math.PI * k) / 36;
+      return this.toScreen(vec.add(c, vec.add(vec.scale(e1, rr * Math.cos(t)), vec.scale(e2, rr * Math.sin(t)))));
+    });
+    polygon(ctx, pts);
+    ctx.fillStyle = fill;
+    ctx.globalAlpha = 0.92;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
   snapshot() {
     return this.canvas.toDataURL('image/png');
   }
+}
+
+/** Raccourcit une polyligne 3D de d0 au début et d1 à la fin (couleurs par tronçon). */
+function trimPolyline(pts, colors, d0, d1) {
+  const cut = (fromStart, d) => {
+    while (d > 1e-9 && pts.length > 2) {
+      const [a, b] = fromStart ? [pts[0], pts[1]] : [pts[pts.length - 1], pts[pts.length - 2]];
+      const l = vec.norm(vec.sub(b, a));
+      if (l <= d) {
+        d -= l;
+        if (fromStart) {
+          pts.shift();
+          colors.shift();
+        } else {
+          pts.pop();
+          colors.pop();
+        }
+        continue;
+      }
+      const q = vec.add(a, vec.scale(vec.sub(b, a), d / l));
+      if (fromStart) pts[0] = q;
+      else pts[pts.length - 1] = q;
+      return;
+    }
+    if (d > 1e-9 && pts.length === 2) {
+      const [a, b] = fromStart ? [pts[0], pts[1]] : [pts[1], pts[0]];
+      const l = vec.norm(vec.sub(b, a));
+      const q = vec.add(a, vec.scale(vec.sub(b, a), Math.min(d, 0.9 * l) / l));
+      if (fromStart) pts[0] = q;
+      else pts[1] = q;
+    }
+  };
+  cut(true, d0);
+  cut(false, d1);
 }
 
 function polygon(ctx, pts) {
