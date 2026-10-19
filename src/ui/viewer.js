@@ -208,7 +208,7 @@ export class Viewer {
     ctx.lineJoin = 'round';
     const prims = []; // primitives 3D triées par profondeur (peintre)
     const valveShape = (pa, pb, od, color) => {
-      if (solid) prims.push(this.valvePrim(pa, pb, od, color, mesh.up));
+      if (solid) prims.push(...this.valvePrims(pa, pb, od, color, mesh.up));
       else drawValve(ctx, this.toScreen(pa), this.toScreen(pb), color, 9);
     };
     const arcs = this.bendArcs(mesh);
@@ -276,7 +276,7 @@ export class Viewer {
       const od = chain[0].e.sec.od;
       trimPolyline(pts, segColors, chain.trim[0], chain.trim[1]);
       const scr = pts.map((p) => this.toScreen(p));
-      if (solid) prims.push(this.chainPrim(scr, segColors, od));
+      if (solid) prims.push(...this.chainPrims(scr, segColors, od));
       else {
         ctx.lineWidth = 2.5;
         for (let k = 1; k < scr.length; k++) {
@@ -510,81 +510,83 @@ export class Viewer {
 
   /**
    * Ligne de tubes à l'échelle (largeur = Dₑ), ombrée comme un cylindre éclairé
-   * (Lambert + reflet de Phong, lumière en haut à gauche) : la section est
-   * découpée en bandes fines dont la teinte est calculée d'après l'orientation
-   * de la surface ; les normales sont moyennées aux sommets, si bien que la
-   * ligne (coudes compris) est continue et sans bordure artificielle.
+   * en haut à gauche : profil transversal doux (bord éclairé légèrement sombre,
+   * reflet diffus, cœur à la teinte nominale, bord opposé dans l'ombre). Les
+   * normales écran sont moyennées aux sommets : la ligne, coudes compris, est
+   * continue. Une primitive par tronçon, pour un tri en profondeur correct
+   * vis-à-vis des robinets et des autres lignes.
    */
-  chainPrim(scr, segColors, od) {
+  chainPrims(scr, segColors, od) {
     const w = Math.max(1.2, od * this.frame.s);
-    const depth = scr.reduce((d, p) => d + p[2], 0) / scr.length;
-    return {
-      depth,
-      draw: (ctx) => {
-        const n = scr.length;
-        // trait de fond (comble les jointures entre bandes)
-        ctx.lineCap = 'butt';
-        ctx.lineJoin = 'round';
-        ctx.lineWidth = w;
-        for (let k = 1; k < n; k++) {
-          ctx.strokeStyle = shade(segColors[k - 1], 0.85);
+    const n = scr.length;
+    if (n < 2) return [];
+    if (w < 3) {
+      return segColors.map((c, k) => ({
+        depth: (scr[k][2] + scr[k + 1][2]) / 2,
+        draw: (ctx) => {
+          ctx.lineCap = 'round';
+          ctx.lineWidth = w;
+          ctx.strokeStyle = c;
           ctx.beginPath();
-          ctx.moveTo(scr[k - 1][0], scr[k - 1][1]);
-          ctx.lineTo(scr[k][0], scr[k][1]);
+          ctx.moveTo(scr[k][0], scr[k][1]);
+          ctx.lineTo(scr[k + 1][0], scr[k + 1][1]);
           ctx.stroke();
-        }
-        if (w < 3) return;
-        // normales écran aux sommets (moyenne des tronçons adjacents, orientation continue)
-        const dirs = [];
-        for (let k = 1; k < n; k++) {
-          const dx = scr[k][0] - scr[k - 1][0];
-          const dy = scr[k][1] - scr[k - 1][1];
-          const l = Math.hypot(dx, dy) || 1;
-          dirs.push([dx / l, dy / l]);
-        }
-        const normals = scr.map((_, i) => {
-          const a = dirs[Math.max(0, i - 1)] ?? [1, 0];
-          const b = dirs[Math.min(dirs.length - 1, i)] ?? a;
-          let tx = a[0] + b[0];
-          let ty = a[1] + b[1];
-          const l = Math.hypot(tx, ty);
-          if (l < 1e-6) [tx, ty] = b;
-          else (tx /= l), (ty /= l);
-          // facteur de raccord pour garder la largeur dans les coudes
-          const miter = 1 / Math.max(0.5, Math.abs(tx * b[0] + ty * b[1]));
-          return [-ty * miter, tx * miter];
-        });
-        const K = Math.max(6, Math.min(28, Math.round(w / 2)));
-        const ys = Array.from({ length: K + 1 }, (_, j) => -w / 2 + (j * w) / K);
-        // lumière : direction écran (haut gauche) et composante vers l'observateur
-        const Lx = -0.42;
-        const Ly = -0.58;
-        const Lz = 0.7;
-        for (let k = 1; k < n; k++) {
-          const base = toRGB(segColors[k - 1]);
-          const n0 = normals[k - 1];
-          const n1 = normals[k];
-          const lat = ((n0[0] + n1[0]) * Lx + (n0[1] + n1[1]) * Ly) / 2;
+        },
+      }));
+    }
+    const dirs = [];
+    for (let k = 1; k < n; k++) {
+      const dx = scr[k][0] - scr[k - 1][0];
+      const dy = scr[k][1] - scr[k - 1][1];
+      const l = Math.hypot(dx, dy) || 1;
+      dirs.push([dx / l, dy / l]);
+    }
+    const normals = scr.map((_, i) => {
+      const a = dirs[Math.max(0, i - 1)];
+      const b = dirs[Math.min(dirs.length - 1, i)];
+      let tx = a[0] + b[0];
+      let ty = a[1] + b[1];
+      const l = Math.hypot(tx, ty);
+      if (l < 1e-6) [tx, ty] = b;
+      else (tx /= l), (ty /= l);
+      // facteur de raccord pour garder la largeur dans les coudes
+      const miter = 1 / Math.max(0.5, Math.abs(tx * b[0] + ty * b[1]));
+      return [-ty * miter, tx * miter];
+    });
+    const K = Math.max(8, Math.min(40, Math.round(w / 1.5)));
+    const ys = Array.from({ length: K + 1 }, (_, j) => -w / 2 + (j * w) / K);
+    const prims = [];
+    for (let k = 1; k < n; k++) {
+      const n0 = normals[k - 1];
+      const n1 = normals[k];
+      const d = dirs[k - 1];
+      // côté éclairé : composante de la normale écran vers la lumière ; le
+      // profil est mélangé avec son symétrique quand le tube est orienté vers
+      // la lumière, pour une transition continue
+      const lat = ((n0[0] + n1[0]) * LIGHT2D[0] + (n0[1] + n1[1]) * LIGHT2D[1]) / 2 / Math.hypot((n0[0] + n1[0]) / 2, (n0[1] + n1[1]) / 2);
+      const wgt = Math.min(1, Math.max(0, 0.5 + lat / 0.5));
+      const base = toRGB(segColors[k - 1]);
+      const fills = [];
+      for (let j = 0; j < K; j++) {
+        const sy = (ys[j] + ys[j + 1]) / w; // −1…1 le long de la normale
+        const pa = tubeProfile((1 - sy) / 2);
+        const pb = tubeProfile((1 + sy) / 2);
+        const mul = wgt * pa[0] + (1 - wgt) * pb[0];
+        const add = wgt * pa[1] + (1 - wgt) * pb[1];
+        fills.push(`rgb(${Math.min(255, base[0] * mul + add) | 0},${Math.min(255, base[1] * mul + add) | 0},${Math.min(255, base[2] * mul + add) | 0})`);
+      }
+      // bandes opaques légèrement chevauchantes : pas de joint visible
+      const e0 = k > 1 ? 0.6 : 0;
+      const e1 = k < n - 1 ? 0.6 : 0;
+      const p0 = [scr[k - 1][0] - d[0] * e0, scr[k - 1][1] - d[1] * e0];
+      const p1 = [scr[k][0] + d[0] * e1, scr[k][1] + d[1] * e1];
+      prims.push({
+        depth: (scr[k - 1][2] + scr[k][2]) / 2,
+        draw: (ctx) => {
           for (let j = 0; j < K; j++) {
-            const sy = (ys[j] + ys[j + 1]) / w; // position latérale (−1…1)
-            const nz = Math.sqrt(Math.max(0, 1 - sy * sy));
-            const diff = Math.max(0, sy * lat + nz * Lz);
-            // demi-vecteur L + V (V vers l'observateur)
-            const hl = Math.hypot(lat, Lz + 1);
-            const spec = Math.max(0, (sy * lat + nz * (Lz + 1)) / hl) ** 18;
-            const f = 0.5 + 0.62 * diff;
-            const r = Math.min(255, base[0] * f + 140 * spec);
-            const g = Math.min(255, base[1] * f + 140 * spec);
-            const b = Math.min(255, base[2] * f + 140 * spec);
-            ctx.fillStyle = `rgb(${r | 0},${g | 0},${b | 0})`;
-            // bandes opaques légèrement chevauchantes (½ px) : pas de joint visible
             const y0 = j === 0 ? ys[j] : ys[j] - 0.5;
             const y1 = j === K - 1 ? ys[j + 1] : ys[j + 1] + 0.5;
-            const d = dirs[k - 1];
-            const e0 = k > 1 ? 0.6 : 0;
-            const e1 = k < n - 1 ? 0.6 : 0;
-            const p0 = [scr[k - 1][0] - d[0] * e0, scr[k - 1][1] - d[1] * e0];
-            const p1 = [scr[k][0] + d[0] * e1, scr[k][1] + d[1] * e1];
+            ctx.fillStyle = fills[j];
             ctx.beginPath();
             ctx.moveTo(p0[0] + n0[0] * y0, p0[1] + n0[1] * y0);
             ctx.lineTo(p1[0] + n1[0] * y0, p1[1] + n1[1] * y0);
@@ -593,9 +595,10 @@ export class Viewer {
             ctx.closePath();
             ctx.fill();
           }
-        }
-      },
-    };
+        },
+      });
+    }
+    return prims;
   }
 
   /**
@@ -694,9 +697,11 @@ export class Viewer {
 
   /**
    * Robinet : deux cônes opposés par la pointe (bases aux brides, pointes au
-   * milieu), tige et volant de manœuvre, projetés en vraie grandeur.
+   * milieu), brides aux extrémités, tige et volant de manœuvre. Le corps est un
+   * solide de révolution facetté, chaque facette étant ombrée d'après sa
+   * normale (même éclairage que les tubes) et triée en profondeur avec eux.
    */
-  valvePrim(pa, pb, od, color, up) {
+  valvePrims(pa, pb, od, color, up) {
     const axis = vec.sub(pb, pa);
     const L = vec.norm(axis);
     const u = L > 0 ? vec.scale(axis, 1 / L) : [1, 0, 0];
@@ -705,37 +710,75 @@ export class Viewer {
     if (vec.norm(e1) < 1e-6) e1 = Math.abs(u[0]) < 0.9 ? vec.cross(u, [1, 0, 0]) : vec.cross(u, [0, 1, 0]);
     e1 = vec.unit(e1);
     const e2 = vec.cross(u, e1);
-    const R = 0.8 * od;
+    const Rf = 0.8 * od; // bride
+    const Rc = 0.7 * od; // base des cônes
+    const tf = Math.min(0.12 * od, 0.12 * L);
+    // profil (abscisse, rayon) de pa à pb
+    const prof = [[0, 0], [0, Rf], [tf, Rf], [tf, Rc], [L / 2, 0], [L - tf, Rc], [L - tf, Rf], [L, Rf], [L, 0]];
+    const N = 48;
+    const ang = Array.from({ length: N + 1 }, (_, k) => (2 * Math.PI * k) / N);
+    const pt = (x, r, t) => vec.add(pa, vec.add(vec.scale(u, x), vec.add(vec.scale(e1, r * Math.cos(t)), vec.scale(e2, r * Math.sin(t)))));
+    const base = toRGB(color);
+    const prims = [];
+    for (let i = 1; i < prof.length; i++) {
+      const [x0, r0] = prof[i - 1];
+      const [x1, r1] = prof[i];
+      const dx = x1 - x0;
+      const dr = r1 - r0;
+      const ln = Math.hypot(dx, dr);
+      if (ln < 1e-9) continue;
+      for (let k = 0; k < N; k++) {
+        const tm = (ang[k] + ang[k + 1]) / 2;
+        const radial = vec.add(vec.scale(e1, Math.cos(tm)), vec.scale(e2, Math.sin(tm)));
+        const nrm = vec.add(vec.scale(u, -dr / ln), vec.scale(radial, dx / ln)); // normale sortante
+        const vn = this.viewDir(nrm);
+        if (vn[2] <= 0) continue; // facette cachée
+        const quad = grow([pt(x0, r0, ang[k]), pt(x1, r1, ang[k]), pt(x1, r1, ang[k + 1]), pt(x0, r0, ang[k + 1])].map((q) => this.toScreen(q)), 0.5);
+        const f = 0.55 + 0.5 * Math.max(0, vn[0] * LIGHT3D[0] + vn[1] * LIGHT3D[1] + vn[2] * LIGHT3D[2]);
+        const fill = `rgb(${Math.min(255, base[0] * f) | 0},${Math.min(255, base[1] * f) | 0},${Math.min(255, base[2] * f) | 0})`;
+        prims.push({
+          depth: quad.reduce((z, q) => z + q[2], 0) / 4,
+          draw: (ctx) => {
+            ctx.fillStyle = fill;
+            polygon(ctx, quad);
+            ctx.fill();
+          },
+        });
+      }
+    }
+    // silhouette en teinte moyenne sous les facettes : masque les joints d'anticrénelage
+    // (une enveloppe convexe par demi-corps : le corps est pincé au milieu)
+    if (prims.length) {
+      const depth = Math.max(...prims.map((q) => q.depth)) + 1e-6;
+      const fill = shade(color, 0.8);
+      for (const half of [prof.slice(0, 5), prof.slice(4)]) {
+        const sil = [];
+        for (const [x, r] of half) for (let k = 0; k < N; k += 2) sil.push(this.toScreen(pt(x, r, ang[k])));
+        const hull = convexHull(sil);
+        prims.push({
+          depth,
+          draw: (ctx) => {
+            ctx.fillStyle = fill;
+            polygon(ctx, hull);
+            ctx.fill();
+          },
+        });
+      }
+    }
+    // tige et volant
     const mid = vec.add(pa, vec.scale(axis, 0.5));
-    const circle = (c, r, a, b) => Array.from({ length: 28 }, (_, k) => {
-      const t = (2 * Math.PI * k) / 28;
-      return this.toScreen(vec.add(c, vec.add(vec.scale(a, r * Math.cos(t)), vec.scale(b, r * Math.sin(t)))));
-    });
-    const apex = this.toScreen(mid);
-    const cones = [pa, pb].map((base) => ({ base: circle(base, R, e1, e2), hull: convexHull([...circle(base, R, e1, e2), apex]) }));
     const stemTop = vec.add(mid, vec.scale(e1, 1.5 * od));
-    const wheel = circle(stemTop, 0.55 * od, u, e2);
-    const ms = this.toScreen(mid);
+    const wheel = Array.from({ length: 28 }, (_, k) => {
+      const t = (2 * Math.PI * k) / 28;
+      return this.toScreen(vec.add(stemTop, vec.add(vec.scale(u, 0.55 * od * Math.cos(t)), vec.scale(e2, 0.55 * od * Math.sin(t)))));
+    });
+    const ms = this.toScreen(vec.add(mid, vec.scale(e1, 0.15 * od)));
     const st = this.toScreen(stemTop);
     const s = this.frame.s;
-    return {
-      depth: ms[2],
+    prims.push({
+      depth: st[2],
       draw: (ctx) => {
-        // cônes, le plus éloigné d'abord
-        const order = cones.map((c) => ({ c, d: c.base.reduce((x, p) => x + p[2], 0) / c.base.length })).sort((x, y) => y.d - x.d);
-        for (const { c } of order) {
-          ctx.fillStyle = color;
-          polygon(ctx, c.hull);
-          ctx.fill();
-          ctx.fillStyle = 'rgba(0,0,0,0.18)';
-          polygon(ctx, c.base);
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-          ctx.lineWidth = 1;
-          ctx.stroke();
-        }
-        // tige et volant
-        ctx.strokeStyle = color;
+        ctx.strokeStyle = shade(color, 0.8);
         ctx.lineCap = 'round';
         ctx.lineWidth = Math.max(1.5, 0.12 * od * s);
         ctx.beginPath();
@@ -745,7 +788,15 @@ export class Viewer {
         polygon(ctx, wheel);
         ctx.stroke();
       },
-    };
+    });
+    return prims;
+  }
+
+  /** Direction 3D dans le repère écran : x à droite, y vers le bas, z vers l'observateur. */
+  viewDir(d) {
+    const a = this.project([0, 0, 0]);
+    const b = this.project(d);
+    return [b[0] - a[0], -(b[1] - a[1]), -(b[2] - a[2])];
   }
 
   /** Axe du tube au nœud (moyenne des éléments qui y aboutissent). */
@@ -822,6 +873,28 @@ export class Viewer {
 }
 
 /** Couleur CSS → [r, g, b] (via le moteur du navigateur, mis en cache). */
+// Lumière (haut gauche, vers l'observateur) commune aux tubes et aux robinets
+const LIGHT2D = [-0.586, -0.81];
+const LIGHT3D = [-0.42, -0.58, 0.7];
+
+/**
+ * Profil d'ombrage transversal d'un tube, t = 0 au bord éclairé, 1 au bord à
+ * l'ombre : [facteur sur la teinte, ajout de blanc]. Voile sombre au bord
+ * éclairé, reflet blanc diffus vers le premier quart, teinte nominale au
+ * milieu, assombrissement progressif jusqu'au bord opposé.
+ */
+function tubeProfile(t) {
+  let ab = 0;
+  let aw = 0;
+  if (t < 0.28) {
+    const x = t / 0.28;
+    ab = 0.25 * (1 - x);
+    aw = 0.35 * x;
+  } else if (t < 0.5) aw = 0.35 * (1 - (t - 0.28) / 0.22);
+  else ab = 0.4 * ((t - 0.5) / 0.5);
+  return [1 - ab - aw, 255 * aw];
+}
+
 const rgbCache = new Map();
 let colorCtx = null;
 function toRGB(color) {
@@ -873,6 +946,16 @@ function trimPolyline(pts, colors, d0, d1) {
   };
   cut(true, d0);
   cut(false, d1);
+}
+
+/** Polygone écran dilaté de `d` px depuis son centre (recouvrement entre facettes). */
+function grow(pts, d) {
+  const cx = pts.reduce((x, p) => x + p[0], 0) / pts.length;
+  const cy = pts.reduce((y, p) => y + p[1], 0) / pts.length;
+  return pts.map((p) => {
+    const l = Math.hypot(p[0] - cx, p[1] - cy) || 1;
+    return [p[0] + ((p[0] - cx) / l) * d, p[1] + ((p[1] - cy) / l) * d, p[2]];
+  });
 }
 
 function polygon(ctx, pts) {
