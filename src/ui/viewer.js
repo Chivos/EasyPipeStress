@@ -271,6 +271,20 @@ export class Viewer {
       }
     });
 
+    // Tés : losange autour du nœud de jonction
+    ctx.strokeStyle = C.sel;
+    ctx.lineWidth = 2;
+    for (const t of mesh.tees ?? []) {
+      const s = S[t.node];
+      ctx.beginPath();
+      ctx.moveTo(s[0], s[1] - 9);
+      ctx.lineTo(s[0] + 9, s[1]);
+      ctx.lineTo(s[0], s[1] + 9);
+      ctx.lineTo(s[0] - 9, s[1]);
+      ctx.closePath();
+      ctx.stroke();
+    }
+
     // Masses ponctuelles
     for (const pm of mesh.pointMasses) {
       const s = S[pm.node];

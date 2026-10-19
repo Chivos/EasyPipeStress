@@ -43,7 +43,7 @@ const state = {
   bottomOpen: true,
   selected: null,
   matSel: null,
-  quick: { from: '', to: '', dx: '', dy: '', dz: '', bend: true, radius: '', len: '1000' },
+  quick: { from: '', to: '', dx: '', dy: '', dz: '', bend: true, tee: true, radius: '', len: '1000' },
   display: { mode: 'geom', scale: 1, labels: true, showAll: false, animate: true },
   filter: { eq: 'all', internal: false, sort: true, failOnly: false, case: null },
 };

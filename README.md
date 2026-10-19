@@ -16,9 +16,10 @@ exportables/importables en JSON.
 
 1. **Géométrie** : ajout rapide de tubes par DX/DY/DZ depuis un nœud (cliquer un
    nœud dans la vue pour en partir) ; un coude est inséré automatiquement au
-   changement de direction. Tableaux éditables des tubes (section, matériau,
-   températures et pressions de service et de calcul) et des coudes (rayon,
-   épaisseur).
+   changement de direction, et un té quand un troisième tube part d'un nœud
+   (forgé, de fabrication renforcé ou non, ou SIF imposé). Tableaux éditables
+   des tubes (section, matériau, températures et pressions de service et de
+   calcul), des coudes (rayon, épaisseur) et des tés.
 2. **Supports & masses** : ancrages, appuis, guides, butées, ressorts, blocages
    personnalisés, déplacements imposés de piquage ; masses ponctuelles.
 3. **Chargements** : poids (fluide, calorifuge), pression, dilatation, séisme
@@ -26,7 +27,9 @@ exportables/importables en JSON.
    100-40-40/SRSS, ou statique équivalente).
 4. **Code** : paramètres du RCC-M C (nombre de cycles, coefficients des
    admissibles par équation et par niveau, indices 0,75i ou B₁/B₂,
-   correction de pression des coudes, épaisseur minimale).
+   correction de pression des coudes). La vérification d'épaisseur minimale
+   par tenue à la pression seule est une option de l'onglet Projet (désactivée
+   par défaut).
 5. **Calculer** (Ctrl + Entrée) : synthèse du dépouillement, taux de travail en
    couleur sur la vue, déformées, modes propres animés, tableaux de
    déplacements, d'efforts sur supports et d'efforts internes, **note de calcul**
@@ -59,7 +62,7 @@ src/
              materials.js   tables matériaux fonction de T
              sections.js    caractéristiques des tubes
   components/               composants modélisables (registre)
-             pipe.js  bend.js  mass.js  support.js
+             pipe.js  bend.js  tee.js  mass.js  support.js
   fem/       beam3d.js      élément de poutre 3D Timoshenko
              system.js      assemblage, statique, réponses, analyse modale
              spectral.js    spectres, CQC/SRSS, combinaisons directionnelles
@@ -83,7 +86,7 @@ Les trois axes d'évolution sont des **registres** : on ajoute un module et on
 l'enregistre, sans toucher au reste. L'interface de saisie est générée à partir
 des descripteurs `fields`.
 
-- **Nouveau composant** (té, réduction, bride, robinet rigide, compensateur…) :
+- **Nouveau composant** (réduction, bride, robinet rigide, compensateur…) :
   créer `src/components/xxx.js` exportant `{ id, label, phase, fields, create,
   mesh }` puis `components.register(xxx)` dans `src/components/index.js`.
   - `phase: 'line'` : `mesh()` appelle `ctx.addSegment({...})` ;

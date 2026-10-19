@@ -31,6 +31,7 @@ export function buildReport(state, snapshot) {
         ['Axe vertical', m.settings.vertical],
         ['Température de référence', `${m.settings.tRef} °C`],
         ['Modélisation', `Poutres 3D ${m.settings.shear !== false ? 'Timoshenko' : 'Euler-Bernoulli'}, longueur max. ${m.settings.meshMaxLength} mm, coudes discrétisés (≤ ${m.settings.bendDivisionAngle}° par élément) avec facteur de flexibilité`],
+        ['Épaisseur minimale (pression seule)', m.settings.checkThickness ? 'vérifiée (C 3641)' : 'non vérifiée'],
         ['Supports', 'Linéaires bilatéraux, rigidité de pénalité 10¹⁰ N/mm / 10¹⁴ N·mm/rad'],
         ['Code', r?.code?.label ?? m.code.id],
         ...Object.entries(m.code.params).map(([k, v]) => [k, String(v)]),

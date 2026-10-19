@@ -15,11 +15,13 @@ import { pipe } from './pipe.js';
 import { bend } from './bend.js';
 import { mass } from './mass.js';
 import { support, SUPPORT_KINDS } from './support.js';
+import { tee, TEE_TYPES } from './tee.js';
 
 export const components = new Registry('Composant');
 components.register(pipe);
 components.register(bend);
+components.register(tee);
 components.register(mass);
 components.register(support);
 
-export { SUPPORT_KINDS };
+export { SUPPORT_KINDS, TEE_TYPES };
