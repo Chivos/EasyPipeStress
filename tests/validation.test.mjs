@@ -111,14 +111,11 @@ test('Système en L entre ancrages : équilibre global des réactions thermiques
 
 test('Coude : facteurs k = 1,65/h et i = 0,9/h^(2/3)', () => {
   const sec = pipeSection({ od: 168.3, t: 7.11 });
-  const f = componentFactors({ kind: 'bend', sec, bend: { radius: 228.6 }, params: { b2Method: 'indices' } });
-  const g = componentFactors({ kind: 'bend', sec, bend: { radius: 228.6 }, params: { b2Method: '0.75i' } });
+  const f = componentFactors({ kind: 'bend', sec, bend: { radius: 228.6 } });
   const h = (7.11 * 228.6) / sec.rm ** 2;
   near(f.k, 1.65 / h, 1e-12, 'k');
   near(f.i, 0.9 / h ** (2 / 3), 1e-12, 'i');
-  near(f.B2, 1.3 / h ** (2 / 3), 1e-12, 'B2');
-  near(g.B2, 0.75 * g.i, 1e-12, 'B2 = 0,75 i');
-  assert.equal(g.B1, 0.5);
+  assert.equal(f.B1, undefined, 'pas d’indices B1/B2 en classe 2');
   assert.equal(rangeReductionFactor(7000), 1);
   assert.equal(rangeReductionFactor(20000), 0.8);
   assert.equal(rangeReductionFactor(1e6), 0.5);
@@ -192,8 +189,7 @@ test('Mécanisme détecté', () => {
 
 test('RCC-M C : équations (6), (7), (8), (10) sur une console', () => {
   const m = setup({ density: 0, maxLen: 500 });
-  m.code.params = { ...m.code.params, b2Method: '0.75i' };
-  m.components = ensureIds({ components: [pipe('1', '2', 2000, 0, 0, { P1: 5, Pd: 5, T1: 150, Td: 150 }), sup('1', 'anchor'), { type: 'mass', node: '2', mass: 1000 }] }).components;
+    m.components = ensureIds({ components: [pipe('1', '2', 2000, 0, 0, { P1: 5, Pd: 5, T1: 150, Td: 150 }), sup('1', 'anchor'), { type: 'mass', node: '2', mass: 1000 }] }).components;
   m.loadCases = [
     { id: 'W', type: 'weight', enabled: true },
     { id: 'T1', type: 'thermal', enabled: true },
@@ -201,14 +197,14 @@ test('RCC-M C : équations (6), (7), (8), (10) sur une console', () => {
   ];
   const r = runAnalysis(m);
   const eqs = new Set(r.check.rows.map((x) => x.eq));
-  for (const q of ['6', '7', '10']) assert.ok(eqs.has(q), `éq. (${q}) présente`);
+  for (const q of ['6', '7', '10D']) assert.ok(eqs.has(q), `éq. (${q}) présente`);
   assert.ok(!eqs.has('9') && !eqs.has('11'));
   const sp = pipeSection(m.sections[0]);
   const MA = 9806.65 * 2000;
   const row6 = r.check.rows.find((x) => x.eq === '6' && x.node === '1');
   near(row6.stress, (5 * 168.3) / (4 * 7.11) + MA / sp.Z, 1e-3, 'éq. (6)');
   near(row6.allow, 100, 1e-12, 'admissible (6) = Sh');
-  const row10 = r.check.rows.find((x) => x.eq === '10' && x.node === '1');
+  const row10 = r.check.rows.find((x) => x.eq === '10D' && x.node === '1');
   near(row10.stress, (5 * 168.3) / (4 * 7.11) + (2 * MA) / sp.Z, 1e-3, 'éq. (10)');
   near(row10.allow, 2.4 * 100, 1e-12, 'admissible niveau D');
 });
@@ -265,4 +261,29 @@ test('Séisme : spectre horizontal commun aux deux directions horizontales', () 
   m.loadCases = [lc(false)];
   s = runAnalysis(m).cases[0].supportLoads;
   near(Math.abs(s[1]), 0.2 * 9806.65, 1e-4, 'Y propre si l’option est décochée');
+});
+
+test('Séisme : niveaux 10B, 10C, 10D, même spectre et coefficients propres', () => {
+  const m = setup({ density: 0, maxLen: 500 });
+  m.components = ensureIds({ components: [pipe('1', '2', 2000, 0, 0, { P1: 0, Pd: 0 }), sup('1', 'anchor'), { type: 'mass', node: '2', mass: 1000 }] }).components;
+  m.loadCases = [
+    {
+      id: 'S1', type: 'seismic', enabled: true, method: 'static', directional: 'SRSS', staticAcc: { Z: 1 },
+      levels: [{ level: 'B', enabled: true, factor: 0.5 }, { level: 'C', enabled: false, factor: 1 }, { level: 'D', enabled: true, factor: 1 }],
+    },
+  ];
+  const r = runAnalysis(m);
+  assert.deepEqual(r.cases.map((c) => c.id), ['S1-B', 'S1-D']);
+  near(r.cases[0].supportLoads[2], 0.5 * r.cases[1].supportLoads[2], 1e-12, 'mise à l’échelle du niveau B');
+  const sp = pipeSection(m.sections[0]);
+  const MB = 9806.65 * 2000;
+  const b = r.check.rows.find((x) => x.eq === '10B' && x.node === '1');
+  const d = r.check.rows.find((x) => x.eq === '10D' && x.node === '1');
+  near(b.stress, (0.5 * MB) / sp.Z, 1e-3, 'éq. (10B)');
+  near(d.stress, MB / sp.Z, 1e-3, 'éq. (10D)');
+  near(b.allow, 1.2 * 100, 1e-12, 'admissible B');
+  near(d.allow, 2.4 * 100, 1e-12, 'admissible D');
+  assert.ok(!r.check.rows.some((x) => x.eq === '10C'));
+  const comb = r.code.combinations({ model: m }).map((c) => c.eq);
+  assert.deepEqual(comb, ['(6)', '(10B)', '(10D)']);
 });

@@ -9,7 +9,7 @@ import { loadTypes } from '../loads/index.js';
 import { codes } from '../codes/index.js';
 import { newId } from '../core/model.js';
 import { DEFAULT_SPECTRUM } from '../core/model.js';
-import { seismicAxes } from '../loads/seismic.js';
+import { seismicAxes, seismicLevels, defaultLevels, LEVELS } from '../loads/seismic.js';
 
 const section = (title, ...content) => h('section', { class: 'card' }, h('h3', {}, title), ...content);
 const help = (...t) => h('p', { class: 'help' }, ...t);
@@ -352,10 +352,51 @@ export function renderLoads(app) {
 }
 
 function defaultSeismic() {
-  return { level: 'D', method: 'spectral', damping: 5, cutoff: 33, modal: 'CQC', directional: 'SRSS', missingMass: true, maxModes: 60, spectra: { X: { factor: 1, points: DEFAULT_SPECTRUM }, Y: { factor: 1, points: DEFAULT_SPECTRUM }, Z: { factor: 2 / 3, points: DEFAULT_SPECTRUM } }, staticAcc: { X: 1.5, Y: 1.5, Z: 1 } };
+  return { levels: defaultLevels(), method: 'spectral', damping: 5, cutoff: 33, modal: 'CQC', directional: 'SRSS', missingMass: true, maxModes: 60, spectra: { X: { factor: 1, points: DEFAULT_SPECTRUM }, Y: { factor: 1, points: DEFAULT_SPECTRUM }, Z: { factor: 2 / 3, points: DEFAULT_SPECTRUM } }, staticAcc: { X: 1.5, Y: 1.5, Z: 1 } };
 }
 
 function seismicEditor(app, lc, li) {
+  return h('div', {}, levelsEditor(app, lc, li), seismicInputEditor(app, lc, li));
+}
+
+/** Niveaux de critère vérifiés (éq. 10B, 10C, 10D) : coefficient sur le spectre par niveau. */
+function levelsEditor(app, lc, li) {
+  const current = seismicLevels(lc);
+  const rows = LEVELS.map((L) => current.find((x) => x.level === L) ?? { level: L, enabled: false, factor: 1 });
+  const set = (L, key, v) =>
+    app.update((mm) => {
+      const c = mm.loadCases[li];
+      c.levels = rows.map((r) => ({ ...r }));
+      c.levels.find((x) => x.level === L)[key] = v;
+      delete c.level;
+    });
+  return h(
+    'div',
+    {},
+    h('h4', {}, 'Niveaux de critère vérifiés (éq. 10)'),
+    help('Même spectre d’entrée pour tous les niveaux : cocher les niveaux à vérifier et donner à chacun le coefficient appliqué au séisme calculé. Les admissibles par niveau se règlent dans l’onglet Code.'),
+    h(
+      'table',
+      { class: 'grid compact levels' },
+      h('thead', {}, h('tr', {}, h('th', {}, 'Niveau'), h('th', {}, 'Vérifié'), h('th', {}, 'Coefficient sur le séisme'))),
+      h(
+        'tbody',
+        {},
+        rows.map((r) =>
+          h(
+            'tr',
+            {},
+            h('td', {}, h('b', {}, `10${r.level}`)),
+            h('td', {}, h('input', { type: 'checkbox', checked: r.enabled !== false, onchange: (e) => set(r.level, 'enabled', e.target.checked) })),
+            h('td', {}, fieldInput({ type: 'number' }, r.factor, (v) => set(r.level, 'factor', v === '' ? 1 : v), { focusKey: `lc${li}:lvl${r.level}` })),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+function seismicInputEditor(app, lc, li) {
   if (lc.method === 'static') {
     lc.staticAcc ??= { X: 0, Y: 0, Z: 0 };
     return h(
@@ -472,13 +513,34 @@ export function renderCode(app) {
           eqRow('(6)', 'Poids propre + pression', 'S_L = P·Dₑ/(4eₙ) + 0,75i·M_A/Z ≤ k₆·S_h   (0,75i ≥ 1)'),
           eqRow('(7)', 'Dilatation thermique', 'S_E = i·M_C/Z ≤ S_A = f(1,25 S_c + 0,25 S_h) [+ (S_h − S_L) en option]'),
           eqRow('(8)', '(6) + (7), si (7) non satisfaite', 'P_max·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ S_h + S_A'),
-          eqRow('(10)', 'Séisme (permanentes + occasionnelles)', 'P_max·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ k·S_h  (B : 1,2 — C : 1,8 — D : 2,4 par défaut, plafond k·Sy optionnel)'),
+          eqRow('(10B) (10C) (10D)', 'Séisme, par niveau de critère', 'P_max·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ k·S_h  (B : 1,2 — C : 1,8 — D : 2,4 par défaut, plafond k·Sy optionnel) ; M_B = séisme × coefficient du niveau'),
         ),
       ),
-      help('Tés : i = 0,9/h^⅔ ≥ 1 avec h = 4,4eₙ/r (forgé), (eₙ + e_r/2)^(5/2)/(eₙ^(3/2)·r) (fabrication renforcé), eₙ/r (non renforcé) ; B₂ = 0,75i ≥ 1.'),
-      help('Option « indices B₁, B₂ » : P·Dₑ/(4eₙ) devient B₁·P·Dₑ/(2eₙ) et 0,75i devient B₂ (coude : B₁ = −0,1 + 0,4h, B₂ = 1,30/h^⅔ ≥ 1). Coudes : h = eₙR/r², k = 1,65/h, i = 0,9/h^⅔ (≥ 1).'),
+      help('Classe 2 : seul le facteur d’intensification i intervient (0,75i ≥ 1 pour les charges primaires) ; les indices B₁, B₂ relèvent de la classe 1 (sous-section B).'),
+      help('Coudes : h = eₙR/r², k = 1,65/h, i = 0,9/h^⅔ (≥ 1). Tés : i = 0,9/h^⅔ ≥ 1 avec h = 4,4eₙ/r (forgé), (eₙ + e_r/2)^(5/2)/(eₙ^(3/2)·r) (fabrication renforcé), eₙ/r (non renforcé).'),
       help('Les coefficients des admissibles (k₆, niveaux B/C/D, plafonds Sy) sont modifiables ci-dessus : les caler sur l’édition du RCC-M et les fiches de modification applicables au projet.'),
     ),
+    combinationsSection(code, m),
+  );
+}
+
+function combinationsSection(code, model) {
+  if (!code?.combinations) return null;
+  const rows = code.combinations({ model });
+  return section(
+    'Cumul des chargements',
+    help('Chargements élémentaires combinés dans chaque équation, d’après les cas actifs de l’onglet Chargements.'),
+    h(
+      'div',
+      { class: 'grid-wrap' },
+      h(
+        'table',
+        { class: 'grid compact' },
+        h('thead', {}, h('tr', {}, ['Éq.', 'Cumul', 'Règle de combinaison', 'Admissible'].map((t) => h('th', {}, t)))),
+        h('tbody', {}, rows.map((r) => h('tr', {}, h('td', {}, h('b', {}, r.eq)), h('td', {}, h('b', {}, r.name), h('br'), r.loads), h('td', { class: 'muted' }, r.rule), h('td', {}, r.allow)))),
+      ),
+    ),
+    help('Déplacements et efforts sur supports : cas élémentaires, combinaison de service poids + dilatation (somme algébrique) et séisme par niveau (enveloppe).'),
   );
 }
 

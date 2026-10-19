@@ -46,7 +46,11 @@ export function defaultLoadCases() {
       type: 'seismic',
       label: 'Séisme',
       enabled: true,
-      level: 'D',
+      levels: [
+        { level: 'B', enabled: true, factor: 1 },
+        { level: 'C', enabled: true, factor: 1 },
+        { level: 'D', enabled: true, factor: 1 },
+      ],
       method: 'spectral',
       damping: 5,
       cutoff: 33,

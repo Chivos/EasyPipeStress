@@ -1,33 +1,31 @@
 // RCC-M, Section I, sous-section C (matériels de classe 2) — tuyauteries, C 3650.
 //
 // Équations implémentées (numérotation RCC-M ; coefficients des admissibles
-// paramétrables pour s'adapter à l'édition applicable) :
-//  C 3641.1  épaisseur minimale (méthode `thickness`, appelée si l'option du
-//            projet est cochée) : e_m = P·De / (2(S/I + y·P)) + c,  y = 0,4
-//  éq. (6)   poids propre + pression (charges permanentes)
-//            S_L = B1·Pc·De/eₙ + B2·MA/Z ≤ k6·Sh
-//  éq. (7)   dilatation thermique  S_E = i·MC/Z ≤ S_A = f(1,25 Sc + 0,25 Sh) [+ (Sh − S_L)]
+// paramétrables pour s'adapter à l'édition applicable). Formulation de la
+// classe 2 par le facteur d'intensification i (les indices B1/B2 relèvent de la
+// classe 1, sous-section B, et ne sont pas utilisés ici) :
+//  éq. (6)   poids propre + pression       S_L = Pc·De/(4eₙ) + 0,75i·MA/Z ≤ k6·Sh
+//  éq. (7)   dilatation thermique          S_E = i·MC/Z ≤ S_A = f(1,25 Sc + 0,25 Sh) [+ (Sh − S_L)]
 //  éq. (8)   (6) + (7), si (7) non satisfaite :
-//            B1·Pmax·De/eₙ + B2·MA/Z + i·MC/Z ≤ Sh + S_A
-//  éq. (10)  séisme (permanentes + occasionnelles), par niveau de critère :
-//            B1·Pmax·De/eₙ + B2·(MA + MB)/Z ≤ min(kS·Sh ; kY·Sy)
-// Formulation par défaut (« 0,75 i ») : B1·De/eₙ → De/(4eₙ) (B1 = 0,25 rapporté à
-// De/eₙ, i.e. P·De/4eₙ) et B2 = 0,75·i ≥ 1 ; option « indices B1, B2 » (C 3680 /
-// NB-3680) : B1·P·De/(2eₙ), B2 = 1,30/h^(2/3) ≥ 1 pour les coudes.
-// Moments : moment résultant √(Mx²+My²+Mz²) aux extrémités de chaque élément.
+//            Pmax·De/(4eₙ) + 0,75i·MA/Z + i·MC/Z ≤ Sh + S_A
+//  éq. (10)  séisme, pour chaque niveau de critère B, C, D (même spectre, coefficient
+//            propre au niveau) : Pmax·De/(4eₙ) + 0,75i·(MA + MB)/Z ≤ min(kS·Sh ; kY·Sy)
+//  avec 0,75i ≥ 1. Moments : moment résultant √(Mx²+My²+Mz²) aux extrémités.
+//  Épaisseur minimale (méthode `thickness`, si l'option du projet est cochée) :
+//            C 3641.1  e_m = P·De / (2(S/I + y·P)) + c,  y = 0,4
 // Facteurs des coudes : h = e·R/r² ; k = 1,65/h ≥ 1 ; i = 0,9/h^(2/3) ≥ 1.
-// Tés (C 3683 / NC-3673.2, i = 0,9/h^(2/3) ≥ 1, k = 1) : forgé h = 4,4e/r,
-// fabrication renforcé h = (e + e_r/2)^(5/2)/(e^(3/2)·r), non renforcé h = e/r ;
-// le SIF du té s'applique aux extrémités des trois éléments qui aboutissent au nœud.
+// Tés (i = 0,9/h^(2/3) ≥ 1, k = 1) : forgé h = 4,4e/r, fabrication renforcé
+// h = (e + e_r/2)^(5/2)/(e^(3/2)·r), non renforcé h = e/r ; le SIF du té
+// s'applique aux extrémités des trois éléments qui aboutissent au nœud.
 // Correction de pression (option) : k/[1 + 6(P/E)(r/e)^(7/3)(R/r)^(1/3)],
 // i/[1 + 3,25(P/E)(r/e)^(5/2)(R/r)^(2/3)].
 
 import { materialAt } from '../core/materials.js';
 import { summarize } from './common.js';
+import { seismicLevels } from '../loads/seismic.js';
 
 export const DEFAULT_PARAMS = {
   cycles: 7000,
-  b2Method: '0.75i',
   pressureCorrection: false,
   k6: 1.0,
   shMinusSL: false,
@@ -52,12 +50,8 @@ export function rangeReductionFactor(N) {
   return 0.5;
 }
 
-/**
- * Facteurs k, i, B1, B2 d'un élément (appelé par le mailleur). B1 est exprimé
- * pour le terme B1·P·De/(2eₙ) : formulation 0,75 i ⇒ B1 = 0,5 (soit P·De/4eₙ).
- */
+/** Facteurs de flexibilité k et d'intensification i d'un élément (appelé par le mailleur). */
 export function componentFactors({ kind, sec, bend, P = 0, Ec, params = {}, teeType, pad = 0, sif = null }) {
-  const legacy = (params.b2Method ?? DEFAULT_PARAMS.b2Method) === '0.75i';
   if (kind === 'tee') {
     const T = sec.t;
     const r = sec.rm;
@@ -66,10 +60,9 @@ export function componentFactors({ kind, sec, bend, P = 0, Ec, params = {}, teeT
     else if (teeType === 'unreinforced') h = T / r;
     else h = (4.4 * T) / r;
     const i = teeType === 'user' && sif >= 1 ? sif : Math.max(1, 0.9 / h ** (2 / 3));
-    // pas d'indice B2 tabulé ici pour les tés : B2 = 0,75 i ≥ 1 dans les deux formulations
-    return { k: 1, i, B1: 0.5, B2: Math.max(1, 0.75 * i), h: teeType === 'user' ? null : h };
+    return { k: 1, i, h: teeType === 'user' ? null : h };
   }
-  if (kind !== 'bend' || !bend) return { k: 1, i: 1, B1: 0.5, B2: 1.0, h: null };
+  if (kind !== 'bend' || !bend) return { k: 1, i: 1, h: null };
   const r = sec.rm;
   const t = sec.t;
   const R = bend.radius;
@@ -80,8 +73,7 @@ export function componentFactors({ kind, sec, bend, P = 0, Ec, params = {}, teeT
     k = Math.max(1, k / (1 + 6 * (P / Ec) * (r / t) ** (7 / 3) * (R / r) ** (1 / 3)));
     i = Math.max(1, i / (1 + 3.25 * (P / Ec) * (r / t) ** (5 / 2) * (R / r) ** (2 / 3)));
   }
-  if (legacy) return { k, i, B1: 0.5, B2: Math.max(1, 0.75 * i), h };
-  return { k, i, B1: Math.min(0.5, Math.max(0, -0.1 + 0.4 * h)), B2: Math.max(1, 1.3 / h ** (2 / 3)), h };
+  return { k, i, h };
 }
 
 function resultant(f, ie, end) {
@@ -104,7 +96,6 @@ export const rccmC = {
   defaults: DEFAULT_PARAMS,
   params: [
     { key: 'cycles', label: 'Nombre de cycles thermiques équivalents N', type: 'number', title: 'Détermine le facteur de réduction f de SA' },
-    { key: 'b2Method', label: 'Indices de contraintes primaires', type: 'select', options: () => ['0.75i', 'indices'], optionLabel: (v) => (v === 'indices' ? 'B1, B2 (C 3680 / NB-3680)' : 'P·De/4e + 0,75 i·M/Z (0,75 i ≥ 1)') },
     { key: 'k6', label: 'Éq. (6) : admissible = k × Sh, k =', type: 'number' },
     { key: 'shMinusSL', label: 'Éq. (7) : ajouter (Sh − S_L) à S_A', type: 'checkbox', title: 'Report de la marge de l’éq. (6) sur l’admissible de dilatation' },
     { key: 'levelB_kS', label: 'Éq. (10) niveau B : k × Sh', type: 'number' },
@@ -169,14 +160,15 @@ export const rccmC = {
         // facteurs de l'extrémité : le plus pénalisant entre l'élément et un té au nœud
         const local = e.endFactors?.[end];
         const fac = local && local.i >= e.factors.i ? local : e.factors;
-        const pTerm = (P) => (fac.B1 * P * De) / (2 * t);
+        const i75 = Math.max(1, 0.75 * fac.i);
+        const pTerm = (P) => (P * De) / (4 * t);
         const node = mesh.nodes[end === 0 ? e.n1 : e.n2].label;
         const compLabel = fac === local ? `Té ${node}` : e.kind === 'bend' ? `Coude ${e.bend.node}` : 'Tube';
         const base = { node, elem: e.label, ie, end, comp: compLabel, kind: fac === local ? 'tee' : e.kind };
         const MA = weightCases.reduce((s, c) => s + resultant(c.elemForces, ie, end), 0);
         // éq. (6) poids propre + pression
-        const SL = pTerm(e.Pd) + (fac.B2 * MA) / Z;
-        rows.push({ ...base, eq: '6', eqLabel: 'Éq. (6) poids propre + pression', case: wId ? `${wId}+P` : 'P', stress: SL, allow: k6 * Sh, ratio: SL / (k6 * Sh), detail: { B1: fac.B1, B2: fac.B2, P: e.Pd, MA, Z, S: Sh } });
+        const SL = pTerm(e.Pd) + (i75 * MA) / Z;
+        rows.push({ ...base, eq: '6', eqLabel: 'Éq. (6) poids propre + pression', case: wId ? `${wId}+P` : 'P', stress: SL, allow: k6 * Sh, ratio: SL / (k6 * Sh), detail: { i: fac.i, i75, P: e.Pd, MA, Z, S: Sh } });
         // éq. (7) / (8) par cas thermique
         let SA = f * (1.25 * atC.S + 0.25 * atH.S);
         if (params.shMinusSL && atH.S > SL) SA += atH.S - SL;
@@ -185,18 +177,19 @@ export const rccmC = {
           const SE = (fac.i * MC) / Z;
           rows.push({ ...base, eq: '7', eqLabel: 'Éq. (7) dilatation thermique', case: tc.id, stress: SE, allow: SA, ratio: SE / SA, detail: { i: fac.i, MC, Z, SA, f, Sc: atC.S, Sh: atH.S } });
           if (SE > SA) {
-            const s8 = pTerm(e.P1) + (fac.B2 * MA) / Z + SE;
+            const s8 = pTerm(e.P1) + (i75 * MA) / Z + SE;
             const allow8 = atH.S + SA;
-            rows.push({ ...base, eq: '8', eqLabel: 'Éq. (8) = (6) + (7)', case: `${wId ? `${wId}+P+` : 'P+'}${tc.id}`, thermalCase: tc.id, stress: s8, allow: allow8, ratio: s8 / allow8, detail: { B1: fac.B1, B2: fac.B2, i: fac.i, MA, MC, Z } });
+            rows.push({ ...base, eq: '8', eqLabel: 'Éq. (8) = (6) + (7)', case: `${wId ? `${wId}+P+` : 'P+'}${tc.id}`, thermalCase: tc.id, stress: s8, allow: allow8, ratio: s8 / allow8, detail: { i: fac.i, i75, MA, MC, Z } });
           }
         }
         // éq. (10) séisme
         for (const sc of seismicCases) {
           const lim = levelLimits(params, sc.level);
           const MB = resultant(sc.elemForces, ie, end);
-          const s10 = pTerm(e.P1) + (fac.B2 * (MA + MB)) / Z;
+          const s10 = pTerm(e.P1) + (i75 * (MA + MB)) / Z;
           const allow = lim.kY ? Math.min(lim.kS * Sh, lim.kY * Sy) : lim.kS * Sh;
-          rows.push({ ...base, eq: '10', eqLabel: `Éq. (10) séisme niveau ${sc.level ?? 'D'}`, case: `${wId ? `${wId}+P+` : 'P+'}${sc.id}`, stress: s10, allow, ratio: s10 / allow, detail: { B1: fac.B1, B2: fac.B2, P: e.P1, MA, MB, Z, S: Sh, Sy } });
+          const L = sc.level ?? 'D';
+          rows.push({ ...base, eq: `10${L}`, eqLabel: `Éq. (10) niveau ${L}`, case: `${wId ? `${wId}+P+` : 'P+'}${sc.id}`, stress: s10, allow, ratio: s10 / allow, detail: { i: fac.i, i75, P: e.P1, MA, MB, Z, S: Sh, Sy, factor: sc.factor } });
         }
       }
     });
@@ -210,5 +203,35 @@ export const rccmC = {
     notes.push('Éq. (8) évaluée seulement aux points où l’éq. (7) n’est pas satisfaite.');
     notes.push('Coefficients des admissibles et valeurs matériaux à confirmer dans l’édition RCC-M applicable (onglet Code).');
     return { rows, summary, notes, f };
+  },
+
+  /** Description des cumuls de chargements utilisés par chaque équation. */
+  combinations({ model }) {
+    const params = { ...DEFAULT_PARAMS, ...(model.code?.params ?? {}) };
+    const active = model.loadCases.filter((c) => c.enabled !== false);
+    const W = active.filter((c) => c.type === 'weight').map((c) => c.id);
+    const T = active.filter((c) => c.type === 'thermal').map((c) => c.id);
+    const S = active.filter((c) => c.type === 'seismic');
+    const w = W.join(' + ') || '(aucun poids)';
+    const out = [
+      { eq: '(6)', name: 'Poids propre + pression', loads: `${w} ; pression de calcul Pc`, rule: 'M_A = moment résultant du poids propre ; terme de pression Pc·Dₑ/(4eₙ)', allow: `${num(params.k6, 1)}·Sh` },
+    ];
+    for (const t of T) {
+      out.push({ eq: '(7)', name: 'Dilatation thermique', loads: `${t} (étendue depuis l’état froid, déplacements imposés compris)`, rule: 'M_C = moment résultant de l’étendue de dilatation, sans poids ni pression', allow: 'S_A = f(1,25 Sc + 0,25 Sh)' });
+      out.push({ eq: '(8)', name: '(6) + (7), si (7) non satisfaite', loads: `${w} + P max + ${t}`, rule: 'contraintes de (6) [avec P max] et de (7) additionnées', allow: 'Sh + S_A' });
+    }
+    for (const s of S) {
+      for (const lv of seismicLevels(s).filter((x) => x.enabled !== false)) {
+        const lim = levelLimits(params, lv.level);
+        out.push({
+          eq: `(10${lv.level})`,
+          name: `Séisme niveau ${lv.level}`,
+          loads: `${w} + P max + ${num(lv.factor, 1)} × ${s.id}`,
+          rule: `M_A + M_B (somme des moments résultants) ; M_B = réponse sismique ${s.method === 'static' ? 'statique équivalente' : `spectrale ${s.modal ?? 'CQC'}`}, directions ${s.directional ?? 'SRSS'}, × ${num(lv.factor, 1)}`,
+          allow: `${lim.kS}·Sh${lim.kY ? ` et ${lim.kY}·Sy` : ''}`,
+        });
+      }
+    }
+    return out;
   },
 };

@@ -50,7 +50,7 @@ extrémités des trois éléments qui aboutissent au nœud, le plus pénalisant
 - té de fabrication renforcé : h = (eₙ + e_r/2)^(5/2) / (eₙ^(3/2)·r) ;
 - té de fabrication non renforcé : h = eₙ/r ;
 - i = 0,9/h^(2/3) ≥ 1, ou valeur imposée par l'utilisateur ;
-- indice primaire B₂ = 0,75·i ≥ 1.
+- facteur des charges primaires 0,75·i ≥ 1.
 
 ### 1.4 Supports
 
@@ -134,11 +134,24 @@ valeurs de S à froid et à chaud.
 | (6) | Poids propre + pression | S_L = P·Dₑ/(4eₙ) + 0,75i·M_A/Z ≤ k₆·Sh (k₆ = 1,0 par défaut) |
 | (7) | Dilatation thermique | S_E = i·M_C/Z ≤ S_A = f·(1,25·Sc + 0,25·Sh) [+ (Sh − S_L), option] |
 | (8) | (6) + (7), si (7) non satisfaite | P_max·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ Sh + S_A |
-| (10) | Séisme | P_max·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ k·Sh, k = 1,2 (B), 1,8 (C), 2,4 (D) par défaut, plafond optionnel k'·Sy |
+| (10B), (10C), (10D) | Séisme, par niveau de critère | P_max·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ k·Sh, k = 1,2 (B), 1,8 (C), 2,4 (D) par défaut, plafond optionnel k'·Sy ; M_B = réponse sismique × coefficient du niveau |
 
-0,75i est pris au moins égal à 1. Une option remplace P·Dₑ/(4eₙ) par
-B₁·P·Dₑ/(2eₙ) et 0,75i par B₂ (indices C 3680 / NB-3683 : tube droit B₁ = 0,5,
-B₂ = 1,0 ; coude B₁ = −0,1 + 0,4h borné à [0 ; 0,5], B₂ = 1,30/h^(2/3) ≥ 1).
+0,75i est pris au moins égal à 1. En classe 2, seul le facteur
+d'intensification i intervient ; les indices de contraintes primaires B₁, B₂
+relèvent de la classe 1 (sous-section B) et ne sont pas utilisés.
+
+**Niveaux sismiques.** Un cas séisme est calculé une fois avec son spectre
+d'entrée ; chaque niveau de critère vérifié (B, C, D) lui applique son propre
+coefficient (réponse linéaire vis-à-vis du spectre) et est vérifié avec ses
+propres admissibles.
+
+**Cumul des chargements.** (6) : moment résultant du poids propre M_A et
+pression de calcul ; (7) : étendue de dilatation M_C seule, depuis l'état froid
+(déplacements imposés compris) ; (8) : contraintes de (6), avec P max, et de (7)
+additionnées ; (10) : M_A + M_B, somme des moments résultants, avec M_B
+enveloppe sismique (combinaisons modale et directionnelle) × coefficient du
+niveau. Le tableau « Cumul des chargements » de l'onglet Code détaille ces
+cumuls à partir des cas actifs.
 
 Tous les coefficients d'admissible (k₆, k par niveau, plafonds Sy) sont des
 paramètres de l'onglet *Code*, à caler sur l'édition applicable.
