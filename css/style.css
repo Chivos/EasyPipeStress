@@ -157,7 +157,9 @@ textarea { width: 100%; font-family: ui-monospace, Menlo, Consolas, monospace; f
 
 .grid-wrap { overflow-x: auto; }
 table.grid { border-collapse: collapse; width: 100%; font-size: 12px; }
-table.grid th { position: sticky; top: 0; background: var(--card); text-align: left; font-weight: 600; padding: 4px; border-bottom: 2px solid var(--border); white-space: nowrap; }
+table.grid th { position: sticky; top: 0; background: var(--card); text-align: left; font-weight: 600; padding: 4px; border-bottom: 2px solid var(--border); white-space: nowrap; vertical-align: bottom; }
+table.grid.result th { padding: 4px 6px; }
+table.grid th.num { text-align: right; }
 table.grid th small { color: var(--muted); font-weight: 400; }
 table.grid td { padding: 2px 3px; border-bottom: 1px solid var(--border); }
 table.grid td input, table.grid td select { width: 100%; }
@@ -208,4 +210,6 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--border); }
 .modal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .modal-head h3 { margin: 0; font-size: 16px; }
 .modal h4 { margin: 14px 0 6px; font-size: 13px; }
-.modal table.kv td:first-child { width: 60%; }
+.modal table.kv td:first-child { width: auto; }
+.modal table.kv td.num { width: 110px; white-space: nowrap; }
+.modal table.kv td:last-child { width: 56px; white-space: nowrap; }

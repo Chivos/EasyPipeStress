@@ -140,7 +140,7 @@ export function renderResultsPanel(app) {
         h(
           'table',
           { class: 'grid compact' },
-          h('thead', {}, h('tr', {}, ['Critère', 'Cas', 'Nœud', 'σ', 'Adm.', 'Taux'].map((t) => h('th', {}, t)))),
+          h('thead', {}, h('tr', {}, th('Critère'), th('Cas'), th('Nœud'), th('σ', true), th('Adm.', true), th('Taux', true))),
           h(
             'tbody',
             {},
@@ -178,7 +178,7 @@ export function renderResultsPanel(app) {
         h(
           'table',
           { class: 'grid compact' },
-          h('thead', {}, h('tr', {}, ['Mode', 'f (Hz)', '%X', '%Y', '%Z', ''].map((t) => h('th', {}, t)))),
+          h('thead', {}, h('tr', {}, th('Mode'), th('f (Hz)', true), th('%X', true), th('%Y', true), th('%Z', true), th(''))),
           h(
             'tbody',
             {},
@@ -388,7 +388,7 @@ export function openRowDetail(row) {
             h(
               'table',
               { class: 'grid compact' },
-              h('thead', {}, h('tr', {}, ['Cas', 'Mt (torsion)', 'Mf,y', 'Mf,z', 'Résultant'].map((t) => h('th', {}, t)))),
+              h('thead', {}, h('tr', {}, th('Cas'), th('Mt (torsion)', true), th('Mf,y', true), th('Mf,z', true), th('Résultant', true))),
               h('tbody', {}, c.moments.map((mo) => h('tr', {}, h('td', {}, mo.name), [mo.mt, mo.my, mo.mz, mo.res].map((v) => h('td', { class: 'num' }, fmt(v, 1)))))),
             ),
             c.moments.some((mo) => !mo.signed) ? h('p', { class: 'help' }, 'Séisme : composantes enveloppes (non signées) après combinaisons modale et directionnelle ; résultant calculé sur ces composantes.') : null,
@@ -408,19 +408,43 @@ export function openRowDetail(row) {
   document.addEventListener('keydown', onKey);
 }
 
+// Colonnes de repères (toujours alignées à gauche, même si le repère est numérique).
+const LABEL_COLUMNS = new Set(['Nœud', 'Élément', 'Repère', 'Type', 'Cas', 'Critère', 'Composant', 'Détail', 'Mode']);
+const NUMERIC = /^-?(\d+(\.\d*)?|\.\d+)(e[+-]?\d+)?( mm)?$/i;
+
+/** Une colonne est numérique si toutes ses cellules non vides le sont : en-tête et valeurs alignés à droite. */
+function numericColumns(headers, rows) {
+  return headers.map((head, j) => {
+    if (LABEL_COLUMNS.has(head)) return false;
+    let seen = false;
+    for (const row of rows) {
+      const c = row[j];
+      if (c === '' || c == null) continue;
+      if (typeof c === 'object' && 'ratio' in c) return true;
+      if (!(typeof c === 'number' || (typeof c === 'string' && NUMERIC.test(c.trim())))) return false;
+      seen = true;
+    }
+    return seen;
+  });
+}
+
 export function simpleTable(headers, rows, onRowClick, renderCell = (c) => c) {
+  const num = numericColumns(headers, rows);
   return h(
     'div',
     { class: 'grid-wrap' },
     h(
       'table',
       { class: 'grid result' },
-      h('thead', {}, h('tr', {}, headers.map((t) => h('th', {}, t)))),
+      h('thead', {}, h('tr', {}, headers.map((t, j) => h('th', { class: num[j] ? 'num' : '' }, t)))),
       h(
         'tbody',
         {},
-        rows.map((row) => h('tr', { class: row.total ? 'total' : onRowClick ? 'clickable' : '', onclick: onRowClick ? () => onRowClick(row) : undefined }, row.map((cell) => h('td', { class: typeof cell === 'string' && /^-?[\d.]/.test(cell) ? 'num' : '' }, renderCell(cell))))),
+        rows.map((row) => h('tr', { class: row.total ? 'total' : onRowClick ? 'clickable' : '', onclick: onRowClick ? () => onRowClick(row) : undefined }, row.map((cell, j) => h('td', { class: num[j] ? 'num' : '' }, renderCell(cell))))),
       ),
     ),
   );
 }
+
+/** En-tête de tableau ; `num` aligne à droite (colonnes de valeurs). */
+export const th = (label, num = false) => h('th', { class: num ? 'num' : '' }, label);
