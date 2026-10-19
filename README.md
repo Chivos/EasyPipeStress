@@ -99,9 +99,11 @@ des descripteurs `fields`.
   `run` utilise `ctx.sys.solveStatic(...)` ou `ctx.sys.modal(...)` et renvoie
   `{ signed, u, elemForces, supportLoads, info }`.
 - **Nouveau code** (RCC-M B/D, EN 13480-3, B31.3…) : `src/codes/xxx.js`
-  exportant `{ id, label, params, componentFactors, check }`. `componentFactors`
+  exportant `{ id, label, params, componentFactors, check, thickness }`. `componentFactors`
   fournit k, i, B₁, B₂ au mailleur ; `check({ model, mesh, cases })` renvoie les
-  lignes de vérification et la synthèse.
+  lignes de vérification et la synthèse ; `thickness` (facultatif) fournit la
+  formule d'épaisseur minimale par tenue à la pression seule, appliquée quand
+  l'option du projet est cochée.
 
 Unités internes : mm, N, MPa, tonne, s (cohérentes). Saisies en kg et kg/m³.
 

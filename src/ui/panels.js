@@ -24,7 +24,7 @@ export function renderProject(app) {
     { key: 'meshMaxLength', label: 'Longueur maximale d’élément', unit: 'mm', type: 'number', title: 'Discrétisation des tubes droits (précision du poids réparti et de l’analyse modale)' },
     { key: 'bendDivisionAngle', label: 'Angle maximal par élément de coude', unit: '°', type: 'number' },
     { key: 'shear', label: 'Déformation d’effort tranchant (Timoshenko)', type: 'checkbox', default: true },
-    { key: 'checkThickness', label: 'Vérifier l’épaisseur minimale (tenue à la pression seule, C 3641)', type: 'checkbox', default: false },
+    { key: 'checkThickness', label: 'Vérifier l’épaisseur minimale (tenue à la pression seule, formule du code retenu)', type: 'checkbox', default: false },
   ];
   return h(
     'div',
@@ -468,7 +468,7 @@ export function renderCode(app) {
         h(
           'tbody',
           {},
-          eqRow('C 3641', 'Épaisseur minimale (option du projet)', 'eₘ = P·Dₑ / [2(S/I + 0,4P)] + c ≤ eₙ(1 − tol)'),
+          code?.thickness ? eqRow(code.thickness.ref, 'Épaisseur minimale — tenue à la pression seule (option de l’onglet Projet)', code.thickness.formula) : null,
           eqRow('(6)', 'Poids propre + pression', 'S_L = P·Dₑ/(4eₙ) + 0,75i·M_A/Z ≤ k₆·S_h   (0,75i ≥ 1)'),
           eqRow('(7)', 'Dilatation thermique', 'S_E = i·M_C/Z ≤ S_A = f(1,25 S_c + 0,25 S_h) [+ (S_h − S_L) en option]'),
           eqRow('(8)', '(6) + (7), si (7) non satisfaite', 'P_max·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ S_h + S_A'),
