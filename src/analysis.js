@@ -22,14 +22,19 @@ export function runAnalysis(model) {
     const r = type.run(ctx, lc);
     if (lc.type === 'seismic') {
       // un cas par niveau de critère : même réponse, mise à l'échelle par le coefficient du niveau
+      const used = new Set();
       for (const lv of seismicLevels(lc).filter((x) => x.enabled !== false)) {
         const k = Number.isFinite(+lv.factor) && lv.factor !== '' ? +lv.factor : 1;
+        // repère du cas : nom du séisme s'il est donné (ex. S1-SMHV), sinon niveau (S1-B)
+        const name = String(lv.name ?? '').trim();
+        const suffix = name && !used.has(name) ? name : lv.level;
+        used.add(suffix);
         const scale = (a) => a.map((v) => v * k);
         cases.push({
           ...r,
-          id: `${lc.id}-${lv.level}`,
-          label: `${lc.label || type.label} niveau ${lv.level}${lv.name ? ` — ${lv.name}` : ''} (× ${k})`,
-          levelName: lv.name || '',
+          id: `${lc.id}-${suffix}`,
+          label: `${lc.label || type.label}${name ? ` ${name}` : ''} — niveau ${lv.level} (× ${k})`,
+          levelName: name,
           type: lc.type,
           level: lv.level,
           factor: k,

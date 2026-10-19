@@ -433,8 +433,9 @@ test('Séisme : nom des niveaux repris dans le bilan, détail de calcul complet'
   m.loadCases = [{ id: 'W', type: 'weight', enabled: true }, { id: 'S1', type: 'seismic', enabled: true, method: 'static', directional: 'SRSS', staticAcc: { Z: 1 }, levels: [{ level: 'D', enabled: true, factor: 1, name: 'SMS' }] }];
   const r = runAnalysis(m);
   const row = r.check.rows.find((x) => x.eq === '10D' && x.node === '1');
-  assert.match(row.eqLabel, /SMS/);
-  assert.match(r.cases.find((c) => c.id === 'S1-D').label, /SMS/);
+  assert.equal(row.eqLabel, 'Éq. (10) niveau D', 'critère = équation + niveau');
+  assert.match(row.case, /\+S1-SMS$/, 'nom du séisme dans le cas');
+  assert.ok(r.cases.some((c) => c.id === 'S1-SMS'));
   const names = row.calc.moments.map((mo) => mo.name);
   assert.ok(names.some((n) => n.startsWith('M_A')) && names.some((n) => n.startsWith('M_B')));
   near(row.calc.moments.find((mo) => mo.name.startsWith('M_B')).res, 9806.65 * 2, 1e-6, 'M_B en N·m');

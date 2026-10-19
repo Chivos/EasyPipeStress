@@ -80,7 +80,7 @@ export function editableTable({ columns, rows, model, onEdit, onDelete, onAdd, a
   const table = h(
     'table',
     { class: 'grid' },
-    h('thead', {}, h('tr', {}, columns.map((c) => h('th', { title: c.title, style: c.width ? { minWidth: `${c.width}px` } : undefined }, c.label, c.unit ? h('small', {}, h('br'), c.unit) : null)), onDelete ? h('th', {}) : null)),
+    h('thead', {}, h('tr', {}, columns.map((c) => h('th', { class: c.type === 'number' ? 'num' : '', title: c.title, style: c.width ? { minWidth: `${c.width}px` } : undefined }, c.label, c.unit ? h('small', {}, h('br'), c.unit) : null)), onDelete ? h('th', {}) : null)),
     h(
       'tbody',
       {},

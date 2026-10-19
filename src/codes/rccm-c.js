@@ -266,7 +266,7 @@ export const rccmC = {
           const allow = lim.kY ? Math.min(lim.kS * Sh, lim.kY * Sy) : lim.kS * Sh;
           const L = sc.level ?? 'D';
           rows.push({
-            ...base, eq: `10${L}`, eqLabel: `Éq. (10) niveau ${L}${sc.levelName ? ` — ${sc.levelName}` : ''}`, case: `${wId ? `${wId}+P+` : 'P+'}${sc.id}`, stress: s10, allow, ratio: s10 / allow,
+            ...base, eq: `10${L}`, eqLabel: `Éq. (10) niveau ${L}`, case: `${wId ? `${wId}+P+` : 'P+'}${sc.id}`, stress: s10, allow, ratio: s10 / allow,
             detail: { i: fac.i, i75, P: e.P1, MA, MB, Z, S: Sh, Sy, factor: sc.factor },
             calc: {
               formula: 'P·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ min(k·Sh ; k′·Sy)',
@@ -314,8 +314,8 @@ export const rccmC = {
         const lim = levelLimits(params, lv.level);
         out.push({
           eq: `(10${lv.level})`,
-          name: `Séisme niveau ${lv.level}${lv.name ? ` — ${lv.name}` : ''}`,
-          loads: `${w} + P + ${num(lv.factor, 1)} × ${s.id}`,
+          name: `Séisme niveau ${lv.level}`,
+          loads: `${w} + P + ${s.id}-${String(lv.name ?? '').trim() || lv.level} (= ${num(lv.factor, 1)} × ${s.id})`,
           rule: `M_A + M_B (somme des moments résultants) ; M_B = réponse sismique ${s.method === 'static' ? 'statique équivalente' : `spectrale ${s.modal ?? 'CQC'}`}, directions ${s.directional ?? 'SRSS'}, × ${num(lv.factor, 1)}`,
           allow: `${lim.kS}·Sh${lim.kY ? ` et ${lim.kY}·Sy` : ''}`,
         });
