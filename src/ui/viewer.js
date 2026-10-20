@@ -320,7 +320,19 @@ export class Viewer {
       const springs = (springsByNode.get(sup.node) ?? []).filter((s) => mesh.supports[s.support] === sup);
       return { springs, fullAnchor: sup.kind === 'anchor' || springs.filter((s) => s.rot).length >= 3 };
     });
+    const minPx = 14; // longueur minimale lisible d'une flèche (px)
+    const hangerLength = (od) => Math.max(2.2 * od, (1.6 * minPx) / pxPerMm);
     mesh.supports.forEach((sup, k) => {
+      // supports variables / constants en 3D : volume trié en profondeur avec les tubes
+      // (profondeur du milieu du ressort, sous le tube : masqué par le tube vu de dessus)
+      if (solid && (sup.kind === 'variable' || sup.kind === 'constant')) {
+        const p = P[sup.node];
+        const od = odAtNode(sup.node) || 100;
+        const Lh = hangerLength(od);
+        const mid = vec.add(p, vec.scale(mesh.up, -(od / 2 + Lh / 2)));
+        prims.push({ depth: this.toScreen(mid)[2], draw: (c) => this.drawHanger3D(c, p, mesh.up, od / 2, Lh, SUPPORT_COLORS[sup.kind], od, sup.kind === 'constant') });
+        return;
+      }
       const { springs, fullAnchor } = supInfo[k];
       if (!fullAnchor && !springs.some((s) => s.rot)) return;
       const p = P[sup.node];
@@ -334,7 +346,6 @@ export class Viewer {
     prims.sort((a, b) => b.depth - a.depth);
     for (const pr of prims) pr.draw(ctx);
 
-    const minPx = 14; // longueur minimale lisible d'une flèche (px)
     mesh.supports.forEach((sup, k) => {
       const p = P[sup.node];
       const od = odAtNode(sup.node) || 100;
@@ -347,9 +358,7 @@ export class Viewer {
       const L = Math.max(1.5 * od, minPx / pxPerMm);
       if (sup.kind === 'variable' || sup.kind === 'constant') {
         // support variable / constant : ressort sous le tube, effort vers le haut
-        const Lh = Math.max(2.2 * od, (1.6 * minPx) / pxPerMm);
-        if (solid) this.drawHanger3D(ctx, p, mesh.up, R, Lh, color, od, sup.kind === 'constant');
-        else this.drawHanger(ctx, p, mesh.up, R, Lh, color, od, sup.kind === 'constant');
+        if (!solid) this.drawHanger(ctx, p, mesh.up, R, hangerLength(od), color, od, sup.kind === 'constant'); // en 3D : dessiné avec les tubes
         return;
       }
       for (const sp of springs.filter((x) => !x.rot)) {
