@@ -663,3 +663,11 @@ test('Forces nodales : console chargée en bout (flèche PL³/3EI, moment M·L/E
   m.loadCases[0].forces[0].node = 'X';
   assert.throws(() => runAnalysis(m), /inexistant/);
 });
+
+test('Forces nodales : avertissement (hors équations du code)', () => {
+  const m = setup();
+  m.components = ensureIds({ components: [pipe('1', '2', 2000, 0, 0), sup('1', 'anchor')] }).components;
+  m.loadCases = [{ id: 'F1', type: 'forces', label: 'Efforts', enabled: true, forces: [{ node: '2', FZ: -100 }] }];
+  const r = runAnalysis(m);
+  assert.ok(r.warnings.some((w) => /F1.*sans effet sur les équations/.test(w)), r.warnings.join(' | '));
+});

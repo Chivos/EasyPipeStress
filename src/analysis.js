@@ -21,6 +21,7 @@ export function runAnalysis(model) {
     if (lc.enabled === false) continue;
     const type = loadTypes.get(lc.type);
     const run = type.run(ctx, lc);
+    if (lc.type === 'forces' && code) warnings.push(`Cas ${lc.id}${lc.label ? ` (${lc.label})` : ''} : forces nodales non attribuées à un chargement du code (poids, dilatation, séisme), sans effet sur les équations de ${code.label}.`);
     // déplacements et efforts sur supports en repères locaux (déjà combinés pour le séisme)
     const r = run.uLocal ? run : { ...run, ...localResponses(run, mesh) };
     if (lc.type === 'seismic') {
