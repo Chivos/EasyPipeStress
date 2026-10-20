@@ -498,36 +498,67 @@ export class Viewer {
     ctx.font = 'bold 11px system-ui, sans-serif';
     ctx.textAlign = 'left';
     ctx.fillText(`Repère local — ${label}`, x0 + 8, y0 + 15);
-    const o = [x0 + bw / 2, y0 + 64];
-    const axes = [
+    this.drawAxes(ctx, C, [x0 + bw / 2, y0 + 64], 32, [
       ['U', frame.U, '#c0392b'],
       ['V', frame.V, '#27ae60'],
       ['W', frame.W, '#2471a3'],
-    ];
-    // axes les plus éloignés de l'observateur dessinés d'abord
-    const items = axes.map(([name, d, color]) => ({ name, color, q: this.project(d) })).sort((a, b) => (a.q[2] ?? 0) - (b.q[2] ?? 0));
+    ]);
+  }
+
+  /**
+   * Trièdre en perspective cavalière : axes dessinés du plus éloigné au plus
+   * proche, ceux qui s'enfoncent derrière l'écran en tirets et estompés, ceux
+   * qui viennent vers l'observateur en trait plein et épais, pour lever
+   * l'ambiguïté de lecture (sens direct : 1ᵉʳ axe × 2ᵉ axe = 3ᵉ axe).
+   */
+  drawAxes(ctx, C, o, len, axes) {
+    // q[2] : profondeur (positive = derrière l'écran)
+    const items = axes.map(([name, d, color]) => ({ name, color, q: this.project(d) })).sort((a, b) => b.q[2] - a.q[2]);
     for (const { name, color, q } of items) {
-      const e = [o[0] + q[0] * 32, o[1] - q[1] * 32];
+      const back = q[2] > 0.05;
+      const e = [o[0] + q[0] * len, o[1] - q[1] * len];
+      ctx.globalAlpha = back ? 0.55 : 1;
       ctx.strokeStyle = color;
       ctx.fillStyle = color;
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = back ? 1.6 : 2.6;
+      ctx.setLineDash(back ? [3, 2] : []);
       ctx.beginPath();
       ctx.moveTo(o[0], o[1]);
       ctx.lineTo(e[0], e[1]);
       ctx.stroke();
-      // pointe de flèche
-      const len = Math.hypot(e[0] - o[0], e[1] - o[1]);
-      if (len > 6) {
-        const ux = (e[0] - o[0]) / len;
-        const uy = (e[1] - o[1]) / len;
+      ctx.setLineDash([]);
+      const l = Math.hypot(e[0] - o[0], e[1] - o[1]);
+      const ux = l > 1e-6 ? (e[0] - o[0]) / l : 0;
+      const uy = l > 1e-6 ? (e[1] - o[1]) / l : -1;
+      if (l > 6) {
+        // pointe de flèche
+        const hw = back ? 3 : 3.8;
         ctx.beginPath();
         ctx.moveTo(e[0] + ux * 4, e[1] + uy * 4);
-        ctx.lineTo(e[0] - ux * 4 - uy * 3.5, e[1] - uy * 4 + ux * 3.5);
-        ctx.lineTo(e[0] - ux * 4 + uy * 3.5, e[1] - uy * 4 - ux * 3.5);
+        ctx.lineTo(e[0] - ux * 4 - uy * hw, e[1] - uy * 4 + ux * hw);
+        ctx.lineTo(e[0] - ux * 4 + uy * hw, e[1] - uy * 4 - ux * hw);
         ctx.fill();
+      } else {
+        // axe vu de bout : point (vers l'observateur) ou croix (vers l'arrière)
+        ctx.beginPath();
+        if (back) {
+          ctx.moveTo(o[0] - 4, o[1] - 4);
+          ctx.lineTo(o[0] + 4, o[1] + 4);
+          ctx.moveTo(o[0] + 4, o[1] - 4);
+          ctx.lineTo(o[0] - 4, o[1] + 4);
+          ctx.stroke();
+        } else {
+          ctx.arc(o[0], o[1], 4, 0, 2 * Math.PI);
+          ctx.stroke();
+        }
       }
       ctx.font = 'bold 12px system-ui, sans-serif';
-      ctx.fillText(name, e[0] + (len > 6 ? ((e[0] - o[0]) / len) * 7 : 6) - 4, e[1] + (len > 6 ? ((e[1] - o[1]) / len) * 7 : -6) + 4);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(name, l > 6 ? e[0] + ux * 10 : o[0] - 11, l > 6 ? e[1] + uy * 10 : o[1] + 11);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+      ctx.globalAlpha = 1;
     }
     ctx.fillStyle = C.text;
     ctx.beginPath();
@@ -536,25 +567,11 @@ export class Viewer {
   }
 
   drawTriad(ctx, C, hgt) {
-    const o = [44, hgt - 44];
-    const axes = [
+    this.drawAxes(ctx, C, [48, hgt - 48], 28, [
       ['X', [1, 0, 0], '#c0392b'],
       ['Y', [0, 1, 0], '#27ae60'],
       ['Z', [0, 0, 1], '#2471a3'],
-    ];
-    ctx.font = 'bold 11px system-ui, sans-serif';
-    for (const [name, d, color] of axes) {
-      const q = this.project(d);
-      const e = [o[0] + q[0] * 28, o[1] - q[1] * 28];
-      ctx.strokeStyle = color;
-      ctx.fillStyle = color;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(o[0], o[1]);
-      ctx.lineTo(e[0], e[1]);
-      ctx.stroke();
-      ctx.fillText(name, e[0] + 3, e[1] + 3);
-    }
+    ]);
   }
 
   drawLegend(ctx, C, w, legend) {
