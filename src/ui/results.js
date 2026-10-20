@@ -50,7 +50,9 @@ function highlightOf(state, mesh) {
   // ligne de tableau de résultats : élément(s) et nœud désignés directement
   if (typeof id === 'object') {
     const node = id.node != null ? mesh.nodeIndex.get(String(id.node)) : undefined;
-    return { elems: new Set(id.elems ?? []), node, keepColor: true };
+    // repère local choisi : trièdre U, V, W du nœud survolé
+    const frame = id.frame && node != null ? mesh.frames?.[node] : null;
+    return { elems: new Set(id.elems ?? []), node, keepColor: true, frame };
   }
   const comp = state.model.components.find((c) => c.id === id);
   if (!comp) return null;
@@ -292,7 +294,7 @@ export function renderBottom(app) {
             .map(({ n, i }) => [n.label, ...[0, 1, 2].map((d) => fmt(cu[i * 6 + d], 2)), ...[3, 4, 5].map((d) => fmt((cu[i * 6 + d] * 180) / Math.PI, 3))]),
           (row) => app.select(row[0]),
           undefined,
-          (row) => app.highlight(row ? { node: row[0] } : null),
+          (row) => app.highlight(row ? { node: row[0], frame: local } : null),
         ),
       );
     case 'supports':
@@ -316,7 +318,7 @@ export function renderBottom(app) {
             openSupportResults(r, row.k, local);
           },
           undefined,
-          (row) => app.highlight(row ? { node: row[0] } : null),
+          (row) => app.highlight(row ? { node: row[0], frame: local } : null),
         ),
       );
     case 'forces':
