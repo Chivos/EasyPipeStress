@@ -261,6 +261,17 @@ export function renderBottom(app) {
     cases.map((x) => h('option', { value: x.id, selected: x.id === f.case }, `${x.id} — ${x.label}${x.signed ? '' : ' (enveloppe)'}`)),
   );
   const internalChk = h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: f.internal, onchange: (e) => app.setUi(() => (f.internal = e.target.checked)) }), ' nœuds internes');
+  // repère de présentation des déplacements et efforts sur supports
+  const local = f.frame === 'local';
+  const ax = frameAxes(local);
+  const cu = c && (local ? c.uLocal : c.u);
+  const cs = c && (local ? c.supportLoadsLocal : c.supportLoads);
+  const frameSel = h(
+    'select',
+    { title: LOCAL_FRAME_HELP, onchange: (e) => app.setUi(() => (f.frame = e.target.value)) },
+    h('option', { value: 'global', selected: !local }, 'Repère global (X, Y, Z)'),
+    h('option', { value: 'local', selected: local }, 'Repère local (U, V, W)'),
+  );
   const nodeOk = (label) => {
     const n = r.mesh.nodes[r.mesh.nodeIndex.get(label)];
     return f.internal || n?.kind !== 'internal';
@@ -272,13 +283,13 @@ export function renderBottom(app) {
       return h(
         'div',
         {},
-        h('div', { class: 'toolbar' }, caseSel, internalChk, c && !c.signed ? h('span', { class: 'muted' }, 'Valeurs enveloppes (non signées).') : null),
+        h('div', { class: 'toolbar' }, caseSel, internalChk, frameSel, c && !c.signed ? h('span', { class: 'muted' }, 'Valeurs enveloppes (non signées).') : null),
         simpleTable(
-          ['Nœud', 'DX (mm)', 'DY (mm)', 'DZ (mm)', 'RX (°)', 'RY (°)', 'RZ (°)'],
+          ['Nœud', ...ax.map((a) => `D${a} (mm)`), ...ax.map((a) => `R${a} (°)`)],
           r.mesh.nodes
             .map((n, i) => ({ n, i }))
             .filter(({ n }) => nodeOk(n.label))
-            .map(({ n, i }) => [n.label, ...[0, 1, 2].map((d) => fmt(c.u[i * 6 + d], 2)), ...[3, 4, 5].map((d) => fmt((c.u[i * 6 + d] * 180) / Math.PI, 3))]),
+            .map(({ n, i }) => [n.label, ...[0, 1, 2].map((d) => fmt(cu[i * 6 + d], 2)), ...[3, 4, 5].map((d) => fmt((cu[i * 6 + d] * 180) / Math.PI, 3))]),
           (row) => app.select(row[0]),
           undefined,
           (row) => app.highlight(row ? { node: row[0] } : null),
@@ -288,15 +299,21 @@ export function renderBottom(app) {
       return h(
         'div',
         {},
-        h('div', { class: 'toolbar' }, caseSel, h('span', { class: 'muted' }, 'Efforts exercés par la tuyauterie sur le support (repère global). Clic sur une ligne : tous les cas et combinaisons.')),
+        h(
+          'div',
+          { class: 'toolbar' },
+          caseSel,
+          frameSel,
+          h('span', { class: 'muted' }, `Efforts exercés par la tuyauterie sur le support (${local ? 'repère local U, V, W du nœud' : 'repère global'}). Clic sur une ligne : tous les cas et combinaisons.`),
+        ),
         simpleTable(
-          ['Nœud', 'Repère', 'Type', 'FX (N)', 'FY (N)', 'FZ (N)', 'MX (N·m)', 'MY (N·m)', 'MZ (N·m)'],
+          ['Nœud', 'Repère', 'Type', ...ax.map((a) => `F${a} (N)`), ...ax.map((a) => `M${a} (N·m)`)],
           r.mesh.supports.map((s, k) =>
-            Object.assign([r.mesh.nodes[s.node].label, s.label, SUPPORT_KINDS[s.kind]?.label ?? s.kind, ...[0, 1, 2].map((d) => fmt(c.supportLoads[k * 6 + d], 0)), ...[3, 4, 5].map((d) => fmt(c.supportLoads[k * 6 + d] / 1000, 0))], { k }),
+            Object.assign([r.mesh.nodes[s.node].label, s.label, SUPPORT_KINDS[s.kind]?.label ?? s.kind, ...[0, 1, 2].map((d) => fmt(cs[k * 6 + d], 0)), ...[3, 4, 5].map((d) => fmt(cs[k * 6 + d] / 1000, 0))], { k }),
           ),
           (row) => {
             app.select(row[0]);
-            openSupportResults(r, row.k);
+            openSupportResults(r, row.k, local);
           },
           undefined,
           (row) => app.highlight(row ? { node: row[0] } : null),
@@ -581,17 +598,34 @@ function hangerText(r, k) {
   return ` ${parts.join(' ; ')}.`;
 }
 
-/** Définition des résultats complets d'un support (repère global). */
-export function supportPoint(r, k) {
+export const LOCAL_FRAME_HELP =
+  'Repère local (U, V, W) d’un nœud : W suivant l’axe du tube qui y arrive (tube droit de préférence), V dans le plan (W, verticale) au plus près de la verticale, U = V × W. Tube vertical : U suivant X (Y si X est vertical).';
+
+/** Noms des axes du repère de présentation. */
+export const frameAxes = (local) => (local ? ['U', 'V', 'W'] : ['X', 'Y', 'Z']);
+
+/** Description du repère local d'un nœud (élément de référence et cosinus directeurs). */
+export function frameText(r, node) {
+  const f = r.mesh.frames?.[node];
+  if (!f) return 'Repère local indisponible (nœud isolé) : repère global.';
+  const v = (a) => `(${a.map((x) => fmt(Math.abs(x) < 5e-4 ? 0 : x, 3)).join(' ; ')})`;
+  return `Repère local : W suivant l’élément ${r.mesh.elements[f.elem].label} ; U = ${v(f.U)}, V = ${v(f.V)}, W = ${v(f.W)} dans le repère global.`;
+}
+
+/** Définition des résultats complets d'un support (repère global ou local du nœud). */
+export function supportPoint(r, k, local = false) {
   const sup = r.mesh.supports[k];
   const kind = SUPPORT_KINDS[sup.kind]?.label ?? sup.kind;
+  const ax = frameAxes(local);
+  const loads = (c) => (local ? c.supportLoadsLocal : c.supportLoads);
+  const disp = (c) => (local ? c.uLocal : c.u);
   return {
     title: `Support ${sup.label || ''} — nœud ${r.mesh.nodes[sup.node].label}`.replace('  ', ' '),
-    subtitle: `${kind} — efforts exercés par la tuyauterie sur le support et déplacements du nœud, repère global.${hangerText(r, k)}`,
-    columns: ['FX (N)', 'FY (N)', 'FZ (N)', 'MX (N·m)', 'MY (N·m)', 'MZ (N·m)', 'DX (mm)', 'DY (mm)', 'DZ (mm)'],
+    subtitle: `${kind} — efforts exercés par la tuyauterie sur le support et déplacements du nœud, ${local ? frameText(r, sup.node).replace(/^R/, 'r') : 'repère global.'}${hangerText(r, k)}`,
+    columns: [...ax.map((a) => `F${a} (N)`), ...ax.map((a) => `M${a} (N·m)`), ...ax.map((a) => `D${a} (mm)`)],
     values: (c) => [
-      ...Array.from({ length: 6 }, (_, d) => c.supportLoads[k * 6 + d] / (d < 3 ? 1 : 1000)),
-      ...[0, 1, 2].map((d) => c.u[sup.node * 6 + d]),
+      ...Array.from({ length: 6 }, (_, d) => loads(c)[k * 6 + d] / (d < 3 ? 1 : 1000)),
+      ...[0, 1, 2].map((d) => disp(c)[sup.node * 6 + d]),
     ],
     derived: [['F rés. (N)', [0, 1, 2]], ['M rés. (N·m)', [3, 4, 5]], ['D rés. (mm)', [6, 7, 8]]],
     digits: [0, 0, 0, 0, 0, 0, 2, 2, 2, 0, 0, 2],
@@ -617,8 +651,8 @@ export function forcePoint(r, ie, end) {
 
 const openPoint = (r, d) => openPointResults(d.title, d.subtitle, r, d.columns, d.values, d.derived, d.digits);
 
-/** Efforts sur un support, tous cas et combinaisons (repère global). */
-export const openSupportResults = (r, k) => openPoint(r, supportPoint(r, k));
+/** Efforts sur un support, tous cas et combinaisons (repère global ou local). */
+export const openSupportResults = (r, k, local = false) => openPoint(r, supportPoint(r, k, local));
 
 /** Efforts internes à une extrémité d'élément, tous cas et combinaisons (repère local). */
 export const openForceResults = (r, ie, end) => openPoint(r, forcePoint(r, ie, end));

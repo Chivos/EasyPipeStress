@@ -101,7 +101,7 @@ function runStatic(sys, lc) {
     const a = [0, 0, 0];
     a[DIRS.indexOf(d)] = g * G_STD;
     const r = sys.solveStatic(bodyForceLoads(sys, a));
-    const v = pack(r).map(Math.abs);
+    const v = pack(r, sys).map(Math.abs);
     perDir[d] = v;
     vectors.push(v);
   }
@@ -153,7 +153,7 @@ function runSpectral(sys, lc) {
       const sa = factor * spectrumAt(sp.points, m.freq, lc.interp) * G_STD;
       const q = (m.gamma[di] * sa) / (m.omega * m.omega);
       const u = m.phi.map((v) => v * q);
-      const v = pack({ u, ...sys.responses(u) });
+      const v = pack({ u, ...sys.responses(u) }, sys);
       const alpha = alphaOf(m.freq);
       if (alpha > 0) {
         rigidSum ??= new Float64Array(v.length);
@@ -173,7 +173,7 @@ function runSpectral(sys, lc) {
     if (lc.missingMass !== false) {
       const a0 = factor * zpa(sp.points) * G_STD;
       const F = residual.map((v) => v * a0);
-      const mm = pack(sys.solveStatic({ F }));
+      const mm = pack(sys.solveStatic({ F }), sys);
       if (rigidSum) for (let k = 0; k < mm.length; k++) rigidSum[k] += mm[k];
       else rigidSum = mm;
     }

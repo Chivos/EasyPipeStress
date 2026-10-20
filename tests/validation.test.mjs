@@ -604,3 +604,49 @@ test('Spectre : interpolation log-log ou linéaire', () => {
   near(spectrumAt(pts, 13.2, 'linear'), 1 - (5.2 / 7) * 0.45, 1e-12, 'linéaire');
   near(spectrumAt(pts, 13.2), Math.exp(Math.log(0.55) * (Math.log(13.2 / 8) / Math.log(15 / 8))), 1e-12, 'log-log');
 });
+
+test('Repère local U, V, W : axes, projection et séisme projeté avant combinaison', async () => {
+  const { localAxes } = await import('../src/core/frames.js');
+  const { bodyForceLoads } = await import('../src/loads/common.js');
+  const close = (a, b, msg) => a.forEach((v, i) => near(v, b[i], 1e-12, `${msg}[${i}]`));
+  // tube horizontal suivant +X, Z vertical : U = +Y, V = +Z, W = +X
+  let f = localAxes([1, 0, 0], [0, 0, 1]);
+  close(f.U, [0, 1, 0], 'U');
+  close(f.V, [0, 0, 1], 'V');
+  // tube vertical : U = X, V = W × U
+  f = localAxes([0, 0, 1], [0, 0, 1]);
+  close(f.U, [1, 0, 0], 'U vertical');
+  close(f.V, [0, 1, 0], 'V vertical');
+  // vertical Y (convention de l'autre logiciel) : tube suivant X → U = −Z, V = Y
+  f = localAxes([1, 0, 0], [0, 1, 0]);
+  close(f.U, [0, 0, -1], 'U (Y vertical)');
+  // ligne biaise à 45° dans le plan horizontal, encastrée en 1
+  const m = setup({ density: 7850, maxLen: 500 });
+  m.components = ensureIds({ components: [pipe('1', '2', 2000, 2000, 0, { T1: 150 }), pipe('2', '3', 0, 0, 1500, { T1: 150 }), sup('1', 'anchor'), sup('3', 'guide')] }).components;
+  m.loadCases = [
+    { id: 'T1', type: 'thermal', enabled: true },
+    { id: 'S1', type: 'seismic', enabled: true, method: 'static', directional: 'SRSS', staticAcc: { X: 1, Y: 0.5 }, levels: [{ level: 'C', enabled: true, factor: 1 }] },
+  ];
+  const r = runAnalysis(m);
+  const fr = r.mesh.frames;
+  const k1 = r.mesh.nodeIndex.get('1');
+  const s2 = Math.SQRT1_2;
+  close(fr[k1].W, [s2, s2, 0], 'W au nœud 1');
+  close(fr[k1].U, [-s2, s2, 0], 'U au nœud 1');
+  const dot = (a, v, o) => a[0] * v[o] + a[1] * v[o + 1] + a[2] * v[o + 2];
+  const T = r.cases.find((c) => c.id === 'T1');
+  const loc = (frm, v, o) => [frm.U, frm.V, frm.W].map((a) => dot(a, v, o));
+  near(T.supportLoadsLocal[2], loc(fr[k1], T.supportLoads, 0)[2], 1e-9, 'effort axial W (thermique)');
+  const i2 = r.mesh.nodeIndex.get('2');
+  close(Array.from(T.uLocal.slice(i2 * 6, i2 * 6 + 3)), loc(fr[i2], T.u, i2 * 6), 'déplacement local (thermique)');
+  // séisme : réponses directionnelles signées projetées, puis SRSS
+  const dirs = [[9806.65, 0, 0], [0, 0.5 * 9806.65, 0]].map((a) => r.sys.solveStatic(bodyForceLoads(r.sys, a)));
+  const S = r.cases.find((c) => c.base === 'S1');
+  for (let d = 0; d < 3; d++) {
+    const exp = Math.hypot(...dirs.map((x) => loc(fr[k1], x.supportLoads, 0)[d]));
+    near(S.supportLoadsLocal[d], exp, 1e-6, `effort sismique local ${'UVW'[d]}`);
+  }
+  // la projection de l'enveloppe globale ne donnerait pas le même résultat
+  const wrong = Math.abs(loc(fr[k1], S.supportLoads, 0)[2]);
+  assert.ok(Math.abs(wrong - S.supportLoadsLocal[2]) > 1, 'projection avant combinaison');
+});
