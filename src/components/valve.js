@@ -1,7 +1,9 @@
 // Robinet (ou tout équipement en ligne rigide : bride, clapet…) modélisé par
 // un élément de poutre « rigide » entre deux nœuds :
 //  - longueur et orientation données par DX, DY, DZ (face à face du robinet) ;
-//  - masse totale répartie sur sa longueur (poids propre et inertie sismique) ;
+//  - masse totale répartie sur sa longueur (poids propre et inertie sismique),
+//    plus le fluide contenu (section intérieure du tube raccordé × longueur),
+//    comme PIPESTRESS ; le calorifuge éventuel est à inclure dans la masse ;
 //  - raideur = facteur × raideur du tube de raccordement (10 par défaut, comme
 //    dans la pratique des logiciels de flexibilité : assez raide pour ne pas
 //    fléchir, sans dégrader le conditionnement numérique qu'une raideur
@@ -20,7 +22,7 @@ export const valve = {
     { key: 'dx', label: 'DX', unit: 'mm', type: 'number', width: 70 },
     { key: 'dy', label: 'DY', unit: 'mm', type: 'number', width: 70 },
     { key: 'dz', label: 'DZ', unit: 'mm', type: 'number', width: 70 },
-    { key: 'mass', label: 'Masse', unit: 'kg', type: 'number', width: 70, title: 'Masse totale du robinet (corps, chapeau, actionneur), répartie sur sa longueur' },
+    { key: 'mass', label: 'Masse', unit: 'kg', type: 'number', width: 70, title: 'Masse du robinet vide (corps, chapeau, actionneur, calorifuge), répartie sur sa longueur ; le fluide contenu est ajouté automatiquement' },
     { key: 'stiffFactor', label: 'Rigidité', unit: '× tube', type: 'number', width: 64, placeholder: '10', title: 'Raideur du robinet en multiple de celle du tube raccordé (10 recommandé)' },
     { key: 'section', label: 'Raccord.', type: 'select', options: (m) => m.sections.map((s) => s.id), width: 100, title: 'Section du tube de raccordement (base de la raideur)' },
     { key: 'label', label: 'Repère', type: 'text', width: 90 },

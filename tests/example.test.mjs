@@ -134,10 +134,11 @@ test('Modèles d’exemple : tous calculables, sans avertissement de maillage', 
     assert.ok(r.check.rows.length > 0, ex.id);
     assert.ok(Number.isFinite(r.check.summary.maxRatio), ex.id);
   }
-  // supports à ressort : précharges réglées sur le poids (déplacement vertical quasi nul)
+  // supports à ressort : précharges réglées sur le poids (déplacement vertical
+  // faible ; précharges identiques au modèle PIPESTRESS, sans le fluide du robinet)
   const r = runAnalysis(EXAMPLES.find((e) => e.id === 'springs').build());
   const W = r.cases.find((c) => c.id === 'W');
-  for (const lab of ['25', '35', '45']) assert.ok(Math.abs(W.u[r.mesh.nodeIndex.get(lab) * 6 + 2]) < 0.1, `uz ${lab}`);
+  for (const lab of ['25', '35', '45']) assert.ok(Math.abs(W.u[r.mesh.nodeIndex.get(lab) * 6 + 2]) < 0.5, `uz ${lab}`);
   // comparaison PIPESTRESS : taux max de l'éq. (7) = 0,396 (référence PIPESTRESS 0,396)
   const ps = runAnalysis(EXAMPLES.find((e) => e.id === 'pipestress').build());
   const max7 = Math.max(...ps.check.rows.filter((x) => x.eq === '7').map((x) => x.ratio));

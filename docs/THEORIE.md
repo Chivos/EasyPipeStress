@@ -62,8 +62,10 @@ extrémités des trois éléments qui aboutissent au nœud, le plus pénalisant
 ### 1.4 Robinets
 
 Le robinet est un élément de poutre « rigide » entre deux nœuds, de longueur
-égale à son face-à-face : sa masse totale est répartie sur sa longueur (poids
-propre et inertie sismique), sa raideur vaut un facteur (10 par défaut) fois
+égale à son face-à-face : sa masse (robinet vide, calorifuge compris) est
+répartie sur sa longueur, et s'y ajoute le fluide contenu (section intérieure du
+tube raccordé × longueur, comme dans PIPESTRESS) pour le poids propre et
+l'inertie sismique ; sa raideur vaut un facteur (10 par défaut) fois
 celle du tube de raccordement, et il se dilate à la température du tube
 raccordé. Ce facteur suit la pratique des logiciels de flexibilité : un corps
 de robinet est beaucoup plus raide que le tube, mais une raideur « infinie »
@@ -129,7 +131,7 @@ spectre par direction.
 
 Pour chaque direction d'excitation (X, Y, Z) :
 
-1. réponse du mode i : qᵢ = Γᵢ·Sa(fᵢ)/ωᵢ², avec interpolation log-log du
+1. réponse du mode i : qᵢ = Γᵢ·Sa(fᵢ)/ωᵢ², avec interpolation log-log (ou linéaire, au choix) du
    spectre ;
 2. combinaison modale **SRSS** ou **CQC** (Der Kiureghian, 1981 [6]) :
    ρᵢⱼ = 8ξ²(1+r)r^1,5 / [(1−r²)² + 4ξ²r(1+r)²], r = ωⱼ/ωᵢ ;
@@ -267,6 +269,7 @@ Vérifications numériques (tests automatiques) :
 | Même ligne, poids propre (tube plein d'eau) + pression, éq. (6) | PIPESTRESS | Σ réactions < 0,1 % ; réactions et déplacements ≈ 1 % ; taux < 0,5 % (max 0,594 contre 0,592) |
 | Même ligne, analyse modale | PIPESTRESS | masse totale identique (239,3 kg) ; 6 premières fréquences < 0,8 % ; masses modales effectives ≈ 1 % |
 | Même ligne, séisme spectral (CQC, SRSS directions) + éq. (10C) | PIPESTRESS | contraintes de l'éq. (10C) < 0,5 % aux points critiques (taux 1,369 contre 1,368 en 50, 1,080 contre 1,079 au coude 40) ; déplacements W + S ≈ 1 % |
+| Ligne DN200 P265GH à supports à ressort (exemple 3) : supports variables 150 N/mm + précharge, support constant, robinet avec fluide, masse ponctuelle ; spectre à interpolation linéaire, modes jusqu'à 100 Hz + masse manquante | PIPESTRESS | poids : réactions < 0,1 % ; fréquences < 1 % ; éq. (6) < 0,5 % ; éq. (7) < 0,6 % ; éq. (10C) < 0,1 % ; efforts sismiques des ressorts < 0,1 % ; réactions thermiques des ressorts 3 à 4 % (PIPESTRESS les imprime à Eh) |
 | Fréquence propre d'une console | 1,875²/2π·√(EI/mL⁴) | < 0,5 % |
 | Oscillateur simple, spectre plat | m·Sa·L | < 10⁻⁴ |
 | Masse manquante, modes tronqués | réponse statique rigide | < 10⁻⁶ |

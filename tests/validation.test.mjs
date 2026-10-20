@@ -404,6 +404,14 @@ test('Robinet : masse répartie, raideur × facteur, dilatation, pas de vérific
   near(-r.cases[0].supportLoads[2], 0.2 * 9806.65, 1e-6, 'réaction = poids du robinet');
   near(nodeDisp(r, 'T1', '4')[0], 12e-6 * 100 * 2400, 1e-6, 'dilatation libre (robinet compris)');
   assert.ok(!r.check.rows.some((x) => x.kind === 'valve'), 'corps du robinet non vérifié');
+  // fluide contenu dans le robinet : section intérieure du tube × longueur
+  m.sections[0].fluidDensity = 1000;
+  const rf = runAnalysis(m);
+  const vf = rf.mesh.elements.find((e) => e.kind === 'valve');
+  const pf = rf.mesh.elements.find((e) => e.kind !== 'valve');
+  assert.ok(vf.mpl.fluid > 0, 'fluide compté dans le robinet');
+  near(vf.mpl.fluid, pf.mpl.fluid, 1e-12, 'même masse linéique de fluide que le tube');
+  near(-rf.cases[0].supportLoads[2], (0.2 + pf.mpl.fluid * 2400) * 9806.65, 1e-6, 'réaction = robinet + fluide sur 2,4 m');
   m.components.push({ id: 'cb', type: 'bend', node: '2', radius: 200 });
   m.components.find((c) => c.n1 === '2' && c.type === 'valve').dy = 400;
   m.components.find((c) => c.n1 === '2' && c.type === 'valve').dx = 0;
@@ -589,4 +597,10 @@ test('Supports variable et constant : précharge (poids) et raideur (dilatation)
   const old = JSON.parse(JSON.stringify(m2));
   old.components.find((c) => c.kind === 'variable').kind = 'spring';
   assert.equal(normalizeModel(old).components.find((c) => c.type === 'support' && c.node === '2').kind, 'variable');
+});
+
+test('Spectre : interpolation log-log ou linéaire', () => {
+  const pts = [[8, 1], [15, 0.55]];
+  near(spectrumAt(pts, 13.2, 'linear'), 1 - (5.2 / 7) * 0.45, 1e-12, 'linéaire');
+  near(spectrumAt(pts, 13.2), Math.exp(Math.log(0.55) * (Math.log(13.2 / 8) / Math.log(15 / 8))), 1e-12, 'log-log');
 });

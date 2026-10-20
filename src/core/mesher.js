@@ -183,7 +183,9 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
     const valve = p.valve ?? null;
     // robinet : masse totale répartie sur la longueur, sans fluide ni calorifuge
     const metal = valve ? kgToT(valve.mass) / L : densityToInternal(mat.density) * sp.A;
-    const fluid = valve ? 0 : densityToInternal(+sec.fluidDensity || 0) * sp.Ai;
+    // robinet : le fluide contenu (alésage ≈ tube raccordé) s'ajoute à la masse
+    // donnée du corps ; le calorifuge n'est pas compté (inclus dans la masse donnée)
+    const fluid = densityToInternal(+sec.fluidDensity || 0) * sp.Ai;
     const insul = valve ? 0 : densityToInternal(+sec.insulDensity || 0) * sp.Ains;
     elements.push({
       index: elements.length,

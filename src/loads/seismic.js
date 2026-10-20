@@ -71,6 +71,15 @@ export const seismic = {
     { key: 'directional', label: 'Combinaison directionnelle', type: 'select', options: () => ['SRSS', '100-40-40'] },
     { key: 'rigid', label: 'Réponse rigide des modes', type: 'select', options: () => ['gupta', 'none'],
       default: 'gupta', optionLabel: (v) => (v === 'gupta' ? 'Méthode de Gupta (RG 1.92 rév. 3)' : 'Aucune (tous les modes périodiques)'), title: 'Part rigide des modes entre f1 et f_ZPA, cumulée algébriquement avec la masse manquante' },
+    {
+      key: 'interp',
+      label: 'Interpolation du spectre',
+      type: 'select',
+      options: () => ['loglog', 'linear'],
+      default: 'loglog',
+      optionLabel: (v) => (v === 'linear' ? 'Linéaire (fréquence, accélération)' : 'Log-log'),
+      title: 'Interpolation de l’accélération entre deux points du spectre : log-log (usuelle) ou linéaire en fréquence et en accélération (certains logiciels).',
+    },
     { key: 'sameHorizontal', label: 'Même spectre pour les deux directions horizontales', type: 'checkbox', default: true },
     { key: 'missingMass', label: 'Correction de masse manquante (ZPA)', type: 'checkbox', default: true },
   ],
@@ -141,7 +150,7 @@ function runSpectral(sys, lc) {
     const residual = new Float64Array(n); // M·r − Σ Γ·M·φ
     for (let node = 0; node < sys.mesh.nodes.length; node++) residual[node * 6 + di] = mass[node * 6 + di];
     for (const m of used) {
-      const sa = factor * spectrumAt(sp.points, m.freq) * G_STD;
+      const sa = factor * spectrumAt(sp.points, m.freq, lc.interp) * G_STD;
       const q = (m.gamma[di] * sa) / (m.omega * m.omega);
       const u = m.phi.map((v) => v * q);
       const v = pack({ u, ...sys.responses(u) });
