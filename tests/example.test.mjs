@@ -161,10 +161,31 @@ test('Problème de Hovgaard (SSLL101) : déplacements du point 3 et moment au po
   const i = r.mesh.nodeIndex.get('C1A');
   for (const [id, v] of Object.entries(ref)) {
     const c = r.cases.find((x) => x.id === id);
-    v.forEach((x, d) => assert.ok(Math.abs(c.u[i * 6 + d] / x - 1) < 0.002, `${id} ${'XYZ'[d]} : ${c.u[i * 6 + d]} / ${x}`));
+    v.forEach((x, d) => assert.ok(Math.abs(c.u[i * 6 + d] / x - 1) < 0.003, `${id} ${'XYZ'[d]} : ${c.u[i * 6 + d]} / ${x}`));
   }
   const W = r.cases.find((x) => x.id === 'W');
   const k = r.mesh.supports.findIndex((s) => s.label === 'T1');
   const meq = Math.hypot(...[3, 4, 5].map((d) => W.supportLoads[k * 6 + d] / 1000));
   assert.ok(Math.abs(meq / 189.769 - 1) < 0.001, `Meq ${meq}`);
+});
+
+test('Problème de Hovgaard (SDLX02) : fréquences et réponse spectrale', async () => {
+  const { EXAMPLES } = await import('../src/core/examples.js');
+  const r = runAnalysis(normalizeModel(JSON.parse(JSON.stringify(EXAMPLES.find((e) => e.id === 'hovgaard').build()))));
+  // fréquences de référence avec matrice de masse diagonale (masses concentrées)
+  [10.18, 19.54, 25.47, 48.09, 52.86, 75.94, 80.11].forEach((f, k) => assert.ok(Math.abs(r.modal.modes[k].freq / f - 1) < 0.02, `mode ${k + 1} : ${r.modal.modes[k].freq}`));
+  const S = r.cases.find((c) => c.base === 'S1');
+  const disp = { C1A: [4.847, 2.192], C1B: [4.808, 2.914, 0.6507], 7: [3.588, 2.914, 0.8599], C2A: [2.342, 2.913, 1.027], C2B: [null, 0.9375, 0.3364] };
+  for (const [n, v] of Object.entries(disp)) {
+    const i = r.mesh.nodeIndex.get(n);
+    v.forEach((x, d) => x != null && assert.ok(Math.abs(S.u[i * 6 + d] / x - 1) < 0.015, `${n} ${'XYZ'[d]} : ${S.u[i * 6 + d]} / ${x}`));
+  }
+  const reac = { T1: [2132, 1241, 564.6, 2352, 4746, 937.3], T15: [1653, 3354, 893.7, 170.8, 1668, 4903] };
+  for (const [lab, v] of Object.entries(reac)) {
+    const k = r.mesh.supports.findIndex((s) => s.label === lab);
+    v.forEach((x, d) => {
+      const y = S.supportLoads[k * 6 + d] / (d < 3 ? 1 : 1000);
+      assert.ok(Math.abs(y / x - 1) < 0.03, `${lab} ${d} : ${y} / ${x}`);
+    });
+  }
 });
