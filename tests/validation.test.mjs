@@ -2,7 +2,7 @@
 // Blevins, « Formulas for Natural Frequency and Mode Shape »).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyModel, ensureIds } from '../src/core/model.js';
+import { emptyModel, ensureIds, exampleModel } from '../src/core/model.js';
 import { runAnalysis } from '../src/analysis.js';
 import { pipeSection } from '../src/core/sections.js';
 import { componentFactors, rangeReductionFactor } from '../src/codes/rccm-c.js';
@@ -533,4 +533,26 @@ test('RCC-M C 3658 : Z = π·r²·eₙ, piquage réduit π·r′ₘ²·tₛ (t�
   r = runAnalysis(m);
   assert.equal(inner(r.check.rows), 0, 'extrémités seulement');
   assert.ok(r.check.rows.some((x) => x.comp === 'Coude 4' && x.node === '4A'));
+});
+
+test('Amortissement : loi constante ou variable (5 % → 2 % entre 10 et 20 Hz), CQC à amortissements différents', async () => {
+  const { dampingOf } = await import('../src/loads/seismic.js');
+  const v = { dampingLaw: 'variable', dampLow: 5, fLow: 10, dampHigh: 2, fHigh: 20 };
+  near(dampingOf(v, 5), 0.05, 1e-12, 'ξ sous f₁');
+  near(dampingOf(v, 15), 0.035, 1e-12, 'ξ interpolé');
+  near(dampingOf(v, 30), 0.02, 1e-12, 'ξ au-delà de f₂');
+  near(dampingOf({ damping: 4 }, 30), 0.04, 1e-12, 'constant');
+  // formule générale : ξᵢ = ξⱼ redonne la formule à amortissement commun
+  const r = 1.1;
+  const xi = 0.05;
+  const ref = (8 * xi * xi * (1 + r) * r ** 1.5) / ((1 - r * r) ** 2 + 4 * xi * xi * r * (1 + r) ** 2);
+  near(cqcRho(1, r, xi, xi), ref, 1e-12, 'ρ commun');
+  assert.ok(cqcRho(1, r, 0.05, 0.02) < ref && cqcRho(1, r, 0.05, 0.02) > cqcRho(1, r, 0.02, 0.02), 'ρ entre les deux amortissements');
+  // calcul complet : loi variable à ξ₁ = ξ₂ = 5 % identique à 5 % constant
+  const m = exampleModel();
+  const s = m.loadCases.find((c) => c.type === 'seismic');
+  const base = runAnalysis(m).cases.find((c) => c.type === 'seismic').supportLoads;
+  Object.assign(s, { dampingLaw: 'variable', dampLow: 5, dampHigh: 5 });
+  const same = runAnalysis(m).cases.find((c) => c.type === 'seismic').supportLoads;
+  for (let k = 0; k < base.length; k++) near(same[k], base[k], 1e-9, `réaction ${k}`);
 });
