@@ -558,13 +558,36 @@ function openPointResults(title, subtitle, r, columns, values, derived, digits) 
   );
 }
 
+/**
+ * Support variable ou constant : précharge, raideur et variabilité thermique
+ * |ΔF| / P (effort vertical dû à la dilatation rapporté à la précharge).
+ */
+export function hangerInfo(r, k) {
+  const sup = r.mesh.supports[k];
+  if (sup.kind !== 'variable' && sup.kind !== 'constant') return null;
+  const vert = (c) => -(c.supportLoads[k * 6] * sup.dir[0] + c.supportLoads[k * 6 + 1] * sup.dir[1] + c.supportLoads[k * 6 + 2] * sup.dir[2]);
+  const thermal = r.cases.filter((c) => c.type === 'thermal').map((c) => ({ id: c.id, dF: vert(c), v: sup.preload > 0 ? Math.abs(vert(c)) / sup.preload : null }));
+  const w = r.cases.find((c) => c.type === 'weight');
+  return { preload: sup.preload, k: sup.k, cold: w ? vert(w) : null, thermal };
+}
+
+function hangerText(r, k) {
+  const h = hangerInfo(r, k);
+  if (!h) return '';
+  const parts = [` Précharge P = ${fmt(h.preload, 0)} N`];
+  if (r.mesh.supports[k].kind === 'variable') parts.push(`raideur k = ${fmt(h.k, 1)} N/mm`);
+  if (h.cold != null) parts.push(`effort vertical sous poids propre ${fmt(h.cold, 0)} N`);
+  for (const t of h.thermal) parts.push(`${t.id} : ΔF = ${fmt(t.dF, 0)} N${t.v != null ? `, variabilité ${fmt(100 * t.v, 1)} %` : ''}`);
+  return ` ${parts.join(' ; ')}.`;
+}
+
 /** Définition des résultats complets d'un support (repère global). */
 export function supportPoint(r, k) {
   const sup = r.mesh.supports[k];
   const kind = SUPPORT_KINDS[sup.kind]?.label ?? sup.kind;
   return {
     title: `Support ${sup.label || ''} — nœud ${r.mesh.nodes[sup.node].label}`.replace('  ', ' '),
-    subtitle: `${kind} — efforts exercés par la tuyauterie sur le support, repère global.`,
+    subtitle: `${kind} — efforts exercés par la tuyauterie sur le support, repère global.${hangerText(r, k)}`,
     columns: ['FX (N)', 'FY (N)', 'FZ (N)', 'MX (N·m)', 'MY (N·m)', 'MZ (N·m)'],
     values: (c) => Array.from({ length: 6 }, (_, d) => c.supportLoads[k * 6 + d] / (d < 3 ? 1 : 1000)),
     derived: [['F rés. (N)', [0, 1, 2]], ['M rés. (N·m)', [3, 4, 5]]],

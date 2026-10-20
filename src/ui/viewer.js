@@ -6,7 +6,7 @@ import { vec } from '../core/linalg.js';
 import { toLocalVector } from '../fem/beam3d.js';
 import { SUPPORT_KINDS } from '../components/support.js';
 
-const SUPPORT_COLORS = { anchor: '#c0392b', rest: '#2471a3', guide: '#7d3c98', restguide: '#1f618d', axial: '#b9770e', spring: '#148f77', custom: '#566573' };
+const SUPPORT_COLORS = { anchor: '#c0392b', rest: '#2471a3', guide: '#7d3c98', restguide: '#1f618d', axial: '#b9770e', variable: '#148f77', constant: '#d35400', custom: '#566573' };
 
 export class Viewer {
   constructor(canvas, { onPick } = {}) {
@@ -345,6 +345,13 @@ export class Viewer {
       if (fullAnchor) return;
       // longueur de flèche : 1,5 De à l'échelle, avec un minimum en pixels
       const L = Math.max(1.5 * od, minPx / pxPerMm);
+      if (sup.kind === 'variable' || sup.kind === 'constant') {
+        // support variable / constant : ressort sous le tube, effort vers le haut
+        const Lh = Math.max(2.2 * od, (1.6 * minPx) / pxPerMm);
+        if (solid) this.drawHanger3D(ctx, p, mesh.up, R, Lh, color, od, sup.kind === 'constant');
+        else this.drawHanger(ctx, p, mesh.up, R, Lh, color, od, sup.kind === 'constant');
+        return;
+      }
       for (const sp of springs.filter((x) => !x.rot)) {
         const d = sp.dir;
         if (Math.abs(vec.dot(d, axis)) > 0.9) {
@@ -937,6 +944,131 @@ export class Viewer {
     ctx.lineTo(bx + uy * half, by - ux * half);
     ctx.closePath();
     ctx.fill();
+  }
+
+  /**
+   * Support variable (ressort) ou constant : ressort hélicoïdal sous le tube, dans
+   * l'axe vertical, terminé par une flèche contre la paroi ; boîtier pour le constant.
+   */
+  drawHanger(ctx, p, up, R, L, color, od, constant) {
+    const tip = vec.add(p, vec.scale(up, -R));
+    const tail = vec.add(tip, vec.scale(up, -L));
+    const a = this.toScreen(tail);
+    const b = this.toScreen(tip);
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const l = Math.hypot(dx, dy);
+    if (l < 6) return this.drawArrow(ctx, tail, tip, color, od);
+    const ux = dx / l;
+    const uy = dy / l;
+    const w = Math.max(4, Math.min(0.35 * od * this.frame.s, l * 0.18));
+    const s0 = 0.18 * l; // départ du ressort
+    const s1 = 0.62 * l; // fin du ressort
+    const turns = 5;
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = Math.max(1.6, 0.06 * od * this.frame.s);
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    const at = (t, off = 0) => [a[0] + ux * t - uy * off, a[1] + uy * t + ux * off];
+    if (constant) {
+      // boîtier du support constant
+      const c0 = at(0, -w * 1.3);
+      const c1 = at(0, w * 1.3);
+      const c2 = at(s0 * 0.9, w * 1.3);
+      const c3 = at(s0 * 0.9, -w * 1.3);
+      ctx.beginPath();
+      ctx.moveTo(...c0);
+      ctx.lineTo(...c1);
+      ctx.lineTo(...c2);
+      ctx.lineTo(...c3);
+      ctx.closePath();
+      ctx.globalAlpha = 0.35;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(...at(0));
+    ctx.lineTo(...at(s0));
+    const n = turns * 2;
+    for (let k = 1; k <= n; k++) ctx.lineTo(...at(s0 + ((s1 - s0) * (k - 0.5)) / n, k % 2 ? w : -w));
+    ctx.lineTo(...at(s1));
+    ctx.stroke();
+    this.drawArrow(ctx, vec.add(tail, vec.scale(up, (L * s1) / l)), tip, color, od); // flèche depuis le haut du ressort
+  }
+
+  /**
+   * Support variable ou constant en 3D : ressort hélicoïdal ombré (spires arrière
+   * plus sombres, puis spires avant), plateaux et tige jusqu'à la paroi du tube ;
+   * boîtier cylindrique pour le support constant.
+   */
+  drawHanger3D(ctx, p, up, R, L, color, od, constant) {
+    let e1 = vec.cross(up, Math.abs(up[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]);
+    e1 = vec.unit(e1);
+    const e2 = vec.cross(up, e1);
+    const s = this.frame.s;
+    const base = vec.add(p, vec.scale(up, -(R + L)));
+    const at = (h, r = 0, t = 0) => vec.add(base, vec.add(vec.scale(up, h), vec.add(vec.scale(e1, r * Math.cos(t)), vec.scale(e2, r * Math.sin(t)))));
+    const rgb = toRGB(color);
+    const tint = (f) => `rgb(${Math.min(255, rgb[0] * f) | 0},${Math.min(255, rgb[1] * f) | 0},${Math.min(255, rgb[2] * f) | 0})`;
+    const lit = (n) => {
+      const v = this.viewDir(n);
+      return 0.55 + 0.55 * Math.max(0, v[0] * LIGHT3D[0] + v[1] * LIGHT3D[1] + v[2] * LIGHT3D[2]);
+    };
+    // cylindre (boîtier, plateaux) : enveloppe des deux cercles, face supérieure éclairée
+    const cylinder = (h0, h1, r, f = 1) => {
+      const N = 32;
+      const ring = (h) => Array.from({ length: N }, (_, k) => this.toScreen(at(h, r, (2 * Math.PI * k) / N)));
+      const bottom = ring(h0);
+      const top = ring(h1);
+      ctx.fillStyle = tint(0.8 * f);
+      polygon(ctx, convexHull([...bottom, ...top]));
+      ctx.fill();
+      const upSeen = this.viewDir(up)[2] > 0;
+      ctx.fillStyle = tint((upSeen ? 1.05 : 0.65) * f);
+      polygon(ctx, upSeen ? top : bottom);
+      ctx.fill();
+      ctx.strokeStyle = tint(0.55);
+      ctx.lineWidth = 1;
+      polygon(ctx, convexHull([...bottom, ...top]));
+      ctx.stroke();
+    };
+    const hBox = constant ? 0.3 * L : 0;
+    const plate = 0.05 * L;
+    if (constant) cylinder(0, hBox, 0.62 * od);
+    else cylinder(0, plate, 0.5 * od);
+    // ressort hélicoïdal
+    const h0 = (constant ? hBox : plate) + 0.02 * L;
+    const h1 = 0.8 * L;
+    const rh = 0.33 * od;
+    const turns = 5;
+    const M = turns * 24;
+    const seg = [];
+    for (let k = 0; k < M; k++) {
+      const t0 = (2 * Math.PI * turns * k) / M;
+      const t1 = (2 * Math.PI * turns * (k + 1)) / M;
+      const hA = h0 + ((h1 - h0) * k) / M;
+      const hB = h0 + ((h1 - h0) * (k + 1)) / M;
+      const tm = (t0 + t1) / 2;
+      const radial = vec.add(vec.scale(e1, Math.cos(tm)), vec.scale(e2, Math.sin(tm)));
+      seg.push({ a: this.toScreen(at(hA, rh, t0)), b: this.toScreen(at(hB, rh, t1)), front: this.viewDir(radial)[2] >= 0, f: lit(radial) });
+    }
+    ctx.lineCap = 'round';
+    ctx.lineWidth = Math.max(1.6, 0.085 * od * s);
+    for (const pass of [false, true]) {
+      for (const g of seg) {
+        if (g.front !== pass) continue;
+        ctx.strokeStyle = tint(pass ? g.f : 0.5);
+        ctx.beginPath();
+        ctx.moveTo(g.a[0], g.a[1]);
+        ctx.lineTo(g.b[0], g.b[1]);
+        ctx.stroke();
+      }
+    }
+    // plateau supérieur, tige et flèche contre la paroi
+    cylinder(h1, h1 + plate, 0.42 * od);
+    this.drawArrow(ctx, at(h1 + plate), vec.add(p, vec.scale(up, -R)), tint(0.9), od);
   }
 
   /** Disque dans le plan de section du tube (normal à l'axe), rayon r. */

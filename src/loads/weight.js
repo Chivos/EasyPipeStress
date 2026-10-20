@@ -18,7 +18,12 @@ export const weight = {
     const { sys } = ctx;
     const a = sys.mesh.up.map((v) => -v * G_STD);
     const loads = bodyForceLoads(sys, a, { metal: true, fluid: lc.fluid !== false, insul: lc.insulation !== false });
+    // précharge des supports variables et constants : effort vers le haut sur la tuyauterie
+    const hangers = sys.mesh.supports.map((s, k) => ({ s, k })).filter(({ s }) => s.preload);
+    for (const { s } of hangers) for (let d = 0; d < 3; d++) loads.F[s.node * 6 + d] += s.preload * s.dir[d];
     const r = sys.solveStatic(loads);
+    // effort exercé par la tuyauterie sur le support : précharge (vers le bas) + raideur
+    for (const { s, k } of hangers) for (let d = 0; d < 3; d++) r.supportLoads[k * 6 + d] -= s.preload * s.dir[d];
     return { signed: true, ...r, info: {} };
   },
 };
