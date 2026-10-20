@@ -87,8 +87,15 @@ function supportCaseSheets(r) {
   return displayCases(r).map((c) => ({
     name: `Supports ${c.id}`,
     rows: [
-      ['Nœud', 'Repère', 'Type', 'FX (N)', 'FY (N)', 'FZ (N)', 'MX (N·m)', 'MY (N·m)', 'MZ (N·m)'],
-      ...r.mesh.supports.map((s, k) => [r.mesh.nodes[s.node].label, s.label, SUPPORT_KINDS[s.kind]?.label ?? s.kind, ...[0, 1, 2].map((d) => r3(c.supportLoads[k * 6 + d], 0)), ...[3, 4, 5].map((d) => r3(c.supportLoads[k * 6 + d] / 1000, 1))]),
+      ['Nœud', 'Repère', 'Type', 'FX (N)', 'FY (N)', 'FZ (N)', 'MX (N·m)', 'MY (N·m)', 'MZ (N·m)', 'DX (mm)', 'DY (mm)', 'DZ (mm)'],
+      ...r.mesh.supports.map((s, k) => [
+        r.mesh.nodes[s.node].label,
+        s.label,
+        SUPPORT_KINDS[s.kind]?.label ?? s.kind,
+        ...[0, 1, 2].map((d) => r3(c.supportLoads[k * 6 + d], 0)),
+        ...[3, 4, 5].map((d) => r3(c.supportLoads[k * 6 + d] / 1000, 1)),
+        ...[0, 1, 2].map((d) => r3(c.u[s.node * 6 + d], 3)),
+      ]),
     ],
   }));
 }
