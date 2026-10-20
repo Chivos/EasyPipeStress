@@ -347,7 +347,9 @@ export class Viewer {
       const L = Math.max(1.5 * od, minPx / pxPerMm);
       if (sup.kind === 'variable' || sup.kind === 'constant') {
         // support variable / constant : ressort sous le tube, effort vers le haut
-        this.drawHanger(ctx, p, mesh.up, R, Math.max(2.2 * od, (1.6 * minPx) / pxPerMm), color, od, sup.kind === 'constant');
+        const Lh = Math.max(2.2 * od, (1.6 * minPx) / pxPerMm);
+        if (solid) this.drawHanger3D(ctx, p, mesh.up, R, Lh, color, od, sup.kind === 'constant');
+        else this.drawHanger(ctx, p, mesh.up, R, Lh, color, od, sup.kind === 'constant');
         return;
       }
       for (const sp of springs.filter((x) => !x.rot)) {
@@ -994,6 +996,79 @@ export class Viewer {
     ctx.lineTo(...at(s1));
     ctx.stroke();
     this.drawArrow(ctx, vec.add(tail, vec.scale(up, (L * s1) / l)), tip, color, od); // flèche depuis le haut du ressort
+  }
+
+  /**
+   * Support variable ou constant en 3D : ressort hélicoïdal ombré (spires arrière
+   * plus sombres, puis spires avant), plateaux et tige jusqu'à la paroi du tube ;
+   * boîtier cylindrique pour le support constant.
+   */
+  drawHanger3D(ctx, p, up, R, L, color, od, constant) {
+    let e1 = vec.cross(up, Math.abs(up[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]);
+    e1 = vec.unit(e1);
+    const e2 = vec.cross(up, e1);
+    const s = this.frame.s;
+    const base = vec.add(p, vec.scale(up, -(R + L)));
+    const at = (h, r = 0, t = 0) => vec.add(base, vec.add(vec.scale(up, h), vec.add(vec.scale(e1, r * Math.cos(t)), vec.scale(e2, r * Math.sin(t)))));
+    const rgb = toRGB(color);
+    const tint = (f) => `rgb(${Math.min(255, rgb[0] * f) | 0},${Math.min(255, rgb[1] * f) | 0},${Math.min(255, rgb[2] * f) | 0})`;
+    const lit = (n) => {
+      const v = this.viewDir(n);
+      return 0.55 + 0.55 * Math.max(0, v[0] * LIGHT3D[0] + v[1] * LIGHT3D[1] + v[2] * LIGHT3D[2]);
+    };
+    // cylindre (boîtier, plateaux) : enveloppe des deux cercles, face supérieure éclairée
+    const cylinder = (h0, h1, r, f = 1) => {
+      const N = 32;
+      const ring = (h) => Array.from({ length: N }, (_, k) => this.toScreen(at(h, r, (2 * Math.PI * k) / N)));
+      const bottom = ring(h0);
+      const top = ring(h1);
+      ctx.fillStyle = tint(0.8 * f);
+      polygon(ctx, convexHull([...bottom, ...top]));
+      ctx.fill();
+      const upSeen = this.viewDir(up)[2] > 0;
+      ctx.fillStyle = tint((upSeen ? 1.05 : 0.65) * f);
+      polygon(ctx, upSeen ? top : bottom);
+      ctx.fill();
+      ctx.strokeStyle = tint(0.55);
+      ctx.lineWidth = 1;
+      polygon(ctx, convexHull([...bottom, ...top]));
+      ctx.stroke();
+    };
+    const hBox = constant ? 0.3 * L : 0;
+    const plate = 0.05 * L;
+    if (constant) cylinder(0, hBox, 0.62 * od);
+    else cylinder(0, plate, 0.5 * od);
+    // ressort hélicoïdal
+    const h0 = (constant ? hBox : plate) + 0.02 * L;
+    const h1 = 0.8 * L;
+    const rh = 0.33 * od;
+    const turns = 5;
+    const M = turns * 24;
+    const seg = [];
+    for (let k = 0; k < M; k++) {
+      const t0 = (2 * Math.PI * turns * k) / M;
+      const t1 = (2 * Math.PI * turns * (k + 1)) / M;
+      const hA = h0 + ((h1 - h0) * k) / M;
+      const hB = h0 + ((h1 - h0) * (k + 1)) / M;
+      const tm = (t0 + t1) / 2;
+      const radial = vec.add(vec.scale(e1, Math.cos(tm)), vec.scale(e2, Math.sin(tm)));
+      seg.push({ a: this.toScreen(at(hA, rh, t0)), b: this.toScreen(at(hB, rh, t1)), front: this.viewDir(radial)[2] >= 0, f: lit(radial) });
+    }
+    ctx.lineCap = 'round';
+    ctx.lineWidth = Math.max(1.6, 0.085 * od * s);
+    for (const pass of [false, true]) {
+      for (const g of seg) {
+        if (g.front !== pass) continue;
+        ctx.strokeStyle = tint(pass ? g.f : 0.5);
+        ctx.beginPath();
+        ctx.moveTo(g.a[0], g.a[1]);
+        ctx.lineTo(g.b[0], g.b[1]);
+        ctx.stroke();
+      }
+    }
+    // plateau supérieur, tige et flèche contre la paroi
+    cylinder(h1, h1 + plate, 0.42 * od);
+    this.drawArrow(ctx, at(h1 + plate), vec.add(p, vec.scale(up, -R)), tint(0.9), od);
   }
 
   /** Disque dans le plan de section du tube (normal à l'axe), rayon r. */
