@@ -6,7 +6,7 @@ import { vec } from '../core/linalg.js';
 import { toLocalVector } from '../fem/beam3d.js';
 import { SUPPORT_KINDS } from '../components/support.js';
 
-const SUPPORT_COLORS = { anchor: '#c0392b', rest: '#2471a3', guide: '#7d3c98', restguide: '#1f618d', axial: '#b9770e', spring: '#148f77', custom: '#566573' };
+const SUPPORT_COLORS = { anchor: '#c0392b', rest: '#2471a3', guide: '#7d3c98', restguide: '#1f618d', axial: '#b9770e', variable: '#148f77', constant: '#d35400', custom: '#566573' };
 
 export class Viewer {
   constructor(canvas, { onPick } = {}) {
@@ -345,6 +345,11 @@ export class Viewer {
       if (fullAnchor) return;
       // longueur de flèche : 1,5 De à l'échelle, avec un minimum en pixels
       const L = Math.max(1.5 * od, minPx / pxPerMm);
+      if (sup.kind === 'variable' || sup.kind === 'constant') {
+        // support variable / constant : ressort sous le tube, effort vers le haut
+        this.drawHanger(ctx, p, mesh.up, R, Math.max(2.2 * od, (1.6 * minPx) / pxPerMm), color, od, sup.kind === 'constant');
+        return;
+      }
       for (const sp of springs.filter((x) => !x.rot)) {
         const d = sp.dir;
         if (Math.abs(vec.dot(d, axis)) > 0.9) {
@@ -937,6 +942,58 @@ export class Viewer {
     ctx.lineTo(bx + uy * half, by - ux * half);
     ctx.closePath();
     ctx.fill();
+  }
+
+  /**
+   * Support variable (ressort) ou constant : ressort hélicoïdal sous le tube, dans
+   * l'axe vertical, terminé par une flèche contre la paroi ; boîtier pour le constant.
+   */
+  drawHanger(ctx, p, up, R, L, color, od, constant) {
+    const tip = vec.add(p, vec.scale(up, -R));
+    const tail = vec.add(tip, vec.scale(up, -L));
+    const a = this.toScreen(tail);
+    const b = this.toScreen(tip);
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const l = Math.hypot(dx, dy);
+    if (l < 6) return this.drawArrow(ctx, tail, tip, color, od);
+    const ux = dx / l;
+    const uy = dy / l;
+    const w = Math.max(4, Math.min(0.35 * od * this.frame.s, l * 0.18));
+    const s0 = 0.18 * l; // départ du ressort
+    const s1 = 0.62 * l; // fin du ressort
+    const turns = 5;
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = Math.max(1.6, 0.06 * od * this.frame.s);
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    const at = (t, off = 0) => [a[0] + ux * t - uy * off, a[1] + uy * t + ux * off];
+    if (constant) {
+      // boîtier du support constant
+      const c0 = at(0, -w * 1.3);
+      const c1 = at(0, w * 1.3);
+      const c2 = at(s0 * 0.9, w * 1.3);
+      const c3 = at(s0 * 0.9, -w * 1.3);
+      ctx.beginPath();
+      ctx.moveTo(...c0);
+      ctx.lineTo(...c1);
+      ctx.lineTo(...c2);
+      ctx.lineTo(...c3);
+      ctx.closePath();
+      ctx.globalAlpha = 0.35;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(...at(0));
+    ctx.lineTo(...at(s0));
+    const n = turns * 2;
+    for (let k = 1; k <= n; k++) ctx.lineTo(...at(s0 + ((s1 - s0) * (k - 0.5)) / n, k % 2 ? w : -w));
+    ctx.lineTo(...at(s1));
+    ctx.stroke();
+    this.drawArrow(ctx, vec.add(tail, vec.scale(up, (L * s1) / l)), tip, color, od); // flèche depuis le haut du ressort
   }
 
   /** Disque dans le plan de section du tube (normal à l'axe), rayon r. */

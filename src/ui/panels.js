@@ -360,6 +360,7 @@ export function renderSupports(app) {
     section(
       'Supports et blocages',
       help('Supports linéaires bilatéraux. « Rigide » = raideur de pénalité 10¹⁰ N/mm. Le déplacement imposé (dx dy dz en mm, repère global) est appliqué dans les cas thermiques : mouvement de piquage d’équipement.'),
+      help('Support variable : ressort vertical de raideur k, actif dans tous les cas, et précharge P (effort de réglage vers le haut) appliquée dans le cas poids propre ; effort repris = P − k·u. Support constant : précharge P seule, sans raideur. La variabilité thermique |ΔF|/P est donnée dans le détail du support (clic sur la ligne d’efforts).'),
       componentTable(app, 'support'),
     ),
     section('Masses ponctuelles', help('Robinets, brides, instruments… Prises en compte en poids propre et en séisme.'), componentTable(app, 'mass')),

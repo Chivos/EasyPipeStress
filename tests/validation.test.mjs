@@ -2,7 +2,7 @@
 // Blevins, « Formulas for Natural Frequency and Mode Shape »).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyModel, ensureIds, exampleModel } from '../src/core/model.js';
+import { emptyModel, ensureIds, exampleModel, normalizeModel } from '../src/core/model.js';
 import { runAnalysis } from '../src/analysis.js';
 import { pipeSection } from '../src/core/sections.js';
 import { componentFactors, rangeReductionFactor } from '../src/codes/rccm-c.js';
@@ -555,4 +555,38 @@ test('Amortissement : loi constante ou variable (5 % → 2 % entre 10 et 20 Hz),
   Object.assign(s, { dampingLaw: 'variable', dampLow: 5, dampHigh: 5 });
   const same = runAnalysis(m).cases.find((c) => c.type === 'seismic').supportLoads;
   for (let k = 0; k < base.length; k++) near(same[k], base[k], 1e-9, `réaction ${k}`);
+});
+
+test('Supports variable et constant : précharge (poids) et raideur (dilatation)', () => {
+  // console horizontale de longueur L sous son poids w, support constant en bout
+  // de précharge 3wL/8 : flèche nulle en bout (poutre console-appuyée)
+  const L = 3000;
+  const m = setup({ density: 7850, maxLen: 100 });
+  const sp = pipeSection(m.sections[0]);
+  const w = sp.A * 7850e-9 * 1e-3 * 9806.65; // N/mm (masse en t/mm³ × g en mm/s²)
+  m.components = ensureIds({ components: [pipe('1', '2', L, 0, 0), sup('1', 'anchor'), sup('2', 'constant', { preload: (3 * w * L) / 8 })] }).components;
+  m.loadCases = [{ id: 'W', type: 'weight', enabled: true, fluid: false, insulation: false }];
+  let r = runAnalysis(m);
+  const uz = nodeDisp(r, 'W', '2')[2];
+  assert.ok(Math.abs(uz) < 1e-3, `flèche nulle (${uz})`);
+  const k2 = r.mesh.supports.findIndex((s) => s.kind === 'constant');
+  near(r.cases[0].supportLoads[k2 * 6 + 2], (-3 * w * L) / 8, 1e-9, 'effort sur le support constant');
+  // support variable : effort sous poids = P − k·u_z ; dilatation verticale contre le ressort
+  const k = 50; // N/mm
+  const m2 = setup({ density: 0, alpha: 12, maxLen: 500 });
+  m2.components = ensureIds({ components: [pipe('1', '2', 0, 0, 2000, { T1: 220 }), sup('1', 'anchor'), sup('2', 'variable', { stiffness: k, preload: 1000 })] }).components;
+  m2.loadCases = [{ id: 'W', type: 'weight', enabled: true }, { id: 'T1', type: 'thermal', enabled: true }];
+  r = runAnalysis(m2);
+  const kv = r.mesh.supports.findIndex((s) => s.kind === 'variable');
+  const W = r.cases.find((c) => c.id === 'W');
+  const T = r.cases.find((c) => c.id === 'T1');
+  const delta = 12e-6 * 200 * 2000;
+  const EA = 200000 * sp.A;
+  near(-T.supportLoads[kv * 6 + 2], (-k * delta) / (1 + (k * 2000) / EA), 1e-6, 'ΔF thermique = −k·αΔT·L/(1 + kL/EA)');
+  const uW = nodeDisp(r, 'W', '2')[2];
+  near(-W.supportLoads[kv * 6 + 2], 1000 - k * uW, 1e-6, 'effort sous poids = P − k·u_z');
+  // ancien type « ressort » relu comme support variable
+  const old = JSON.parse(JSON.stringify(m2));
+  old.components.find((c) => c.kind === 'variable').kind = 'spring';
+  assert.equal(normalizeModel(old).components.find((c) => c.type === 'support' && c.node === '2').kind, 'variable');
 });

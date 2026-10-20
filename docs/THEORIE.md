@@ -296,6 +296,9 @@ statique rigide), coefficients CQC, facteurs k et i des coudes.
 ## 6. Limites actuelles et évolutions
 
 - Supports linéaires bilatéraux (pas de jeux, frottement, décollement).
+- Supports variables (ressorts) : raideur verticale k dans tous les cas, précharge P
+  vers le haut dans le cas poids propre (effort repris P − k·u) ; supports constants :
+  précharge P seule. Variabilité thermique |ΔF|/P indiquée par support.
 - Pas d'effet de Bourdon ni de poussée de pression sur compensateurs.
 - Pas de mouvements sismiques différentiels (SAM, éq. 10a) ni de spectres
   multiples.
