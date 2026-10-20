@@ -257,6 +257,7 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
         const end = e.n1 === i ? 0 : 1;
         e.endFactors[end] = factors({ ...desc, sec: run.sec, P: run.P1, Ec: run.E, params: model.code?.params ?? {} });
         e.endFactors[end].component = desc.kind;
+        e.endFactors[end].runSec = run.sec; // collecteur (module Z des piquages réduits)
       }
       tees.push({ node: i, ...desc });
     },

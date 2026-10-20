@@ -11,7 +11,10 @@
 //  éq. (10)  séisme, pour chaque niveau de critère B, C, D (même spectre, coefficient
 //            propre au niveau) : P·De/(4eₙ) + 0,75i·(MA + MB)/Z ≤ k·Sh,
 //            k = 1,2 (B), 1,8 (C), 2,4 (D)
-//  avec 0,75i ≥ 1. Moments : moment résultant √(Mx²+My²+Mz²) aux extrémités.
+//  avec 0,75i ≥ 1. Moments : moment résultant √(Mx²+My²+Mz²) aux extrémités
+//  (C 3658 a). Module Z (C 3658 b, d) : Z = π·r²·eₙ (r rayon moyen) pour les parties
+//  droites, cintrées, coudes, tés et piquages égaux ; pour le tronçon réduit d'un té
+//  ou piquage réduit, Z = π·r'ₘ²·tₛ avec tₛ = min(Tᵣ, i·T_b).
 //  Épaisseur minimale (méthode `thickness`, si l'option du projet est cochée) :
 //            C 3641.1  e_m = P·De / (2(S/I + y·P)) + c,  y = 0,4
 // Facteurs des coudes : h = e·R/r² ; k = 1,65/h ≥ 1 ; i = 0,9/h^(2/3) ≥ 1.
@@ -71,6 +74,29 @@ export function componentFactors({ kind, sec, bend, P = 0, Ec, params = {}, teeT
     i = Math.max(1, i / (1 + 3.25 * (P / Ec) * (r / t) ** (5 / 2) * (R / r) ** (2 / 3)));
   }
   return { k, i, h };
+}
+
+/**
+ * Module Z du C 3658 : π·r²·eₙ (rayon moyen, épaisseur nominale) ; pour le tronçon
+ * réduit d'un té ou piquage réduit, π·r'ₘ²·tₛ, tₛ = min(Tᵣ, i·T_b).
+ */
+export function sectionModulus(e, local) {
+  const { rm, t } = e.sec;
+  const run = local?.runSec;
+  if (run && e.sec.od < run.od - 1e-6) {
+    const ts = Math.min(run.t, local.i * t);
+    const Z = Math.PI * rm * rm * ts;
+    return {
+      Z,
+      zItems: [
+        ['Rayon moyen du piquage r′ₘ', rm, 'mm'],
+        ['Épaisseur effective tₛ = min(Tᵣ, i·T_b)', ts, 'mm'],
+        ['Module Z = π·r′ₘ²·tₛ (piquage réduit, C 3658 d)', Z, 'mm³'],
+      ],
+    };
+  }
+  const Z = Math.PI * rm * rm * t;
+  return { Z, zItems: [['Rayon moyen r', rm, 'mm'], ['Module Z = π·r²·eₙ (C 3658 b)', Z, 'mm³']] };
 }
 
 /** Composantes locales du moment à une extrémité (torsion, flexions) et résultant, en N·m. */
@@ -170,7 +196,7 @@ export const rccmC = {
     mesh.elements.forEach((e, ie) => {
       if (e.kind === 'valve') return; // corps de robinet rigide : vérifié par le fabricant, pas par le code
       const { sec, mat } = e;
-      const { od: De, t, Z } = sec;
+      const { od: De, t } = sec;
       const atD = materialAt(mat, e.Td);
       const atH = materialAt(mat, Math.max(e.T1, e.Td));
       const atC = materialAt(mat, tRef);
@@ -185,12 +211,15 @@ export const rccmC = {
         const node = mesh.nodes[end === 0 ? e.n1 : e.n2].label;
         const compLabel = fac === local ? `Té ${node}` : e.kind === 'bend' ? `Coude ${e.bend.node}` : 'Tube';
         const base = { node, elem: e.label, ie, end, comp: compLabel, kind: fac === local ? 'tee' : e.kind };
+        // coudes : points intérieurs vérifiés ou non (option du projet)
+        if (e.kind === 'bend' && model.settings?.bendInnerPoints === false && node !== `${e.bend.node}A` && node !== `${e.bend.node}B`) continue;
+        const { Z, zItems } = sectionModulus(e, local);
         const MA = weightCases.reduce((s, c) => s + resultant(c.elemForces, ie, end), 0);
         // éléments communs au détail de calcul
         const geom = [
           ['Diamètre extérieur Dₑ', De, 'mm'],
           ['Épaisseur nominale eₙ', t, 'mm'],
-          ['Module de flexion Z', Z, 'mm³'],
+          ...zItems,
           ['Facteur d’intensification i', fac.i, ''],
           ...(fac.h != null ? [['Caractéristique h', fac.h, '']] : []),
         ];
