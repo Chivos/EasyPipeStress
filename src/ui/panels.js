@@ -385,7 +385,7 @@ export function renderLoads(app) {
         h('button', { class: 'icon danger', title: 'Supprimer le cas', onclick: () => app.update((mm) => mm.loadCases.splice(li, 1)) }, '✕'),
       ),
       type?.description ? help(type.description) : null,
-      type ? fieldForm(type.fields.filter((f) => !(lc.type === 'seismic' && lc.method === 'static' && ['damping', 'cutoff', 'maxModes', 'modal', 'missingMass', 'rigid'].includes(f.key))), lc, set, { model: m, focusPrefix: `lc${li}` }) : null,
+      type ? fieldForm(type.fields.filter((f) => (!f.show || f.show(lc)) && !(lc.type === 'seismic' && lc.method === 'static' && ['damping', 'dampingLaw', 'dampLow', 'fLow', 'dampHigh', 'fHigh', 'cutoff', 'maxModes', 'modal', 'missingMass', 'rigid'].includes(f.key))), lc, set, { model: m, focusPrefix: `lc${li}` }) : null,
       lc.type === 'seismic' ? seismicEditor(app, lc, li) : null,
     );
   });

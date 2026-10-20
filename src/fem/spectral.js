@@ -55,16 +55,23 @@ export function guptaAlpha(points, fZPA) {
   };
 }
 
-/** Coefficient de corrélation CQC pour un amortissement réduit ξ commun. */
-export function cqcRho(wi, wj, xi) {
+/**
+ * Coefficient de corrélation CQC (Der Kiureghian, 1981), amortissements réduits
+ * ξᵢ, ξⱼ propres à chaque mode (ξⱼ = ξᵢ par défaut : formule à amortissement commun).
+ */
+export function cqcRho(wi, wj, xi, xj = xi) {
   const r = wj / wi;
-  const num = 8 * xi * xi * (1 + r) * r ** 1.5;
-  const den = (1 - r * r) ** 2 + 4 * xi * xi * r * (1 + r) ** 2;
+  const num = 8 * Math.sqrt(xi * xj) * (xi + r * xj) * r ** 1.5;
+  const den = (1 - r * r) ** 2 + 4 * xi * xj * r * (1 + r * r) + 4 * (xi * xi + xj * xj) * r * r;
   return num / den;
 }
 
-/** Combinaison modale d'une liste de vecteurs réponse (signés) → vecteur ≥ 0. */
+/**
+ * Combinaison modale d'une liste de vecteurs réponse (signés) → vecteur ≥ 0.
+ * `xi` : amortissement réduit commun, ou tableau des amortissements par mode.
+ */
 export function combineModal(vectors, omegas, method = 'SRSS', xi = 0.05) {
+  const xiOf = (i) => (Array.isArray(xi) || ArrayBuffer.isView(xi) ? xi[i] : xi);
   const len = vectors[0]?.length ?? 0;
   const out = new Float64Array(len);
   const nm = vectors.length;
@@ -72,7 +79,7 @@ export function combineModal(vectors, omegas, method = 'SRSS', xi = 0.05) {
     const rho = [];
     for (let i = 0; i < nm; i++) {
       rho.push(new Float64Array(nm));
-      for (let j = 0; j < nm; j++) rho[i][j] = i === j ? 1 : cqcRho(omegas[i], omegas[j], xi);
+      for (let j = 0; j < nm; j++) rho[i][j] = i === j ? 1 : cqcRho(omegas[i], omegas[j], xiOf(i), xiOf(j));
     }
     for (let q = 0; q < len; q++) {
       let s = 0;

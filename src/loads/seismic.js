@@ -50,7 +50,21 @@ export const seismic = {
   description: 'Effets d’inertie du séisme, par analyse spectrale (recommandée) ou statique équivalente.',
   fields: [
     { key: 'method', label: 'Méthode', type: 'select', options: () => ['spectral', 'static'], optionLabel: (v) => (v === 'spectral' ? 'Spectrale (modale)' : 'Statique équivalente') },
-    { key: 'damping', label: 'Amortissement', unit: '%', type: 'number' },
+    {
+      key: 'dampingLaw',
+      label: 'Amortissement (combinaison CQC)',
+      type: 'select',
+      options: () => ['constant', 'variable'],
+      default: 'constant',
+      optionLabel: (v) => (v === 'variable' ? 'Variable selon la fréquence' : 'Constant'),
+      title: 'Amortissement associé au spectre saisi. Il ne modifie pas les accélérations (le spectre saisi les fixe) : il sert aux coefficients de corrélation de la combinaison CQC, mode par mode.',
+      show: (lc) => lc.modal !== 'SRSS',
+    },
+    { key: 'damping', label: 'Amortissement du spectre', unit: '%', type: 'number', show: (lc) => lc.modal !== 'SRSS' && lc.dampingLaw !== 'variable' },
+    { key: 'dampLow', label: 'Amortissement ξ₁ (basses fréquences)', unit: '%', type: 'number', placeholder: '5', show: (lc) => lc.modal !== 'SRSS' && lc.dampingLaw === 'variable' },
+    { key: 'fLow', label: 'jusqu’à f₁', unit: 'Hz', type: 'number', placeholder: '10', show: (lc) => lc.modal !== 'SRSS' && lc.dampingLaw === 'variable' },
+    { key: 'dampHigh', label: 'Amortissement ξ₂ (hautes fréquences)', unit: '%', type: 'number', placeholder: '2', show: (lc) => lc.modal !== 'SRSS' && lc.dampingLaw === 'variable' },
+    { key: 'fHigh', label: 'à partir de f₂ (variation linéaire entre f₁ et f₂)', unit: 'Hz', type: 'number', placeholder: '20', show: (lc) => lc.modal !== 'SRSS' && lc.dampingLaw === 'variable' },
     { key: 'cutoff', label: 'Fréquence de coupure', unit: 'Hz', type: 'number' },
     { key: 'maxModes', label: 'Nombre maximal de modes', type: 'number' },
     { key: 'modal', label: 'Combinaison modale', type: 'select', options: () => ['CQC', 'SRSS'] },
@@ -87,10 +101,27 @@ function runStatic(sys, lc) {
   return { signed: false, ...unpack(comb, sys), info: { method: 'static', directions: Object.keys(perDir) } };
 }
 
+/**
+ * Amortissement réduit d'un mode de fréquence f : constant, ou variable (ξ₁ jusqu'à
+ * f₁, ξ₂ au-delà de f₂, interpolation linéaire en fréquence entre les deux, par ex.
+ * 5 % → 2 % entre 10 et 20 Hz). Le spectre saisi doit être le spectre composite
+ * correspondant (construit par l'utilisateur à partir des spectres à ξ₁ et ξ₂).
+ */
+export function dampingOf(lc, f) {
+  const num = (v, d) => (v === '' || v == null || !Number.isFinite(+v) ? d : +v);
+  if (lc.dampingLaw !== 'variable') return num(lc.damping, 5) / 100;
+  const x1 = num(lc.dampLow, 5);
+  const x2 = num(lc.dampHigh, 2);
+  const f1 = num(lc.fLow, 10);
+  const f2 = Math.max(f1, num(lc.fHigh, 20));
+  if (f <= f1) return x1 / 100;
+  if (f >= f2) return x2 / 100;
+  return (x1 + ((x2 - x1) * (f - f1)) / (f2 - f1)) / 100;
+}
+
 function runSpectral(sys, lc) {
   const maxModes = Math.max(1, +lc.maxModes || 60);
   const cutoff = +lc.cutoff > 0 ? +lc.cutoff : 33;
-  const xi = (+lc.damping || 5) / 100;
   const modal = sys.modal({ maxModes, fmax: cutoff });
   const used = modal.modes.filter((m) => m.freq <= cutoff);
   const { mass } = modal;
@@ -124,7 +155,8 @@ function runSpectral(sys, lc) {
       omegas.push(m.omega);
       for (let i = 0; i < n; i++) residual[i] -= m.gamma[di] * mass[i] * m.phi[i];
     }
-    let resp = modeVectors.length ? combineModal(modeVectors, omegas, lc.modal, xi) : null;
+    const xis = used.map((m) => dampingOf(lc, m.freq));
+    let resp = modeVectors.length ? combineModal(modeVectors, omegas, lc.modal, xis) : null;
     let massMissingFrac = 0;
     const total = modal.totalMass[di];
     const captured = used.reduce((s, m) => s + m.effMass[di], 0);

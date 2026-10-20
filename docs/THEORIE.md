@@ -133,6 +133,13 @@ Pour chaque direction d'excitation (X, Y, Z) :
    spectre ;
 2. combinaison modale **SRSS** ou **CQC** (Der Kiureghian, 1981 [6]) :
    ρᵢⱼ = 8ξ²(1+r)r^1,5 / [(1−r²)² + 4ξ²r(1+r)²], r = ωⱼ/ωᵢ ;
+   avec amortissements propres à chaque mode (Der Kiureghian) :
+   ρᵢⱼ = 8√(ξᵢξⱼ)(ξᵢ + rξⱼ)r^1,5 / [(1−r²)² + 4ξᵢξⱼr(1+r²) + 4(ξᵢ²+ξⱼ²)r²].
+   L’amortissement du cas séisme ne modifie pas les accélérations (elles sont
+   lues sur le spectre saisi) : il ne sert qu'à ces coefficients. Loi constante,
+   ou variable selon la fréquence (ξ₁ jusqu'à f₁, ξ₂ au-delà de f₂, linéaire
+   entre les deux, par ex. 5 % → 2 % entre 10 et 20 Hz) ; le spectre saisi est
+   alors le spectre composite construit par l'utilisateur ;
 3. **correction de masse manquante** (USNRC RG 1.92 rév. 3 [7], ASCE 4-16 [8]) :
    la masse non capturée par les modes inférieurs à la fréquence de coupure,
    Mr − Σ Γᵢ·M·φᵢ, est soumise statiquement à l'accélération à période nulle
