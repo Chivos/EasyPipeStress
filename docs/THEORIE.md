@@ -129,7 +129,7 @@ spectre par direction.
 
 Pour chaque direction d'excitation (X, Y, Z) :
 
-1. réponse du mode i : qᵢ = Γᵢ·Sa(fᵢ)/ωᵢ², avec interpolation log-log du
+1. réponse du mode i : qᵢ = Γᵢ·Sa(fᵢ)/ωᵢ², avec interpolation log-log (ou linéaire, au choix) du
    spectre ;
 2. combinaison modale **SRSS** ou **CQC** (Der Kiureghian, 1981 [6]) :
    ρᵢⱼ = 8ξ²(1+r)r^1,5 / [(1−r²)² + 4ξ²r(1+r)²], r = ωⱼ/ωᵢ ;
@@ -267,6 +267,7 @@ Vérifications numériques (tests automatiques) :
 | Même ligne, poids propre (tube plein d'eau) + pression, éq. (6) | PIPESTRESS | Σ réactions < 0,1 % ; réactions et déplacements ≈ 1 % ; taux < 0,5 % (max 0,594 contre 0,592) |
 | Même ligne, analyse modale | PIPESTRESS | masse totale identique (239,3 kg) ; 6 premières fréquences < 0,8 % ; masses modales effectives ≈ 1 % |
 | Même ligne, séisme spectral (CQC, SRSS directions) + éq. (10C) | PIPESTRESS | contraintes de l'éq. (10C) < 0,5 % aux points critiques (taux 1,369 contre 1,368 en 50, 1,080 contre 1,079 au coude 40) ; déplacements W + S ≈ 1 % |
+| Ligne DN200 P265GH à supports à ressort (exemple 3), supports variables rigides comme dans le calcul PIPESTRESS, spectre linéaire | PIPESTRESS | fréquences < 1,2 % ; dilatation : réactions des ressorts et contraintes de l'éq. (7) < 0,3 % (après Ec/Eh) ; éq. (6) ≈ 3 % ; éq. (10C) < 3 % |
 | Fréquence propre d'une console | 1,875²/2π·√(EI/mL⁴) | < 0,5 % |
 | Oscillateur simple, spectre plat | m·Sa·L | < 10⁻⁴ |
 | Masse manquante, modes tronqués | réponse statique rigide | < 10⁻⁶ |

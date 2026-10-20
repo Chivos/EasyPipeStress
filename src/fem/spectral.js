@@ -6,8 +6,8 @@
 //    retenus, méthode de la masse manquante, combinée SRSS avec la réponse modale) ;
 //  - combinaison directionnelle SRSS ou 100-40-40 (Newmark).
 
-/** Interpolation log-log d'un spectre [[f (Hz), a (g)], …]. */
-export function spectrumAt(points, f) {
+/** Interpolation d'un spectre [[f (Hz), a (g)], …] : log-log (défaut) ou linéaire en f et a. */
+export function spectrumAt(points, f, interp = 'loglog') {
   const p = [...points].filter((x) => x[0] > 0 && x[1] >= 0).sort((a, b) => a[0] - b[0]);
   if (!p.length) return 0;
   if (f <= p[0][0]) return p[0][1];
@@ -15,7 +15,7 @@ export function spectrumAt(points, f) {
     if (f <= p[i][0]) {
       const [f0, a0] = p[i - 1];
       const [f1, a1] = p[i];
-      if (a0 > 0 && a1 > 0) {
+      if (interp !== 'linear' && a0 > 0 && a1 > 0) {
         const w = Math.log(f / f0) / Math.log(f1 / f0);
         return Math.exp(Math.log(a0) + w * (Math.log(a1) - Math.log(a0)));
       }

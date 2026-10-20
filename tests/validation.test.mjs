@@ -590,3 +590,9 @@ test('Supports variable et constant : précharge (poids) et raideur (dilatation)
   old.components.find((c) => c.kind === 'variable').kind = 'spring';
   assert.equal(normalizeModel(old).components.find((c) => c.type === 'support' && c.node === '2').kind, 'variable');
 });
+
+test('Spectre : interpolation log-log ou linéaire', () => {
+  const pts = [[8, 1], [15, 0.55]];
+  near(spectrumAt(pts, 13.2, 'linear'), 1 - (5.2 / 7) * 0.45, 1e-12, 'linéaire');
+  near(spectrumAt(pts, 13.2), Math.exp(Math.log(0.55) * (Math.log(13.2 / 8) / Math.log(15 / 8))), 1e-12, 'log-log');
+});
