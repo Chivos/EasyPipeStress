@@ -587,11 +587,14 @@ export function supportPoint(r, k) {
   const kind = SUPPORT_KINDS[sup.kind]?.label ?? sup.kind;
   return {
     title: `Support ${sup.label || ''} — nœud ${r.mesh.nodes[sup.node].label}`.replace('  ', ' '),
-    subtitle: `${kind} — efforts exercés par la tuyauterie sur le support, repère global.${hangerText(r, k)}`,
-    columns: ['FX (N)', 'FY (N)', 'FZ (N)', 'MX (N·m)', 'MY (N·m)', 'MZ (N·m)'],
-    values: (c) => Array.from({ length: 6 }, (_, d) => c.supportLoads[k * 6 + d] / (d < 3 ? 1 : 1000)),
-    derived: [['F rés. (N)', [0, 1, 2]], ['M rés. (N·m)', [3, 4, 5]]],
-    digits: [0, 0, 0, 0, 0, 0, 0, 0],
+    subtitle: `${kind} — efforts exercés par la tuyauterie sur le support et déplacements du nœud, repère global.${hangerText(r, k)}`,
+    columns: ['FX (N)', 'FY (N)', 'FZ (N)', 'MX (N·m)', 'MY (N·m)', 'MZ (N·m)', 'DX (mm)', 'DY (mm)', 'DZ (mm)'],
+    values: (c) => [
+      ...Array.from({ length: 6 }, (_, d) => c.supportLoads[k * 6 + d] / (d < 3 ? 1 : 1000)),
+      ...[0, 1, 2].map((d) => c.u[sup.node * 6 + d]),
+    ],
+    derived: [['F rés. (N)', [0, 1, 2]], ['M rés. (N·m)', [3, 4, 5]], ['D rés. (mm)', [6, 7, 8]]],
+    digits: [0, 0, 0, 0, 0, 0, 2, 2, 2, 0, 0, 2],
   };
 }
 

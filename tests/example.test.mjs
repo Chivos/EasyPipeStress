@@ -118,6 +118,15 @@ test('Export Excel : une feuille par équation, par support, par cas ; archive x
   const names = sheets.map((s) => s.name);
   for (const n of ['Synthèse', 'Éq 6', 'Éq 7', 'Éq 10B', 'Modes propres', 'Dépl W', 'Dépl T1']) assert.ok(names.includes(n), `feuille ${n}`);
   assert.equal(names.filter((n) => n.startsWith('Sup ')).length, r.mesh.supports.length);
+  // déplacements du nœud supporté dans la feuille du support (cas W, colonnes DX..DZ)
+  const k = r.mesh.supports.findIndex((s) => s.kind !== 'anchor');
+  const sup = sheets.filter((s) => s.name.startsWith('Sup '))[k];
+  const head = sup.rows[2];
+  const W = r.cases.find((c) => c.id === 'W');
+  const wRow = sup.rows.find((row) => row[0] === 'W');
+  const n = r.mesh.supports[k].node;
+  for (const [d, col] of ['DX (mm)', 'DY (mm)', 'DZ (mm)'].entries()) assert.ok(Math.abs(wRow[head.indexOf(col)] - W.u[n * 6 + d]) < 0.01, col);
+  assert.ok(head.includes('D rés. (mm)'));
   const eq7 = sheets.find((s) => s.name === 'Éq 7');
   assert.equal(eq7.rows.length - 1, r.check.rows.filter((x) => x.eq === '7').length);
   const bytes = buildXlsx(sheets);
