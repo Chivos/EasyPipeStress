@@ -14,9 +14,11 @@ import { weight } from './weight.js';
 import { pressure } from './pressure.js';
 import { thermal } from './thermal.js';
 import { seismic } from './seismic.js';
+import { forces } from './forces.js';
 
 export const loadTypes = new Registry('Type de chargement');
 loadTypes.register(weight);
 loadTypes.register(pressure);
 loadTypes.register(thermal);
 loadTypes.register(seismic);
+loadTypes.register(forces);

@@ -650,3 +650,16 @@ test('Repère local U, V, W : axes, projection et séisme projeté avant combina
   const wrong = Math.abs(loc(fr[k1], S.supportLoads, 0)[2]);
   assert.ok(Math.abs(wrong - S.supportLoadsLocal[2]) > 1, 'projection avant combinaison');
 });
+
+test('Forces nodales : console chargée en bout (flèche PL³/3EI, moment M·L/EI)', () => {
+  const m = setup({ maxLen: 250 });
+  m.components = ensureIds({ components: [pipe('1', '2', 2000, 0, 0), sup('1', 'anchor')] }).components;
+  m.loadCases = [{ id: 'F1', type: 'forces', enabled: true, forces: [{ node: '2', FX: 0, FY: 0, FZ: -1000, MX: 0, MY: 0, MZ: 0 }, { node: '2', FX: 0, FY: 0, FZ: 0, MX: 0, MY: 0, MZ: 500 }] }];
+  const r = runAnalysis(m);
+  const I = r.mesh.elements[0].sec.I;
+  const u = nodeDisp(r, 'F1', '2');
+  near(u[2], (-1000 * 2000 ** 3) / (3 * 200000 * I), 1e-4, 'flèche (encastrement par pénalité)');
+  near(u[5], (500e3 * 2000) / (200000 * I), 1e-4, 'rotation sous MZ');
+  m.loadCases[0].forces[0].node = 'X';
+  assert.throws(() => runAnalysis(m), /inexistant/);
+});

@@ -87,8 +87,68 @@ function springSupportedLine() {
   return ensureIds(m);
 }
 
+/**
+ * Problème de Hovgaard (Kellogg, Design of Piping Systems, 1956, problème 5.9 ;
+ * Code_Aster SSLL101) : tuyauterie non plane encastrée aux deux extrémités, deux
+ * coudes à 90° de rayon 922 mm. Masse volumique « équivalente » incluant l'eau.
+ * Repères : points 1 à 15 du cas de référence ; les sommets des coudes sont C1
+ * (points 3, 4, 5 = C1A, C1M, C1B) et C2 (points 9, 10, 11 = C2A, C2M, C2B).
+ * Référence poutre (POUX, ADL, TITUS) : coudes avec facteur de flexibilité k = 1,65/h.
+ */
+function hovgaard() {
+  const m = emptyModel();
+  m.meta.title = 'Problème de Hovgaard (SSLL101)';
+  m.meta.notes =
+    'Cas de validation Code_Aster SSLL101 (Kellogg 1956, problème 5.9). Points 3, 4, 5 = C1A, C1M, C1B ; points 9, 10, 11 = C2A, C2M, C2B. ' +
+    'Références au point 3 (C1A), en mm — poids : DX −0,1658, DY −0,0204, DZ −0,00801 ; forces nodales : DX −0,1651, DY −0,0208, DZ −0,009516 ; ' +
+    'dilatation (ΔT = 472,22 °C) : DX −6,1418, DY −13,090, DZ 16,799. Moment résultant au point 1 sous poids : 189,77 N·m. ' +
+    'Facteur de flexibilité des coudes k = 1,65/h (même formule que le RCC-M). La vérification RCC-M n’a pas de sens ici (contrainte admissible fictive).';
+  m.settings = { ...m.settings, vertical: 'Z', tRef: 20, meshMaxLength: 100, bendDivisionAngle: 2.25, shear: true };
+  m.materials = [
+    {
+      id: 'HOVGAARD',
+      name: 'Matériau du cas Hovgaard (masse volumique avec l’eau)',
+      density: 13404.1,
+      nu: 0.3,
+      table: [
+        { T: 20, E: 165800, alpha: 12.88, S: 1000, Sy: 1000 },
+        { T: 500, E: 165800, alpha: 12.88, S: 1000, Sy: 1000 },
+      ],
+    },
+  ];
+  m.sections = [{ id: 'H185', name: 'Tube 185 × 6,12', od: 185, t: 6.12, millTol: 0, corrosion: 0, fluidDensity: 0, insulThk: 0, insulDensity: 0 }];
+  const base = { section: 'H185', material: 'HOVGAARD', T1: 20 + 472.22, P1: 0 };
+  const pipes = [
+    ['1', '2', 0, 0, 1384],
+    ['2', 'C1', 0, 0, 2306],
+    ['C1', '6', 0, 1148.5, 0],
+    ['6', '7', 0, 226.5, 0],
+    ['7', '8', 0, 226.5, 0],
+    ['8', 'C2', 0, 1148.5, 0],
+    ['C2', '12', 1181.5, 0, 0],
+    ['12', '13', 259.5, 0, 0],
+    ['13', '14', 259.5, 0, 0],
+    ['14', '15', 259.5, 0, 0],
+  ];
+  for (const [n1, n2, dx, dy, dz] of pipes) m.components.push({ type: 'pipe', n1, n2, dx, dy, dz, ...base });
+  for (const node of ['C1', 'C2']) m.components.push({ type: 'bend', node, radiusType: '', radius: 922, t: '', divisions: '' });
+  m.components.push({ type: 'support', node: '1', kind: 'anchor', label: 'T1' });
+  m.components.push({ type: 'support', node: '15', kind: 'anchor', label: 'T15' });
+  const fz = [
+    ['2', -624.897], ['C1A', -788.724], ['C1M', -327.654], ['C1B', -214.839], ['6', -102.5145], ['7', -102.5145], ['8', -102.5145],
+    ['C2A', -214.839], ['C2M', -327.654], ['C2B', -222.687], ['12', -117.72], ['13', -117.72], ['14', -176.58],
+  ];
+  m.loadCases = [
+    { id: 'W', type: 'weight', label: 'Poids propre', enabled: true, fluid: true, insulation: true },
+    { id: 'T1', type: 'thermal', label: 'Dilatation (ΔT = 472,22 °C)', enabled: true, imposed: true },
+    { id: 'F1', type: 'forces', label: 'Forces nodales', enabled: true, forces: fz.map(([node, FZ]) => ({ node, FX: 0, FY: 0, FZ, MX: 0, MY: 0, MZ: 0 })) },
+  ];
+  return ensureIds(m);
+}
+
 export const EXAMPLES = [
   { id: 'dn150', title: 'Ligne DN150 inox entre trois piquages', description: 'Trois coudes LR, un té forgé, un robinet, une masse ponctuelle, appui-guide, déplacement imposé de piquage ; poids, pression, dilatation, séisme B/C/D.', build: exampleModel },
   { id: 'pipestress', title: 'Comparaison PIPESTRESS – DN100 × 3,6 inox', description: 'Cas de validation : même modèle que dans PIPESTRESS (coudes vérifiés aux extrémités, Sc = 117 MPa). Poids, dilatation, modal et séisme niveau C (SMS).', build: pipestressBenchmark },
   { id: 'springs', title: 'Ligne DN200 acier carbone – supports à ressort', description: 'Pompe → échangeur : colonne montante, robinet de 350 kg, débitmètre de 60 kg, deux supports variables et un support constant réglés sur le poids.', build: springSupportedLine },
+  { id: 'hovgaard', title: 'Validation – problème de Hovgaard (SSLL101)', description: 'Cas test Code_Aster SSLL101 (Kellogg 1956) : tuyauterie non plane à deux coudes, encastrée aux extrémités ; poids, dilatation et forces nodales comparés aux déplacements de référence au point 3 (C1A).', build: hovgaard },
 ];

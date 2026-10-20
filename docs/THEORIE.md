@@ -121,6 +121,7 @@ l'enveloppe globale, non signée, serait faux.
 | Pression | Pression de calcul Pd et maximale de service P1 portées par les tubes, utilisées dans les équations de contraintes (terme de membrane longitudinale) et la correction de flexibilité. Effet de fond auto-équilibré dans un circuit fermé. |
 | Dilatation thermique | Déformation libre ε = ᾱ(T)·(T − T_réf), ᾱ coefficient moyen de dilatation entre T_réf et T, introduite par forces de blocage ±E·A·ε ; déplacements imposés des supports. |
 | Séisme (inertie) | Analyse modale spectrale ou statique équivalente (cf. § 3). |
+| Forces nodales | Forces et moments donnés aux nœuds (repère global). Cas présenté dans les résultats, non combiné dans les équations du code. |
 
 ## 3. Analyse sismique
 
@@ -290,6 +291,7 @@ Vérifications numériques (tests automatiques) :
 | Même ligne, analyse modale | PIPESTRESS | masse totale identique (239,3 kg) ; 6 premières fréquences < 0,8 % ; masses modales effectives ≈ 1 % |
 | Même ligne, séisme spectral (CQC, SRSS directions) + éq. (10C) | PIPESTRESS | contraintes de l'éq. (10C) < 0,5 % aux points critiques (taux 1,369 contre 1,368 en 50, 1,080 contre 1,079 au coude 40) ; déplacements W + S ≈ 1 % |
 | Ligne DN200 P265GH à supports à ressort (exemple 3) : supports variables 150 N/mm + précharge, support constant, robinet avec fluide, masse ponctuelle ; spectre à interpolation linéaire, modes jusqu'à 100 Hz + masse manquante | PIPESTRESS | poids : réactions < 0,1 % ; fréquences < 1 % ; éq. (6) < 0,5 % ; éq. (7) < 0,6 % ; éq. (10C) < 0,1 % ; efforts sismiques des ressorts < 0,1 % ; réactions thermiques des ressorts 3 à 4 % (PIPESTRESS les imprime à Eh) |
+| Problème de Hovgaard (Code_Aster SSLL101 ; Kellogg 1956, pb 5.9) : tuyauterie non plane à deux coudes R 922 mm, encastrée aux deux bouts, k = 1,65/h ; poids, dilatation ΔT = 472,22 °C, forces nodales | POUX, ADL, TITUS (poutre) | déplacements du point 3 < 0,1 % dans les trois cas ; moment résultant au point 1 sous poids < 0,05 % (189,73 contre 189,77 N·m) ; coudes à 2,25° par élément, maillage 100 mm (réglages par défaut 10° / 500 mm : < 0,7 %) |
 | Fréquence propre d'une console | 1,875²/2π·√(EI/mL⁴) | < 0,5 % |
 | Oscillateur simple, spectre plat | m·Sa·L | < 10⁻⁴ |
 | Masse manquante, modes tronqués | réponse statique rigide | < 10⁻⁶ |
