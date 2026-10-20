@@ -124,3 +124,22 @@ test('Export Excel : une feuille par équation, par support, par cas ; archive x
   assert.equal(new DataView(bytes.buffer).getUint32(0, true), 0x04034b50, 'signature ZIP');
   assert.equal(crc32(new TextEncoder().encode('123456789')), 0xcbf43926, 'CRC-32 de référence');
 });
+
+test('Modèles d’exemple : tous calculables, sans avertissement de maillage', async () => {
+  const { EXAMPLES } = await import('../src/core/examples.js');
+  assert.ok(EXAMPLES.length >= 3);
+  for (const ex of EXAMPLES) {
+    const m = normalizeModel(JSON.parse(JSON.stringify(ex.build())));
+    const r = runAnalysis(m);
+    assert.ok(r.check.rows.length > 0, ex.id);
+    assert.ok(Number.isFinite(r.check.summary.maxRatio), ex.id);
+  }
+  // supports à ressort : précharges réglées sur le poids (déplacement vertical quasi nul)
+  const r = runAnalysis(EXAMPLES.find((e) => e.id === 'springs').build());
+  const W = r.cases.find((c) => c.id === 'W');
+  for (const lab of ['25', '35', '45']) assert.ok(Math.abs(W.u[r.mesh.nodeIndex.get(lab) * 6 + 2]) < 0.1, `uz ${lab}`);
+  // comparaison PIPESTRESS : taux max de l'éq. (7) = 0,396 (référence PIPESTRESS 0,396)
+  const ps = runAnalysis(EXAMPLES.find((e) => e.id === 'pipestress').build());
+  const max7 = Math.max(...ps.check.rows.filter((x) => x.eq === '7').map((x) => x.ratio));
+  assert.ok(Math.abs(max7 - 0.396) < 0.002, `éq. (7) ${max7}`);
+});

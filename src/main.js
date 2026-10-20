@@ -4,10 +4,11 @@
 import { h, download } from './ui/dom.js';
 import { Viewer } from './ui/viewer.js';
 import { renderProject, renderGeometry, renderSupports, renderLoads, renderCode } from './ui/panels.js';
-import { renderResultsPanel, renderBottom, BOTTOM_TABS, buildScene, displayCases } from './ui/results.js';
+import { renderResultsPanel, renderBottom, BOTTOM_TABS, buildScene, displayCases, showModal } from './ui/results.js';
 import { buildReport } from './ui/report.js';
 import { exampleModel, emptyModel, normalizeModel } from './core/model.js';
 import { initSplitters, initGridKeys } from './ui/layout.js';
+import { EXAMPLES } from './core/examples.js';
 import { openExportDialog } from './ui/export.js';
 import { buildMesh } from './core/mesher.js';
 import { runAnalysis } from './analysis.js';
@@ -257,6 +258,33 @@ function toast(msg) {
   setTimeout(() => el.remove(), 3500);
 }
 
+/** Choix d'un modèle d'exemple (fenêtre) ; le modèle courant est remplacé. */
+function openExamples() {
+  const load = (ex) => {
+    document.querySelector('.modal-backdrop')?.remove();
+    state.quick.from = '';
+    app.update((m) => {
+      for (const k of Object.keys(m)) delete m[k];
+      Object.assign(m, ex.build());
+    });
+    viewer.setView('iso');
+  };
+  showModal(
+    'Modèles d’exemple',
+    [
+      h('p', { class: 'muted' }, 'Le modèle choisi remplace le modèle courant (pensez à l’enregistrer).'),
+      h(
+        'div',
+        { class: 'example-list' },
+        EXAMPLES.map((ex) =>
+          h('div', { class: 'example' }, h('div', {}, h('b', {}, ex.title), h('p', { class: 'help' }, ex.description)), h('button', { class: 'primary', onclick: () => load(ex) }, 'Charger')),
+        ),
+      ),
+    ],
+    { label: 'Modèles d’exemple' },
+  );
+}
+
 function openReport() {
   const html = buildReport(state, viewer.snapshot());
   const w = window.open('', '_blank');
@@ -281,15 +309,7 @@ function init() {
     state.tab = 'geometry';
     viewer.fit();
   });
-  $('#btn-example').addEventListener('click', () => {
-    if (!confirm('Charger l’exemple ? Le modèle courant sera remplacé.')) return;
-    state.quick.from = '';
-    app.update((m) => {
-      for (const k of Object.keys(m)) delete m[k];
-      Object.assign(m, exampleModel());
-    });
-    viewer.setView('iso');
-  });
+  $('#btn-example').addEventListener('click', openExamples);
   $('#btn-save').addEventListener('click', () => download(`${slug(state.model.meta.title)}.eps.json`, JSON.stringify(state.model, null, 2)));
   $('#file-open').addEventListener('change', async (e) => {
     const file = e.target.files[0];

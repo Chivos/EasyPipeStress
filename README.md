@@ -39,7 +39,10 @@ exportables/importables en JSON.
    imprimable, **export Excel** (choix des contenus : une feuille par équation,
    par support, par cas de déplacements et d'efforts, modes propres).
 
-Le bouton **Exemple** charge une ligne DN150 inox entre deux piquages.
+Le bouton **Exemple** propose plusieurs modèles : ligne DN150 inox entre trois
+piquages (té, robinet, masse, déplacement imposé), cas de comparaison PIPESTRESS
+(DN100 × 3,6 inox) et ligne DN200 acier carbone avec robinet, débitmètre,
+supports variables et support constant.
 
 Ergonomie : les séparateurs entre le volet de saisie, la vue et le bandeau de
 résultats se déplacent à la souris (double-clic : taille par défaut). Dans les
