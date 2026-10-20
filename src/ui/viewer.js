@@ -476,6 +476,63 @@ export class Viewer {
     }
 
     if (sc.legend) this.drawLegend(ctx, C, w, sc.legend);
+    if (hlSpec?.frame && hlSpec.node != null) this.drawLocalTriad(ctx, C, w, hlSpec.frame, mesh.nodes[hlSpec.node].label, sc.legend);
+  }
+
+  /** Trièdre local U, V, W du nœud survolé, en haut à droite (sous la légende). */
+  drawLocalTriad(ctx, C, w, frame, label, legend) {
+    const bw = 130;
+    const bh = 108;
+    const x0 = w - bw - 12;
+    // bas de la légende (graduée ou par classes), sinon sous la barre d'outils
+    const bottom = !legend ? 44 : legend.gradient ? 6 + 30 + 120 + (legend.notes?.length ?? 0) * 16 : 10 + 20 + legend.items.length * 18;
+    const y0 = bottom + 8;
+    ctx.fillStyle = C.bg;
+    ctx.globalAlpha = 0.9;
+    ctx.fillRect(x0, y0, bw, bh);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = C.sel;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x0 + 0.5, y0 + 0.5, bw - 1, bh - 1);
+    ctx.fillStyle = C.text;
+    ctx.font = 'bold 11px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(`Repère local — ${label}`, x0 + 8, y0 + 15);
+    const o = [x0 + bw / 2, y0 + 64];
+    const axes = [
+      ['U', frame.U, '#c0392b'],
+      ['V', frame.V, '#27ae60'],
+      ['W', frame.W, '#2471a3'],
+    ];
+    // axes les plus éloignés de l'observateur dessinés d'abord
+    const items = axes.map(([name, d, color]) => ({ name, color, q: this.project(d) })).sort((a, b) => (a.q[2] ?? 0) - (b.q[2] ?? 0));
+    for (const { name, color, q } of items) {
+      const e = [o[0] + q[0] * 32, o[1] - q[1] * 32];
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(o[0], o[1]);
+      ctx.lineTo(e[0], e[1]);
+      ctx.stroke();
+      // pointe de flèche
+      const len = Math.hypot(e[0] - o[0], e[1] - o[1]);
+      if (len > 6) {
+        const ux = (e[0] - o[0]) / len;
+        const uy = (e[1] - o[1]) / len;
+        ctx.beginPath();
+        ctx.moveTo(e[0] + ux * 4, e[1] + uy * 4);
+        ctx.lineTo(e[0] - ux * 4 - uy * 3.5, e[1] - uy * 4 + ux * 3.5);
+        ctx.lineTo(e[0] - ux * 4 + uy * 3.5, e[1] - uy * 4 - ux * 3.5);
+        ctx.fill();
+      }
+      ctx.font = 'bold 12px system-ui, sans-serif';
+      ctx.fillText(name, e[0] + (len > 6 ? ((e[0] - o[0]) / len) * 7 : 6) - 4, e[1] + (len > 6 ? ((e[1] - o[1]) / len) * 7 : -6) + 4);
+    }
+    ctx.fillStyle = C.text;
+    ctx.beginPath();
+    ctx.arc(o[0], o[1], 2, 0, 2 * Math.PI);
+    ctx.fill();
   }
 
   drawTriad(ctx, C, hgt) {
