@@ -26,6 +26,7 @@ export function renderProject(app) {
     { key: 'meshMaxLength', label: 'Longueur maximale d’élément', unit: 'mm', type: 'number', title: 'Discrétisation des tubes droits (précision du poids réparti et de l’analyse modale)' },
     { key: 'bendDivisionAngle', label: 'Angle maximal par élément de coude', unit: '°', type: 'number' },
     { key: 'shear', label: 'Déformation d’effort tranchant (Timoshenko)', type: 'checkbox', default: true },
+    { key: 'bendInnerPoints', label: 'Coudes : vérifier aussi les nœuds intérieurs (sinon extrémités A et B seulement)', type: 'checkbox', default: true, title: 'Coché : contraintes vérifiées à tous les nœuds du coude (A, intermédiaires, M, B). Décoché : aux seules extrémités du coude, comme certains logiciels.' },
     { key: 'checkThickness', label: 'Vérifier l’épaisseur minimale (tenue à la pression seule)', type: 'checkbox', default: false },
     { key: 'allowances', label: 'Prendre en compte la tolérance de fabrication et la surépaisseur de corrosion', type: 'checkbox', default: false, title: 'Ajoute les colonnes « Tol. » et « Corr. » aux sections ; utilisées dans la vérification d’épaisseur minimale. Les contraintes des équations du code restent calculées avec l’épaisseur nominale.' },
   ];
@@ -584,6 +585,7 @@ export function renderCode(app) {
           eqRow('(10B) (10C) (10D)', 'Séisme, par niveau de critère', 'P·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ k·S_h  (B : 1,2 — C : 1,8 — D : 2,4) ; M_B = séisme × coefficient du niveau'),
         ),
       ),
+      help('Module Z (C 3658) : π·r²·eₙ (r rayon moyen) ; tronçon réduit d’un té ou piquage réduit : π·r′ₘ²·tₛ, tₛ = min(Tᵣ, i·T_b). Moments résultants √(Mx² + My² + Mz²) à la jonction, branche par branche.'),
       help('Coudes : h = eₙR/r², k = 1,65/h, i = 0,9/h^⅔ (≥ 1). Tés : i = 0,9/h^⅔ ≥ 1 avec h = 4,4eₙ/r (forgé), (eₙ + e_r/2)^(5/2)/(eₙ^(3/2)·r) (fabrication renforcé), eₙ/r (non renforcé).'),
     ),
     combinationsSection(code, m),

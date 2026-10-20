@@ -202,10 +202,10 @@ test('RCC-M C : équations (6), (7), (8), (10) sur une console', () => {
   const sp = pipeSection(m.sections[0]);
   const MA = 9806.65 * 2000;
   const row6 = r.check.rows.find((x) => x.eq === '6' && x.node === '1');
-  near(row6.stress, (5 * 168.3) / (4 * 7.11) + MA / sp.Z, 1e-3, 'éq. (6)');
+  near(row6.stress, (5 * 168.3) / (4 * 7.11) + MA / (Math.PI * sp.rm ** 2 * sp.t), 1e-3, 'éq. (6)');
   near(row6.allow, 100, 1e-12, 'admissible (6) = Sh');
   const row10 = r.check.rows.find((x) => x.eq === '10D' && x.node === '1');
-  near(row10.stress, (5 * 168.3) / (4 * 7.11) + (2 * MA) / sp.Z, 1e-3, 'éq. (10)');
+  near(row10.stress, (5 * 168.3) / (4 * 7.11) + (2 * MA) / (Math.PI * sp.rm ** 2 * sp.t), 1e-3, 'éq. (10)');
   near(row10.allow, 2.4 * 100, 1e-12, 'admissible niveau D');
 });
 
@@ -279,8 +279,9 @@ test('Séisme : niveaux 10B, 10C, 10D, même spectre et coefficients propres', (
   const MB = 9806.65 * 2000;
   const b = r.check.rows.find((x) => x.eq === '10B' && x.node === '1');
   const d = r.check.rows.find((x) => x.eq === '10D' && x.node === '1');
-  near(b.stress, (0.5 * MB) / sp.Z, 1e-3, 'éq. (10B)');
-  near(d.stress, MB / sp.Z, 1e-3, 'éq. (10D)');
+  const Zc = Math.PI * sp.rm ** 2 * sp.t; // C 3658 b
+  near(b.stress, (0.5 * MB) / Zc, 1e-3, 'éq. (10B)');
+  near(d.stress, MB / Zc, 1e-3, 'éq. (10D)');
   near(b.allow, 1.2 * 100, 1e-12, 'admissible B');
   near(d.allow, 2.4 * 100, 1e-12, 'admissible D');
   assert.ok(!r.check.rows.some((x) => x.eq === '10C'));
@@ -497,4 +498,39 @@ test('Dilatation, cadre 3D avec coudes LR : moments = méthode des forces sur l�
   const M = thermalFrame(true);
   const ref = { 1: 4497883, '2A': 2920531, '2M': 3120691, '2B': 2991377, '3A': 2162906, '3M': 2274956, '3B': 2114218, 4: 4457442 };
   for (const [n, v] of Object.entries(ref)) near(M(n), v, 2e-3, `M nœud ${n}`);
+});
+
+test('RCC-M C 3658 : Z = π·r²·eₙ, piquage réduit π·r′ₘ²·tₛ (tₛ = min(Tᵣ, i·T_b)), points des coudes', () => {
+  const m = setup({ alpha: 12, maxLen: 500 });
+  m.sections.push({ id: 'B', od: 60.3, t: 3.91, millTol: 0, corrosion: 0, fluidDensity: 0, insulThk: 0, insulDensity: 0 });
+  m.components = ensureIds({
+    components: [
+      pipe('1', '2', 2000, 0, 0, { T1: 200 }),
+      pipe('2', '3', 2000, 0, 0, { T1: 200 }),
+      pipe('2', '4', 0, 1500, 0, { T1: 200, section: 'B' }),
+      pipe('4', '5', 0, 0, 1500, { T1: 200, section: 'B' }),
+      { type: 'tee', node: '2', teeType: 'welding' },
+      { type: 'bend', node: '4', radiusType: 'LR' },
+      sup('1', 'anchor'), sup('3', 'anchor'), sup('5', 'anchor'),
+    ],
+  }).components;
+  m.loadCases = [{ id: 'T1', type: 'thermal', enabled: true }];
+  let r = runAnalysis(m);
+  const run = pipeSection(m.sections[0]);
+  const br = pipeSection(m.sections[1]);
+  const rows = r.check.rows.filter((x) => x.eq === '7');
+  const zOf = (x) => x.detail.Z;
+  // tube principal au té et tube droit courant
+  near(zOf(rows.find((x) => x.node === '1')), Math.PI * run.rm ** 2 * run.t, 1e-12, 'Z tube');
+  // tronçon réduit au té
+  const brRow = rows.find((x) => x.node === '2' && r.mesh.elements[x.ie].sec.od < 100);
+  const i = brRow.detail.i;
+  near(zOf(brRow), Math.PI * br.rm ** 2 * Math.min(run.t, i * br.t), 1e-12, 'Z piquage réduit');
+  // coudes : points intérieurs (option du projet)
+  const inner = (rs) => rs.filter((x) => x.eq === '7' && x.comp === 'Coude 4' && !['4A', '4B'].includes(x.node)).length;
+  assert.ok(inner(r.check.rows) > 0, 'points intérieurs vérifiés par défaut');
+  m.settings.bendInnerPoints = false;
+  r = runAnalysis(m);
+  assert.equal(inner(r.check.rows), 0, 'extrémités seulement');
+  assert.ok(r.check.rows.some((x) => x.comp === 'Coude 4' && x.node === '4A'));
 });

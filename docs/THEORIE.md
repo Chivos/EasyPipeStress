@@ -174,6 +174,16 @@ la fois pour la dilatation et comme conditions de calcul du code.
 | (8) | (6) + (7), si (7) non satisfaite | P·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ Sh + S_A |
 | (10B), (10C), (10D) | Séisme, par niveau de critère | P·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ k·Sh, k = 1,2 (B), 1,8 (C), 2,4 (D) ; M_B = réponse sismique × coefficient du niveau |
 
+**Moments et module Z (C 3658).** Moment résultant √(Mx² + My² + Mz²) à
+l'extrémité de chaque élément (pour un té, séparément pour chaque branche, au
+nœud de jonction). Module Z = π·r²·eₙ (r rayon moyen, eₙ épaisseur nominale) pour
+les parties droites, cintrées, coudes, tés et piquages égaux ; pour le tronçon
+réduit d'un té ou d'un piquage réduit, Z = π·r′ₘ²·tₛ avec tₛ = min(Tᵣ, i·T_b)
+(Tᵣ épaisseur du collecteur, T_b du piquage, i SIF du té). La faculté de prendre
+le moment du piquage à la surface du collecteur quand r′ₘ/r < 0,5 n'est pas
+utilisée (moment à la jonction, conservatif). Coudes : vérification à tous les
+nœuds du coude, ou aux seules extrémités A et B (option de l'onglet Projet).
+
 0,75i est pris au moins égal à 1. En classe 2, seul le facteur
 d'intensification i intervient ; les indices de contraintes primaires B₁, B₂
 relèvent de la classe 1 (sous-section B) et ne sont pas utilisés.
@@ -246,6 +256,7 @@ Vérifications numériques (tests automatiques) :
 | Coude 90°, flexion hors plan + torsion | Castigliano avec I/k | < 0,5 % (10°/élément) |
 | Cadre 3D bi-encastré, dilatation (moments aux nœuds) | méthode des forces (EI, GJ, EA) | < 10⁻⁴ |
 | Cadre 3D à deux coudes LR, dilatation | méthode des forces sur l'arc exact, EI/k | < 0,1 % |
+| Ligne DN100 × 3,6 (3 coudes LR, 2 ancrages, appui-guide), éq. (7) RCC-M C | PIPESTRESS (même modèle, coudes vérifiés aux extrémités) | < 0,3 % sur S_E et le taux |
 | Fréquence propre d'une console | 1,875²/2π·√(EI/mL⁴) | < 0,5 % |
 | Oscillateur simple, spectre plat | m·Sa·L | < 10⁻⁴ |
 | Masse manquante, modes tronqués | réponse statique rigide | < 10⁻⁶ |
