@@ -93,6 +93,26 @@ axiale, ressort vertical, blocage personnalisé par DDL globaux.
 - Un pivot nul ou négatif signale un mécanisme : le message indique le nœud et
   le DDL non retenus.
 
+### 1.7 Repère local des résultats (U, V, W)
+
+Déplacements et efforts sur supports peuvent être présentés dans le repère
+global (X, Y, Z) ou dans un repère local (U, V, W) propre à chaque nœud, utile
+pour les tuyauteries non parallèles aux axes :
+
+- W : axe de l'élément de référence du nœud, même orientation (tube droit de
+  préférence à une corde de coude ou un robinet ; celui qui arrive au nœud,
+  sinon celui qui en part) ;
+- W non vertical : V dans le plan (W, verticale du projet), d'angle minimal
+  avec la verticale (verticale projetée orthogonalement à W) ;
+- W vertical : U suivant X (suivant Y si X est la verticale) ;
+- troisième axe par la règle de la main droite (U × V = W).
+
+Exemple : tube horizontal suivant +X, Z vertical → U = +Y, V = +Z, W = +X (W
+effort axial, V effort vertical, U effort latéral horizontal). Pour un cas
+sismique, la réponse de chaque mode et de chaque direction est projetée dans le
+repère local avant les combinaisons modale et directionnelle : projeter
+l'enveloppe globale, non signée, serait faux.
+
 ## 2. Chargements
 
 | Cas | Modélisation |

@@ -4,7 +4,7 @@
 
 import { h, download } from './dom.js';
 import { buildXlsx } from '../core/xlsx.js';
-import { displayCases, pointResults, supportPoint, forcePoint, modalSums, showModal } from './results.js';
+import { displayCases, pointResults, supportPoint, forcePoint, modalSums, showModal, frameAxes, LOCAL_FRAME_HELP } from './results.js';
 import { SUPPORT_KINDS } from '../components/support.js';
 
 /** Contenus exportables : [clé, libellé, disponible ?] */
@@ -76,38 +76,61 @@ function pointRows(r, def) {
   ];
 }
 
-function supportSheets(r) {
+function supportSheets(r, local) {
   return r.mesh.supports.map((s, k) => {
-    const def = supportPoint(r, k);
+    const def = supportPoint(r, k, local);
     return { name: `Sup ${s.label || k + 1} (${r.mesh.nodes[s.node].label})`, rows: [[def.title], [def.subtitle], ...pointRows(r, def)], header: 3 };
   });
 }
 
-function supportCaseSheets(r) {
-  return displayCases(r).map((c) => ({
-    name: `Supports ${c.id}`,
-    rows: [
-      ['Nœud', 'Repère', 'Type', 'FX (N)', 'FY (N)', 'FZ (N)', 'MX (N·m)', 'MY (N·m)', 'MZ (N·m)', 'DX (mm)', 'DY (mm)', 'DZ (mm)'],
-      ...r.mesh.supports.map((s, k) => [
-        r.mesh.nodes[s.node].label,
-        s.label,
-        SUPPORT_KINDS[s.kind]?.label ?? s.kind,
-        ...[0, 1, 2].map((d) => r3(c.supportLoads[k * 6 + d], 0)),
-        ...[3, 4, 5].map((d) => r3(c.supportLoads[k * 6 + d] / 1000, 1)),
-        ...[0, 1, 2].map((d) => r3(c.u[s.node * 6 + d], 3)),
-      ]),
-    ],
-  }));
+// Repère local : cosinus directeurs des axes U, V, W de chaque nœud, en fin de ligne.
+const FRAME_HEADS = ['Élément réf.', ...['U', 'V', 'W'].flatMap((a) => ['X', 'Y', 'Z'].map((g) => `${a}${g.toLowerCase()}`))];
+const frameCells = (r, node) => {
+  const f = r.mesh.frames?.[node];
+  return f ? [r.mesh.elements[f.elem].label, ...[f.U, f.V, f.W].flatMap((a) => a.map((x) => r3(x, 4)))] : [];
+};
+
+function supportCaseSheets(r, local) {
+  const ax = frameAxes(local);
+  return displayCases(r).map((c) => {
+    const s6 = local ? c.supportLoadsLocal : c.supportLoads;
+    const u = local ? c.uLocal : c.u;
+    return {
+      name: `Supports ${c.id}`,
+      rows: [
+        ['Nœud', 'Repère', 'Type', ...ax.map((a) => `F${a} (N)`), ...ax.map((a) => `M${a} (N·m)`), ...ax.map((a) => `D${a} (mm)`), ...(local ? FRAME_HEADS : [])],
+        ...r.mesh.supports.map((s, k) => [
+          r.mesh.nodes[s.node].label,
+          s.label,
+          SUPPORT_KINDS[s.kind]?.label ?? s.kind,
+          ...[0, 1, 2].map((d) => r3(s6[k * 6 + d], 0)),
+          ...[3, 4, 5].map((d) => r3(s6[k * 6 + d] / 1000, 1)),
+          ...[0, 1, 2].map((d) => r3(u[s.node * 6 + d], 3)),
+          ...(local ? frameCells(r, s.node) : []),
+        ]),
+      ],
+    };
+  });
 }
 
-function dispSheets(r) {
-  return displayCases(r).map((c) => ({
-    name: `Dépl ${c.id}`,
-    rows: [
-      ['Nœud', 'DX (mm)', 'DY (mm)', 'DZ (mm)', 'RX (°)', 'RY (°)', 'RZ (°)', 'D total (mm)'],
-      ...r.mesh.nodes.map((n, i) => [n.label, ...[0, 1, 2].map((d) => r3(c.u[i * 6 + d], 3)), ...[3, 4, 5].map((d) => r3((c.u[i * 6 + d] * 180) / Math.PI, 4)), r3(Math.hypot(c.u[i * 6], c.u[i * 6 + 1], c.u[i * 6 + 2]), 3)]),
-    ],
-  }));
+function dispSheets(r, local) {
+  const ax = frameAxes(local);
+  return displayCases(r).map((c) => {
+    const u = local ? c.uLocal : c.u;
+    return {
+      name: `Dépl ${c.id}`,
+      rows: [
+        ['Nœud', ...ax.map((a) => `D${a} (mm)`), ...ax.map((a) => `R${a} (°)`), 'D total (mm)', ...(local ? FRAME_HEADS : [])],
+        ...r.mesh.nodes.map((n, i) => [
+          n.label,
+          ...[0, 1, 2].map((d) => r3(u[i * 6 + d], 3)),
+          ...[3, 4, 5].map((d) => r3((u[i * 6 + d] * 180) / Math.PI, 4)),
+          r3(Math.hypot(u[i * 6], u[i * 6 + 1], u[i * 6 + 2]), 3),
+          ...(local ? frameCells(r, i) : []),
+        ]),
+      ],
+    };
+  });
 }
 
 function forceSheets(r) {
@@ -148,15 +171,15 @@ function modeSheet(r) {
 }
 
 /** Feuilles du classeur pour les contenus choisis. */
-export function exportSheets(state, keys) {
+export function exportSheets(state, keys, { local = false } = {}) {
   const r = state.result;
   const sel = new Set(keys);
   const sheets = [];
   if (sel.has('summary')) sheets.push(summarySheet(state, r));
   if (sel.has('code') && r.check) sheets.push(...codeSheets(r));
-  if (sel.has('supports')) sheets.push(...supportSheets(r));
-  if (sel.has('supportsCases')) sheets.push(...supportCaseSheets(r));
-  if (sel.has('disp')) sheets.push(...dispSheets(r));
+  if (sel.has('supports')) sheets.push(...supportSheets(r, local));
+  if (sel.has('supportsCases')) sheets.push(...supportCaseSheets(r, local));
+  if (sel.has('disp')) sheets.push(...dispSheets(r, local));
   if (sel.has('forces')) sheets.push(...forceSheets(r));
   if (sel.has('modes') && r.modal) sheets.push(modeSheet(r));
   return sheets;
@@ -177,6 +200,7 @@ export function openExportDialog(state) {
     const input = h('input', { type: 'checkbox', checked: ok && (saved ? saved.includes(key) : key !== 'forces'), disabled: !ok });
     return { key, input, el: h('label', { class: `check block${ok ? '' : ' muted'}` }, input, ' ', label) };
   });
+  const frameBox = h('input', { type: 'checkbox', checked: state.filter?.frame === 'local' });
   const go = () => {
     const keys = boxes.filter((b) => b.input.checked && !b.input.disabled).map((b) => b.key);
     if (!keys.length) return;
@@ -185,7 +209,7 @@ export function openExportDialog(state) {
     } catch {
       /* préférences non mémorisées */
     }
-    const data = buildXlsx(exportSheets(state, keys));
+    const data = buildXlsx(exportSheets(state, keys, { local: frameBox.checked }));
     const base = (state.model.meta.title || 'resultats').replace(/[^\p{L}\p{N}_-]+/gu, '_').slice(0, 60);
     download(`${base}.xlsx`, data, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     document.querySelector('.modal-backdrop')?.remove();
@@ -196,6 +220,7 @@ export function openExportDialog(state) {
     [
       h('p', { class: 'muted' }, 'Choisir les résultats à exporter : chaque donnée est placée dans une feuille du classeur (.xlsx).'),
       h('div', { class: 'export-list' }, boxes.map((b) => b.el)),
+      h('label', { class: 'check block', title: LOCAL_FRAME_HELP }, frameBox, ' Déplacements et efforts sur supports en repère local (U, V, W) des nœuds'),
       h(
         'div',
         { class: 'toolbar' },

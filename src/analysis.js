@@ -7,6 +7,7 @@ import { loadTypes } from './loads/index.js';
 import { codes } from './codes/index.js';
 import { summarize, thicknessRows } from './codes/common.js';
 import { seismicLevels } from './loads/seismic.js';
+import { localResponses } from './core/frames.js';
 
 export function runAnalysis(model) {
   const t0 = Date.now();
@@ -19,7 +20,9 @@ export function runAnalysis(model) {
   for (const lc of model.loadCases) {
     if (lc.enabled === false) continue;
     const type = loadTypes.get(lc.type);
-    const r = type.run(ctx, lc);
+    const run = type.run(ctx, lc);
+    // déplacements et efforts sur supports en repères locaux (déjà combinés pour le séisme)
+    const r = run.uLocal ? run : { ...run, ...localResponses(run, mesh) };
     if (lc.type === 'seismic') {
       // un cas par niveau de critère : même réponse, mise à l'échelle par le coefficient du niveau
       const used = new Set();
@@ -43,6 +46,8 @@ export function runAnalysis(model) {
           u: scale(r.u),
           elemForces: scale(r.elemForces),
           supportLoads: scale(r.supportLoads),
+          uLocal: scale(r.uLocal),
+          supportLoadsLocal: scale(r.supportLoadsLocal),
         });
       }
     } else {
@@ -78,5 +83,5 @@ export function combineSigned(cases, ids, label) {
     for (const c of list) for (let i = 0; i < out.length; i++) out[i] += c[key][i];
     return out;
   };
-  return { id: list.map((c) => c.id).join('+'), label, type: 'combination', signed: true, fe: true, u: add('u'), elemForces: add('elemForces'), supportLoads: add('supportLoads') };
+  return { id: list.map((c) => c.id).join('+'), label, type: 'combination', signed: true, fe: true, u: add('u'), elemForces: add('elemForces'), supportLoads: add('supportLoads'), uLocal: add('uLocal'), supportLoadsLocal: add('supportLoadsLocal') };
 }

@@ -49,7 +49,7 @@ const state = {
   quick: { from: '', to: '', dx: '', dy: '', dz: '', bend: true, tee: true, radius: '', len: '1000' },
   display: { mode: 'geom', scale: 1, labels: true, showAll: false, animate: true, render: '3d', ratioMap: 'bands' },
   highlight: null,
-  filter: { eq: null, internal: false, sort: true, failOnly: false, case: null, all: false },
+  filter: { eq: null, internal: false, sort: true, failOnly: false, case: null, all: false, frame: 'global' },
 };
 
 const $ = (sel) => document.querySelector(sel);
