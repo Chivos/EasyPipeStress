@@ -10,6 +10,7 @@ import { codes } from '../codes/index.js';
 import { newId } from '../core/model.js';
 import { DEFAULT_SPECTRUM } from '../core/model.js';
 import { seismicAxes, seismicLevels, defaultLevels, LEVELS } from '../loads/seismic.js';
+import { COMPONENTS } from '../loads/forces.js';
 import { PIPE_SIZES, schedulesOf } from '../core/pipeCatalog.js';
 import { fmt } from '../core/units.js';
 
@@ -388,6 +389,7 @@ export function renderLoads(app) {
       type?.description ? help(type.description) : null,
       type ? fieldForm(type.fields.filter((f) => (!f.show || f.show(lc)) && !(lc.type === 'seismic' && lc.method === 'static' && ['damping', 'dampingLaw', 'dampLow', 'fLow', 'dampHigh', 'fHigh', 'cutoff', 'maxModes', 'modal', 'missingMass', 'rigid'].includes(f.key))), lc, set, { model: m, focusPrefix: `lc${li}` }) : null,
       lc.type === 'seismic' ? seismicEditor(app, lc, li) : null,
+      lc.type === 'forces' ? forcesEditor(app, lc, li) : null,
     );
   });
   const typeSel = h('select', {}, loadTypes.list().map((t) => h('option', { value: t.id }, t.label)));
@@ -418,6 +420,25 @@ export function renderLoads(app) {
       ),
     ),
   );
+}
+
+/** Forces nodales : une ligne par nœud chargé (N, N·m, repère global). */
+function forcesEditor(app, lc, li) {
+  const edit = (fn) => app.update((mm) => fn((mm.loadCases[li].forces ??= [])));
+  return editableTable({
+    columns: [
+      { key: 'node', label: 'Nœud', type: 'text', width: 60, title: 'Repère du nœud (sommet de coude : nA, nM ou nB)' },
+      ...COMPONENTS.map((c) => ({ key: c, label: c, unit: c[0] === 'F' ? 'N' : 'N·m', type: 'number', width: 70 })),
+    ],
+    rows: lc.forces ?? [],
+    model: app.state.model,
+    onEdit: (i, k, v) => edit((rows) => (rows[i][k] = v)),
+    onDelete: (i) => edit((rows) => rows.splice(i, 1)),
+    onAdd: () => edit((rows) => rows.push({ node: '', FX: 0, FY: 0, FZ: 0, MX: 0, MY: 0, MZ: 0 })),
+    addLabel: 'Ajouter un effort',
+    focusPrefix: `lc${li}:forces`,
+    empty: 'Aucun effort.',
+  });
 }
 
 function defaultSeismic() {

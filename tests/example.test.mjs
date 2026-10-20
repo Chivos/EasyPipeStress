@@ -153,3 +153,18 @@ test('Modèles d’exemple : tous calculables, sans avertissement de maillage', 
   const max7 = Math.max(...ps.check.rows.filter((x) => x.eq === '7').map((x) => x.ratio));
   assert.ok(Math.abs(max7 - 0.396) < 0.002, `éq. (7) ${max7}`);
 });
+
+test('Problème de Hovgaard (SSLL101) : déplacements du point 3 et moment au point 1', async () => {
+  const { EXAMPLES } = await import('../src/core/examples.js');
+  const r = runAnalysis(normalizeModel(JSON.parse(JSON.stringify(EXAMPLES.find((e) => e.id === 'hovgaard').build()))));
+  const ref = { W: [-0.1658, -0.0204, -0.00801], F1: [-0.1651, -0.0208, -0.009516], T1: [-6.1418, -13.09, 16.799] };
+  const i = r.mesh.nodeIndex.get('C1A');
+  for (const [id, v] of Object.entries(ref)) {
+    const c = r.cases.find((x) => x.id === id);
+    v.forEach((x, d) => assert.ok(Math.abs(c.u[i * 6 + d] / x - 1) < 0.002, `${id} ${'XYZ'[d]} : ${c.u[i * 6 + d]} / ${x}`));
+  }
+  const W = r.cases.find((x) => x.id === 'W');
+  const k = r.mesh.supports.findIndex((s) => s.label === 'T1');
+  const meq = Math.hypot(...[3, 4, 5].map((d) => W.supportLoads[k * 6 + d] / 1000));
+  assert.ok(Math.abs(meq / 189.769 - 1) < 0.001, `Meq ${meq}`);
+});
