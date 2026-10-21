@@ -355,9 +355,15 @@ export class Viewer {
         draw: (c) => (fullAnchor ? this.drawDisc(c, p, axis, 1.0 * od, '#d62828', '#7a1010') : this.drawDisc(c, p, axis, 0.85 * od, '#f2c200', '#8a6d00')),
       });
     });
-    prims.sort((a, b) => b.depth - a.depth);
-    for (const pr of prims) pr.draw(ctx);
-
+    // Flèches des supports : en 3D, triées en profondeur avec les tubes (une flèche
+    // derrière le tube est masquée par lui) ; en filaire, dessinées par-dessus
+    const arrow = (tail, tip, color, od) => {
+      if (!solid) return this.drawArrow(ctx, tail, tip, color, od);
+      // profondeur du milieu de la flèche, légèrement avancée : à profondeur égale
+      // (flèche perpendiculaire à la vue), la flèche passe devant le tube
+      const depth = (this.toScreen(tail)[2] + this.toScreen(tip)[2]) / 2 - 0.05 * od;
+      prims.push({ depth, draw: (c) => this.drawArrow(c, tail, tip, color, od) });
+    };
     mesh.supports.forEach((sup, k) => {
       const p = P[sup.node];
       const od = odAtNode(sup.node) || 100;
@@ -384,17 +390,19 @@ export class Viewer {
           for (const sg of [-1, 1]) {
             const tip = vec.add(vec.add(p, off), vec.scale(axis, sg * 0.15 * od));
             const tail = vec.add(tip, vec.scale(axis, sg * L));
-            this.drawArrow(ctx, tail, tip, color, od);
+            arrow(tail, tip, color, od);
           }
           continue;
         }
         for (const sg of [-1, 1]) {
           const tip = vec.add(p, vec.scale(d, sg * R));
           const tail = vec.add(tip, vec.scale(d, sg * L));
-          this.drawArrow(ctx, tail, tip, color, od);
+          arrow(tail, tip, color, od);
         }
       }
     });
+    prims.sort((a, b) => b.depth - a.depth);
+    for (const pr of prims) pr.draw(ctx);
 
     // Nœud du composant ponctuel en cours d'édition (support, masse, té…)
     if (hlSpec?.node != null && !hlSpec.keepColor) {
