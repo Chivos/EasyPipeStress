@@ -108,11 +108,19 @@ export function buildScene(state) {
     }
   } else if (kind === 'ratio' && result.check) {
     const per = new Float64Array(mesh.elements.length);
+    const checked = new Set();
     for (const r of result.check.rows) {
       if (r.eq !== arg) continue;
-      const v = r.ratio;
-      if (v > per[r.ie]) per[r.ie] = v;
+      checked.add(r.ie);
+      if (r.ratio > per[r.ie]) per[r.ie] = r.ratio;
     }
+    // coudes vérifiés à leurs seules extrémités (option du projet) : le taux le
+    // plus élevé des extrémités A et B s'applique à tout le coude
+    const bendMax = new Map();
+    mesh.elements.forEach((e, ie) => e.bend && checked.has(ie) && bendMax.set(e.bend.node, Math.max(bendMax.get(e.bend.node) ?? 0, per[ie])));
+    mesh.elements.forEach((e, ie) => {
+      if (e.bend && !checked.has(ie) && bendMax.has(e.bend.node)) per[ie] = bendMax.get(e.bend.node);
+    });
     const jet = display.ratioMap === 'jet';
     scene.elementColors = Array.from(per, (v, ie) => (mesh.elements[ie].kind === 'valve' ? null : jet ? ratioJet(v) : ratioColor(v)));
     scene.legend = jet ? RATIO_JET_LEGEND : RATIO_LEGEND;
