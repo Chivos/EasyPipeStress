@@ -19,7 +19,8 @@ exportables/importables en JSON.
    changement de direction, et un té quand un troisième tube part d'un nœud
    (forgé, de fabrication renforcé ou non, ou SIF imposé). Tableaux éditables
    des tubes (section, matériau, températures et pressions de service et de
-   calcul), des coudes (rayon saisi ou normalisé ASME B16.9, épaisseur) et des
+   calcul), des coudes (rayon saisi ou normalisé ASME B16.9, épaisseur), des
+   réductions concentriques ou excentriques (facteur i du RCC-M C 3673) et des
    tés. Sections normalisées ASME B36.10M / B36.19M proposées par catalogue.
 2. **Supports & masses** : ancrages, appuis, guides, butées, ressorts, blocages
    personnalisés, déplacements imposés de piquage ; masses ponctuelles.
@@ -99,7 +100,7 @@ Les trois axes d'évolution sont des **registres** : on ajoute un module et on
 l'enregistre, sans toucher au reste. L'interface de saisie est générée à partir
 des descripteurs `fields`.
 
-- **Nouveau composant** (réduction, bride, robinet rigide, compensateur…) :
+- **Nouveau composant** (bride, compensateur, coude à onglets…) :
   créer `src/components/xxx.js` exportant `{ id, label, phase, fields, create,
   mesh }` puis `components.register(xxx)` dans `src/components/index.js`.
   - `phase: 'line'` : `mesh()` appelle `ctx.addSegment({...})` ;

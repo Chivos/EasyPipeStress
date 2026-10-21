@@ -20,7 +20,9 @@ export const pipe = {
   ],
 
   create(model, { from, to, dx = 0, dy = 0, dz = 0 } = {}) {
-    const prev = [...model.components].reverse().find((c) => c.type === 'pipe');
+    const prev = [...model.components].reverse().find((c) => c.type === 'pipe' || c.type === 'reducer');
+    // après une réduction : section de son extrémité aval
+    const section = prev?.type === 'reducer' ? prev.section2 || prev.section : prev?.section;
     return {
       type: 'pipe',
       n1: from ?? '',
@@ -28,7 +30,7 @@ export const pipe = {
       dx,
       dy,
       dz,
-      section: prev?.section ?? model.sections[0]?.id,
+      section: section ?? model.sections[0]?.id,
       material: prev?.material ?? model.materials[0]?.id,
       T1: prev?.T1 ?? 20,
       P1: prev?.P1 ?? 0,

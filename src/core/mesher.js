@@ -130,12 +130,12 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
   for (const s of segments) {
     const L = vec.norm(vec.sub(s.pb, s.pa));
     if (L < 1) continue; // extrémités fusionnées ci-dessus
-    const nsub = s.subdivide ? Math.max(1, Math.ceil(L / maxLen - 1e-9)) : 1;
+    const nsub = s.nsub ?? (s.subdivide ? Math.max(1, Math.ceil(L / maxLen - 1e-9)) : 1);
     let prev = getNode(s.a, s.pa, s.nodeKinds[0]);
     const end = getNode(s.b, s.pb, s.nodeKinds[1]);
     for (let k = 1; k <= nsub; k++) {
       const cur = k === nsub ? end : getNode(`${s.a}>${s.b}.${k}`, vec.add(s.pa, vec.scale(vec.sub(s.pb, s.pa), k / nsub)), 'internal');
-      rawElems.push({ seg: s, n1: prev, n2: cur, massLength: s.massLength != null ? s.massLength : L / nsub });
+      rawElems.push({ seg: s, n1: prev, n2: cur, massLength: s.massLength != null ? s.massLength : L / nsub, frac: [(k - 1) / nsub, k / nsub] });
       prev = cur;
     }
   }
@@ -154,7 +154,13 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
   for (const re of rawElems) {
     const { seg } = re;
     const p = seg.props;
-    const sec = sections.get(p.section);
+    // réduction : section interpolée au milieu du sous-élément (raideur, masse),
+    // sections exactes de ses extrémités pour la vérification du code
+    const taperAt = (x) => {
+      const [s1, s2] = p.taper;
+      return { ...s1, id: `${s1.id}→${s2.id}`, od: +s1.od + (+s2.od - +s1.od) * x, t: +s1.t + (+s2.t - +s1.t) * x };
+    };
+    const sec = p.taper ? taperAt((re.frac[0] + re.frac[1]) / 2) : sections.get(p.section);
     const mat = materials.get(p.material);
     if (!sec) {
       errors.push(`Élément ${seg.a}-${seg.b} : section « ${p.section} » introuvable.`);
@@ -179,7 +185,7 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
     const cold = materialAt(mat, tRef);
     const hot = materialAt(mat, p.T1);
     if (hot.outOfRange) warnings.push(`Matériau ${mat.id} : température ${p.T1} °C hors de la table (extrapolation constante).`);
-    const f = factors({ kind: seg.kind, sec: sp, bend: p.bend, P: p.P1, Ec: cold.E, params: model.code?.params ?? {} });
+    const f = factors({ kind: seg.kind, sec: sp, bend: p.bend, reducer: p.reducer, P: p.P1, Ec: cold.E, params: model.code?.params ?? {} });
     const valve = p.valve ?? null;
     // robinet : masse totale répartie sur la longueur, sans fluide ni calorifuge
     const metal = valve ? kgToT(valve.mass) / L : densityToInternal(mat.density) * sp.A;
@@ -209,6 +215,8 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
       Pd: p.Pd,
       bend: p.bend ?? null,
       valve,
+      reducer: p.reducer ?? null,
+      endSec: p.taper ? re.frac.map((x) => pipeSection(taperAt(x))) : null, // sections des extrémités (réduction)
       factors: f,
       endFactors: [null, null], // facteurs locaux d'extrémité (té), prioritaires sur `factors`
       massLength: re.massLength,

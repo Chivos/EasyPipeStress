@@ -671,3 +671,41 @@ test('Forces nodales : avertissement (hors équations du code)', () => {
   const r = runAnalysis(m);
   assert.ok(r.warnings.some((w) => /F1.*sans effet sur les équations/.test(w)), r.warnings.join(' | '));
 });
+
+test('Réduction concentrique / excentrique : sections interpolées, i du RCC-M C 3673, sections des extrémités', async () => {
+  const { reducerSif } = await import('../src/components/reducer.js');
+  const m = setup({ density: 7850, maxLen: 500 });
+  m.sections.push({ id: 'B', od: 114.3, t: 6.02, millTol: 0, corrosion: 0, fluidDensity: 0, insulThk: 0, insulDensity: 0 });
+  const red = { type: 'reducer', n1: '2', n2: '3', dx: 152, dy: 0, dz: 0, kind: 'eccentric', section: 'S', section2: 'B', alpha: '', material: 'M', T1: 150, P1: 0 };
+  m.components = ensureIds({ components: [pipe('1', '2', 2000, 0, 0, { T1: 150 }), red, pipe('3', '4', 0, 2000, 0, { section: 'B', T1: 150 }), sup('1', 'anchor'), sup('4', 'anchor')] }).components;
+  m.loadCases = [{ id: 'W', type: 'weight', enabled: true }, { id: 'T1', type: 'thermal', enabled: true }];
+  let r = runAnalysis(m);
+  const els = r.mesh.elements.filter((e) => e.kind === 'reducer');
+  assert.equal(els.length, 6);
+  // excentrique : α = atan((D₁ − D₂)/L) ; i = 0,5 + 0,01·α·√(D₂/t₂)
+  const alpha = (Math.atan((168.3 - 114.3) / 152) * 180) / Math.PI;
+  near(els[0].reducer.alpha, alpha, 1e-9, 'α excentrique');
+  near(els[0].factors.i, 0.5 + 0.01 * alpha * Math.sqrt(114.3 / 6.02), 1e-9, 'i');
+  assert.equal(els[0].factors.k, 1);
+  // continuité des sections et extrémités exactes
+  const ends = els.flatMap((e) => e.endSec.map((s) => s.od)).sort((a, b) => b - a);
+  near(ends[0], 168.3, 1e-9, 'gros bout');
+  near(ends[ends.length - 1], 114.3, 1e-9, 'petit bout');
+  // poids : masse du cône = ρ·∫A(x)dx (A quadratique en x : Simpson exact ; 6 sous-éléments au point milieu)
+  const mass = els.reduce((s, e) => s + e.mpl.metal * e.massLength, 0) * 1000;
+  const A = (D, t) => (Math.PI / 4) * (D * D - (D - 2 * t) ** 2);
+  near(mass, (7850e-9 * (A(168.3, 7.11) + 4 * A((168.3 + 114.3) / 2, (7.11 + 6.02) / 2) + A(114.3, 6.02)) * 152) / 6, 0.002, 'masse du cône (kg)');
+  // vérification : la ligne du petit bout utilise D₂, t₂
+  const row = r.check.rows.find((x) => x.eq === '7' && x.node === '3' && x.kind === 'reducer');
+  near(row.detail.Z, Math.PI * ((114.3 - 6.02) / 2) ** 2 * 6.02, 1e-9, 'Z au petit bout');
+  near(row.detail.i, els[0].factors.i, 1e-12, 'i à l’extrémité');
+  // concentrique : demi-angle, et domaine de validité
+  m.components.find((c) => c.type === 'reducer').kind = 'concentric';
+  r = runAnalysis(m);
+  near(r.mesh.elements.find((e) => e.kind === 'reducer').reducer.alpha, (Math.atan(27 / 152) * 180) / Math.PI, 1e-9, 'α concentrique');
+  assert.equal(reducerSif({ alpha: 70, D1: 168.3, t1: 7.11, D2: 114.3, t2: 6.02 }).i, 2, 'α > 60° : i = 2');
+  assert.equal(reducerSif({ alpha: 5, D1: 168.3, t1: 7.11, D2: 114.3, t2: 6.02 }).i, 1, 'i ≥ 1');
+  // coude contre une réduction : refusé
+  m.components.push({ type: 'bend', node: '3', id: 'b3' });
+  assert.throws(() => runAnalysis(m), /réduction/);
+});

@@ -282,8 +282,20 @@ export class Viewer {
         pts.push(...(k ? t.pts.slice(1) : t.pts));
         segColors.push(...t.segColors);
       });
-      const od = chain[0].e.sec.od;
+      let od = chain[0].e.sec.od;
+      // réduction : diamètre variant linéairement le long du cône, d'une extrémité à l'autre
+      const cone = chain[0].e.kind === 'reducer';
+      const endOd = (x, node) => x.endSec[node === x.n1 ? 0 : 1].od;
+      const p0 = pts[0];
+      const ltot = cone ? vec.norm(vec.sub(pts[pts.length - 1], p0)) : 0;
       trimPolyline(pts, segColors, chain.trim[0], chain.trim[1]);
+      if (cone) {
+        const f = chain[0];
+        const l = chain[chain.length - 1];
+        const od0 = endOd(f.e, f.rev ? f.e.n2 : f.e.n1);
+        const od1 = endOd(l.e, l.rev ? l.e.n1 : l.e.n2);
+        od = pts.map((p) => od0 + (od1 - od0) * (ltot > 0 ? Math.min(1, vec.norm(vec.sub(p, p0)) / ltot) : 0));
+      }
       const scr = pts.map((p) => this.toScreen(p));
       if (solid) prims.push(...this.chainPrims(scr, segColors, od));
       else {
@@ -661,7 +673,9 @@ export class Viewer {
    * profondeur correct vis-à-vis des robinets, des supports et des autres lignes.
    */
   chainPrims(scr, segColors, od) {
-    const w = Math.max(1.2, od * this.frame.s);
+    // od : diamètre constant, ou un diamètre par sommet (réduction)
+    const wv = scr.map((_, i) => Math.max(1.2, (Array.isArray(od) ? od[i] : od) * this.frame.s));
+    const w = Math.max(...wv);
     const n = scr.length;
     if (n < 2) return [];
     const sc = this.frame.s;
@@ -731,12 +745,19 @@ export class Viewer {
       }
       // demi-ellipses d'extrémité : demi-petit axe = R·|cos| (R en pixels) ; inutiles
       // à un raccord régulier avec un tronçon voisin assez long pour les couvrir
-      const capR = (w / 2) * tilt[k - 1];
+      const wA = wv[k - 1];
+      const wB = wv[k];
+      const capRA = (wA / 2) * tilt[k - 1];
+      const capRB = (wB / 2) * tilt[k - 1];
       const segLen = Math.hypot(scr[k][0] - scr[k - 1][0], scr[k][1] - scr[k - 1][1]);
       const short = segLen < w;
-      const capA = k === 1 || !joint[k - 1] || short ? capR : 0;
-      const capB = k === n - 1 || !joint[k] || short ? capR : 0;
+      const capA = k === 1 || !joint[k - 1] || short ? capRA : 0;
+      const capB = k === n - 1 || !joint[k] || short ? capRB : 0;
+      // y : coordonnée transversale rapportée au plus grand diamètre (−w/2…w/2) ;
+      // mise à l'échelle de chaque extrémité par son propre diamètre
       const ell = (y) => Math.sqrt(Math.max(0, 1 - ((2 * y) / w) ** 2));
+      const sA = wA / w;
+      const sB = wB / w;
       // léger recouvrement longitudinal entre tronçons : pas de joint visible
       const e0 = k > 1 ? 0.6 : 0;
       const e1 = k < n - 1 ? 0.6 : 0;
@@ -754,15 +775,15 @@ export class Viewer {
             // bord y0 → y1 côté A (avec la demi-ellipse), puis retour côté B
             yc.forEach((y, i) => {
               const ex = e0 + capA * ell(y);
-              const x = A[0] + n0[0] * y - d[0] * ex;
-              const yy = A[1] + n0[1] * y - d[1] * ex;
+              const x = A[0] + n0[0] * y * sA - d[0] * ex;
+              const yy = A[1] + n0[1] * y * sA - d[1] * ex;
               if (i === 0) ctx.moveTo(x, yy);
               else ctx.lineTo(x, yy);
             });
             for (let i = 2; i >= 0; i--) {
               const y = yc[i];
               const ex = e1 + capB * ell(y);
-              ctx.lineTo(B[0] + n1[0] * y + d[0] * ex, B[1] + n1[1] * y + d[1] * ex);
+              ctx.lineTo(B[0] + n1[0] * y * sB + d[0] * ex, B[1] + n1[1] * y * sB + d[1] * ex);
             }
             ctx.closePath();
             ctx.fill();
@@ -814,7 +835,9 @@ export class Viewer {
           const pair = runPair.get(node);
           next = pair[0] === cur ? pair[1] : pair[0];
         } else break;
-        if (used.has(next) || Math.abs(next.sec.od - cur.sec.od) > 1e-6) break;
+        // réduction : une suite à part (cône continu), même si les diamètres se raccordent
+        if (used.has(next) || (next.kind === 'reducer') !== (cur.kind === 'reducer')) break;
+        if (cur.kind !== 'reducer' && Math.abs(next.sec.od - cur.sec.od) > 1e-6) break;
         used.add(next);
         const rev = next.n2 === node;
         out.push({ e: next, rev });
