@@ -189,3 +189,19 @@ test('Problème de Hovgaard (SDLX02) : fréquences et réponse spectrale', async
     });
   }
 });
+
+test('Cas test collecteur DN200 : éq. (7) dépassée, couverte par l’éq. (8) ; précharges réglées sur le poids', async () => {
+  const { EXAMPLES } = await import('../src/core/examples.js');
+  const m = normalizeModel(JSON.parse(JSON.stringify(EXAMPLES.find((e) => e.id === 'benchmark').build())));
+  const r = runAnalysis(m);
+  assert.deepEqual(r.warnings, []);
+  for (const t of ['tee', 'reducer', 'valve']) assert.ok(m.components.some((c) => c.type === t), t);
+  const over7 = r.check.rows.filter((x) => x.eq === '7' && x.ratio > 1);
+  assert.ok(over7.length >= 2, 'éq. (7) dépassée');
+  assert.ok(over7.every((x) => x.coveredBy === '8'), 'éq. (8) satisfaite aux points concernés');
+  assert.ok(over7.some((x) => x.comp.startsWith('Té')), 'dépassement au té');
+  assert.ok(r.check.summary.ok);
+  assert.ok(r.check.rows.some((x) => x.eq === '10C'));
+  const W = r.cases.find((c) => c.id === 'W');
+  for (const lab of ['25', '75']) assert.ok(Math.abs(W.u[r.mesh.nodeIndex.get(lab) * 6 + 2]) < 0.1, `uz ${lab}`);
+});

@@ -172,9 +172,91 @@ function hovgaard() {
   return ensureIds(m);
 }
 
+/**
+ * Cas test complet (à reproduire dans un autre logiciel) : collecteur DN200
+ * d'un réservoir vers l'aspiration d'une pompe (descente verticale sur la bride),
+ * réduction concentrique DN200 × DN150, robinet,
+ * piquage DN100 par té forgé vers un second équipement ; points fixes, supports
+ * variables, appui-guide, guide, butée axiale. Poids, dilatation à 300 °C et
+ * séisme spectral niveau C ; la dilatation dépasse l'admissible de l'éq. (7) au té
+ * et aux coudes 60 et 70, ce qui fait jouer l'éq. (8).
+ */
+function fullBenchmark() {
+  const m = emptyModel();
+  m.meta.title = 'Cas test – collecteur DN200, té, réduction, robinet, supports variables';
+  m.meta.notes =
+    'Cas destiné à la comparaison avec un logiciel de référence. P265GH, 300 °C, 3 MPa, eau, calorifuge. ' +
+    'Coudes vérifiés à leurs extrémités. Séisme : spectre ξ = 5 %, interpolation linéaire, modes jusqu’à 100 Hz + masse manquante, CQC, SRSS des directions, vertical = 2/3 horizontal.';
+  m.settings.bendInnerPoints = false;
+  m.sections = [
+    { id: 'DN200', name: 'DN200 Sch 40 (219,1 × 8,18)', od: 219.1, t: 8.18, millTol: 12.5, corrosion: 0, fluidDensity: 1000, insulThk: 80, insulDensity: 120 },
+    { id: 'DN150', name: 'DN150 Sch 40 (168,3 × 7,11)', od: 168.3, t: 7.11, millTol: 12.5, corrosion: 0, fluidDensity: 1000, insulThk: 80, insulDensity: 120 },
+    { id: 'DN100', name: 'DN100 Sch 40 (114,3 × 6,02)', od: 114.3, t: 6.02, millTol: 12.5, corrosion: 0, fluidDensity: 1000, insulThk: 60, insulDensity: 120 },
+  ];
+  const cond = { material: 'P265GH', T1: 300, P1: 3 };
+  const pipes = [
+    // collecteur DN200 : réservoir (10) → té (30)
+    ['10', '20', 3000, 0, 0, 'DN200'],
+    ['20', '25', 0, 1250, 0, 'DN200'],
+    ['25', '30', 0, 1250, 0, 'DN200'],
+    ['30', '40', 0, 1500, 0, 'DN200'],
+    // DN150 après la réduction (40 → 41)
+    ['41', '45', 0, 500, 0, 'DN150'],
+    ['45', '50', 0, 500, 0, 'DN150'],
+    ['51', '60', 0, 1000, 0, 'DN150'],
+    ['60', '65', 0, 0, 1000, 'DN150'],
+    ['65', '70', 0, 0, 1000, 'DN150'],
+    ['70', '75', 2000, 0, 0, 'DN150'],
+    ['75', '78', 1000, 0, 0, 'DN150'],
+    ['78', '80', 1000, 0, 0, 'DN150'],
+    ['80', '85', 0, 1000, 0, 'DN150'],
+    ['85', '90', 0, 1000, 0, 'DN150'],
+    // descente vers la bride d'aspiration de la pompe (100)
+    ['90', '100', 0, 0, -1500, 'DN150'],
+    // piquage DN100 : té (30) → second équipement (120)
+    ['30', '110', 0, 0, -700, 'DN100'],
+    ['110', '120', 600, 0, 0, 'DN100'],
+  ];
+  for (const [n1, n2, dx, dy, dz, section] of pipes) m.components.push({ type: 'pipe', n1, n2, dx, dy, dz, section, ...cond });
+  m.components.push({ type: 'reducer', n1: '40', n2: '41', dx: 0, dy: 152, dz: 0, kind: 'concentric', section: 'DN200', section2: 'DN150', alpha: '', ...cond });
+  m.components.push({ type: 'valve', n1: '50', n2: '51', dx: 0, dy: 400, dz: 0, mass: 150, stiffFactor: 10, section: 'DN150', label: 'Robinet DN150' });
+  for (const node of ['20', '60', '70', '80', '90', '110']) m.components.push({ type: 'bend', node, radiusType: 'LR', radius: '', t: '', divisions: '' });
+  m.components.push({ type: 'tee', node: '30', teeType: 'welding', pad: '', sif: '', label: 'Té DN200 × DN100' });
+  m.components.push({ type: 'support', node: '10', kind: 'anchor', label: 'Réservoir' });
+  m.components.push({ type: 'support', node: '25', kind: 'variable', stiffness: 100, preload: PRELOADS.V1, label: 'V1' });
+  m.components.push({ type: 'support', node: '45', kind: 'restguide', label: 'AG1' });
+  m.components.push({ type: 'support', node: '65', kind: 'guide', label: 'G1' });
+  m.components.push({ type: 'support', node: '75', kind: 'variable', stiffness: 100, preload: PRELOADS.V2, label: 'V2' });
+  m.components.push({ type: 'support', node: '78', kind: 'axial', label: 'BA1' });
+  m.components.push({ type: 'support', node: '85', kind: 'restguide', label: 'AG2' });
+  m.components.push({ type: 'support', node: '100', kind: 'anchor', label: 'Pompe' });
+  m.components.push({ type: 'support', node: '120', kind: 'anchor', label: 'Équipement' });
+  const seismic = m.loadCases.find((c) => c.type === 'seismic');
+  const pts = [[0.5, 0.1], [1, 0.25], [2, 0.6], [3, 1], [8, 1], [15, 0.55], [33, 0.3], [50, 0.3]];
+  Object.assign(seismic, {
+    levels: [
+      { level: 'B', enabled: false, factor: 1 },
+      { level: 'C', enabled: true, factor: 1, name: 'SMS' },
+      { level: 'D', enabled: false, factor: 1 },
+    ],
+    damping: 5,
+    cutoff: 100,
+    modal: 'CQC',
+    directional: 'SRSS',
+    missingMass: true,
+    rigid: 'none',
+    interp: 'linear',
+    sameHorizontal: false,
+    spectra: { X: { factor: 1, points: pts.map((p) => [...p]) }, Y: { factor: 1, points: pts.map((p) => [...p]) }, Z: { factor: 0.6667, points: pts.map((p) => [...p]) } },
+  });
+  return ensureIds(m);
+}
+const PRELOADS = { V1: 3490, V2: 2990 }; // réglées sur le poids repris (supports bloqués verticalement)
+
 export const EXAMPLES = [
   { id: 'dn150', title: 'Ligne DN150 inox entre trois piquages', description: 'Trois coudes LR, un té forgé, un robinet, une masse ponctuelle, appui-guide, déplacement imposé de piquage ; poids, pression, dilatation, séisme B/C/D.', build: exampleModel },
   { id: 'pipestress', title: 'Ligne DN100 × 3,6 inox – séisme niveau C', description: 'Trois coudes, un appui-guide, deux points fixes (coudes vérifiés aux extrémités, Sc = 117 MPa). Poids, dilatation, modal et séisme niveau C (SMS).', build: pipestressBenchmark },
   { id: 'springs', title: 'Ligne DN200 acier carbone – supports à ressort', description: 'Pompe → échangeur : colonne montante, robinet de 350 kg, débitmètre de 60 kg, deux supports variables et un support constant réglés sur le poids.', build: springSupportedLine },
+  { id: 'benchmark', title: 'Cas test – collecteur DN200 (té, réduction, robinet, supports variables)', description: 'Poids, dilatation à 300 °C (éq. (7) dépassée au té et aux coudes, éq. (8) jouée), séisme spectral niveau C ; points fixes, supports variables, appui-guide, guide, butée axiale ; té forgé, réduction concentrique, robinet.', build: fullBenchmark },
   { id: 'hovgaard', title: 'Validation – problème de Hovgaard (SSLL101, SDLX02)', description: 'Cas test Code_Aster SSLL101 (Kellogg 1956) : tuyauterie non plane à deux coudes, encastrée aux extrémités ; poids, dilatation et forces nodales (SSLL101), analyse modale et réponse spectrale (SDLX02) comparées aux valeurs de référence.', build: hovgaard },
 ];
