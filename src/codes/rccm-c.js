@@ -18,7 +18,7 @@
 //  Épaisseur minimale (méthode `thickness`, si l'option du projet est cochée) :
 //            C 3641.1  e_m = P·De / (2(S/I + y·P)) + c,  y = 0,4
 // Facteurs des coudes : h = e·R/r² ; k = 1,65/h ≥ 1 ; i = 0,9/h^(2/3) ≥ 1.
-// Réductions (C 3673) : k = 1, i = 0,5 + 0,01·α·(D₂/t₂)^½, 1 ≤ i ≤ 2,0 (α ≤ 60°,
+// Réductions concentriques ASME B16.9 / MSS SP 43 (C 3673) : k = 1, i = 0,5 + 0,01·α·(D₂/t₂)^½, 1 ≤ i ≤ 2,0 (α ≤ 60°,
 // D/t ≤ 100, sinon i = 2,0) ; chaque extrémité vérifiée avec sa propre section.
 // Tés (i = 0,9/h^(2/3) ≥ 1, k = 1) : forgé h = 4,4e/r, fabrication renforcé
 // h = (e + e_r/2)^(5/2)/(e^(3/2)·r), non renforcé h = e/r ; le SIF du té

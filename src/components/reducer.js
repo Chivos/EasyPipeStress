@@ -3,12 +3,13 @@
 // côté « À »). Modélisée par des sous-éléments de poutre droits de diamètre et
 // d'épaisseur interpolés linéairement (raideur, masse, poids, fluide) ; chaque
 // extrémité est vérifiée avec sa propre section.
-// RCC-M C 3673 (tableau des facteurs, identique à ASME NC-3673.2(b)-1) :
-//   k = 1 ; i = 0,5 + 0,01·α·(D₂/t₂)^½, 1 ≤ i ≤ 2,0,
+// RCC-M C 3673, tableau des facteurs, ligne « Réductions concentriques (ASME
+// B16.9 ou MSS SP 43), notes (2), (7) » (identique à ASME NC-3673.2(b)-1) :
+//   k = 1 ; i = 0,5 + 0,01·α·(D₂/t₂)^½, 2,0 au plus (et au moins 1),
 //   α demi-angle du cône (°), D₂, t₂ diamètre et épaisseur au petit bout ;
 //   conditions : α ≤ 60°, D/t ≤ 100 aux deux extrémités ; à défaut, i = 2,0.
-// Excentrique : même formule, α étant l'angle de la génératrice inclinée (côté
-// opposé au plat) ; l'excentricité de l'axe est à donner, si on veut la
+// Excentrique : non couverte par le tableau ; formule de la concentrique avec α
+// angle de la génératrice inclinée (côté opposé au plat), avec avertissement ; l'excentricité de l'axe est à donner, si on veut la
 // représenter, dans les composantes DX, DY, DZ (axe du tube : droite entre nœuds).
 
 export const REDUCER_TYPES = {
@@ -74,6 +75,7 @@ export const reducer = {
     const [big, small] = +s1.od >= +s2.od ? [s1, s2] : [s2, s1];
     const alpha = reducerAngle({ type: comp.kind, alpha: comp.alpha }, +big.od, +small.od, L);
     const { i, ok } = reducerSif({ alpha, D1: +big.od, t1: +big.t, D2: +small.od, t2: +small.t });
+    if (comp.kind === 'eccentric') ctx.warn(`${name} : réduction excentrique non couverte par le tableau du RCC-M C 3673 (réductions concentriques ASME B16.9 / MSS SP 43) ; formule de la concentrique appliquée avec l'angle de la génératrice inclinée.`);
     if (!ok) ctx.warn(`${name} : hors du domaine de la formule du RCC-M (α ≤ 60°, D/t ≤ 100) : i = 2,0.`);
     if (+s1.od === +s2.od) ctx.warn(`${name} : sections de même diamètre.`);
     const T = +comp.T1 || 0;

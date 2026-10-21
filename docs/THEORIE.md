@@ -70,11 +70,13 @@ avec la section exacte de ce point, en particulier le petit bout avec D₂, t₂
 L'axe est la droite entre les deux nœuds : l'excentricité d'une réduction
 excentrique se représente, si on le souhaite, par les composantes DX, DY, DZ.
 
-Facteurs (RCC-M C 3673, identiques à ASME NC-3673.2(b)-1) : k = 1 et
+Facteurs (RCC-M C 3673, ligne « Réductions concentriques (ASME B16.9 ou MSS SP 43) »,
+notes (2) et (7), identique à ASME NC-3673.2(b)-1) : k = 1 et
 i = 0,5 + 0,01·α·(D₂/t₂)^½, avec 1 ≤ i ≤ 2,0, D₂, t₂ au petit bout et α le
 demi-angle du cône en degrés (génératrice inclinée pour une excentrique). La
 formule vaut pour α ≤ 60° et D/t ≤ 100 aux deux extrémités ; hors de ce
-domaine, i = 2,0 (avertissement). α est saisi, ou déduit de la géométrie :
+domaine, i = 2,0 (avertissement). Les réductions excentriques ne figurent pas au
+tableau : la formule de la concentrique leur est appliquée (avertissement). α est saisi, ou déduit de la géométrie :
 tan α = (D₁ − D₂)/(2L) pour une concentrique, (D₁ − D₂)/L pour une excentrique
 (cône occupant toute la longueur ; saisir α quand la partie conique est plus
 courte que le face-à-face). Un coude ne peut pas être placé directement
