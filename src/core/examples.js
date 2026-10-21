@@ -10,13 +10,13 @@ const PS_V = [[0.2, 0.032], [0.25, 0.04091], [0.3, 0.05], [0.35, 0.0593], [0.4, 
 /** Ligne DN100 × 3,6 inox comparée à PIPESTRESS (poids, dilatation, modal, séisme 10C). */
 function pipestressBenchmark() {
   const m = emptyModel();
-  m.meta.title = 'Comparaison PIPESTRESS – ligne DN100 × 3,6 inox';
-  m.meta.notes = 'Même modèle que le cas PIPESTRESS (CALTUY) : coudes vérifiés à leurs extrémités, Sc = 117 MPa à 20 °C comme dans les données PIPESTRESS.';
+  m.meta.title = 'Ligne DN100 × 3,6 inox – coudes, appui-guide, séisme niveau C';
+  m.meta.notes = 'Coudes vérifiés à leurs extrémités ; Sc = 117 MPa à 20 °C.';
   m.settings.bendInnerPoints = false;
   m.materials = [
     {
       id: 'Z2CND17-12',
-      name: 'Z2CND17-12 (données du cas PIPESTRESS)',
+      name: 'Z2CND17-12',
       density: 7852,
       nu: 0.3,
       table: [
@@ -174,7 +174,7 @@ function hovgaard() {
 
 export const EXAMPLES = [
   { id: 'dn150', title: 'Ligne DN150 inox entre trois piquages', description: 'Trois coudes LR, un té forgé, un robinet, une masse ponctuelle, appui-guide, déplacement imposé de piquage ; poids, pression, dilatation, séisme B/C/D.', build: exampleModel },
-  { id: 'pipestress', title: 'Comparaison PIPESTRESS – DN100 × 3,6 inox', description: 'Cas de validation : même modèle que dans PIPESTRESS (coudes vérifiés aux extrémités, Sc = 117 MPa). Poids, dilatation, modal et séisme niveau C (SMS).', build: pipestressBenchmark },
+  { id: 'pipestress', title: 'Ligne DN100 × 3,6 inox – séisme niveau C', description: 'Trois coudes, un appui-guide, deux points fixes (coudes vérifiés aux extrémités, Sc = 117 MPa). Poids, dilatation, modal et séisme niveau C (SMS).', build: pipestressBenchmark },
   { id: 'springs', title: 'Ligne DN200 acier carbone – supports à ressort', description: 'Pompe → échangeur : colonne montante, robinet de 350 kg, débitmètre de 60 kg, deux supports variables et un support constant réglés sur le poids.', build: springSupportedLine },
   { id: 'hovgaard', title: 'Validation – problème de Hovgaard (SSLL101, SDLX02)', description: 'Cas test Code_Aster SSLL101 (Kellogg 1956) : tuyauterie non plane à deux coudes, encastrée aux extrémités ; poids, dilatation et forces nodales (SSLL101), analyse modale et réponse spectrale (SDLX02) comparées aux valeurs de référence.', build: hovgaard },
 ];
