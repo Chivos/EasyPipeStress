@@ -182,7 +182,21 @@ export function renderResultsPanel(app) {
             s.governing.map((g) =>
               h(
                 'tr',
-                { class: 'clickable', title: 'Détail du calcul', onclick: () => (app.select(g.node), openRowDetail(g)), onmouseenter: () => app.highlight(rowHighlight(g)), onmouseleave: () => app.highlight(null) },
+                {
+                  class: `clickable${st.display.mode === `ratio:${g.eq}` ? ' sel' : ''}`,
+                  title: 'Afficher cette équation dans la vue et dans « Vérification code »',
+                  // équation affichée dans la vue et le tableau du bas ; le détail du calcul reste dans « Vérification code »
+                  onclick: () =>
+                    app.setUi((s0) => {
+                      s0.display.mode = `ratio:${g.eq}`;
+                      s0.filter.eq = g.eq;
+                      s0.bottomTab = 'code';
+                      s0.bottomOpen = true;
+                      s0.selected = g.node;
+                    }),
+                  onmouseenter: () => app.highlight(rowHighlight(g)),
+                  onmouseleave: () => app.highlight(null),
+                },
                 h('td', {}, g.eqLabel),
                 h('td', {}, g.case),
                 h('td', {}, g.node),
