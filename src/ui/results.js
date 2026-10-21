@@ -110,7 +110,7 @@ export function buildScene(state) {
     const per = new Float64Array(mesh.elements.length);
     for (const r of result.check.rows) {
       if (r.eq !== arg) continue;
-      const v = r.coveredBy ? 0 : r.ratio;
+      const v = r.ratio;
       if (v > per[r.ie]) per[r.ie] = v;
     }
     const jet = display.ratioMap === 'jet';
@@ -171,7 +171,7 @@ export function renderResultsPanel(app) {
         'section',
         { class: 'card' },
         h('h3', {}, `Dépouillement — ${r.code.label}`),
-        h('div', { class: `verdict ${s.ok ? 'ok' : 'ko'}` }, s.ok ? '✔ Critères satisfaits' : '✘ Critère(s) non satisfait(s)', h('small', {}, ` — taux maximal ${fmt(s.maxRatio, 2)}`)),
+        h('div', { class: `verdict ${s.ok ? 'ok' : 'ko'}` }, s.ok ? '✔ Critères satisfaits' : '✘ Critère(s) non satisfait(s)', h('small', {}, ` — taux maximal ${fmt(s.maxRatio, 2)}${s.covered ? ` (éq. (7) dépassée en ${s.covered} point(s), où l’éq. (8) est satisfaite)` : ''}`)),
         h(
           'table',
           { class: 'grid compact' },
@@ -202,7 +202,7 @@ export function renderResultsPanel(app) {
                 h('td', {}, g.node),
                 h('td', { class: 'num' }, fmt(g.stress, g.unit === 'mm' ? 2 : 1)),
                 h('td', { class: 'num' }, fmt(g.allow, g.unit === 'mm' ? 2 : 1)),
-                h('td', { class: 'num' }, h('span', { class: 'pill', style: { background: ratioColor(g.effRatio) } }, fmt(g.effRatio, 2)), g.coveredBy ? h('small', {}, ` via (${g.coveredBy})`) : null),
+                h('td', { class: 'num' }, h('span', { class: 'pill', style: { background: ratioColor(g.ratio) } }, fmt(g.ratio, 2))),
               ),
             ),
           ),
@@ -396,7 +396,7 @@ function codeTable(app, r, nodeOk, internalChk) {
   const f = app.state.filter;
   const eqs = [...new Set(r.check.rows.map((x) => x.eq))];
   if (!eqs.includes(f.eq)) f.eq = eqs[0];
-  const rows = r.check.rows.filter((x) => x.eq === f.eq && nodeOk(x.node) && (!f.failOnly || (x.ratio > 1 && !x.coveredBy)));
+  const rows = r.check.rows.filter((x) => x.eq === f.eq && nodeOk(x.node) && (!f.failOnly || x.ratio > 1));
   if (f.sort) rows.sort((a, b) => b.ratio - a.ratio);
   return h(
     'div',
@@ -415,12 +415,12 @@ function codeTable(app, r, nodeOk, internalChk) {
     ),
     simpleTable(
       ['Critère', 'Cas', 'Nœud', 'Élément', 'Composant', 'σ (MPa)', 'Admissible', 'Taux', 'Détail'],
-      rows.slice(0, f.all ? rows.length : MAX_ROWS).map((x) => Object.assign([x.eqLabel, x.case, x.node, x.elem, x.comp, fmt(x.stress, x.unit === 'mm' ? 2 : 1) + (x.unit === 'mm' ? ' mm' : ''), fmt(x.allow, x.unit === 'mm' ? 2 : 1), { ratio: x.ratio, covered: x.coveredBy }, detailText(x)], { src: x })),
+      rows.slice(0, f.all ? rows.length : MAX_ROWS).map((x) => Object.assign([x.eqLabel, x.case, x.node, x.elem, x.comp, fmt(x.stress, x.unit === 'mm' ? 2 : 1) + (x.unit === 'mm' ? ' mm' : ''), fmt(x.allow, x.unit === 'mm' ? 2 : 1), { ratio: x.ratio }, detailText(x)], { src: x })),
       (row) => {
         app.select(row[2]);
         openRowDetail(row.src);
       },
-      (cell) => (cell && typeof cell === 'object' && 'ratio' in cell ? h('span', { class: 'pill', style: { background: ratioColor(cell.covered ? 0 : cell.ratio) } }, fmt(cell.ratio, 2), cell.covered ? ` (${cell.covered} ok)` : '') : cell),
+      (cell) => (cell && typeof cell === 'object' && 'ratio' in cell ? h('span', { class: 'pill', style: { background: ratioColor(cell.ratio) } }, fmt(cell.ratio, 2)) : cell),
       (row) => app.highlight(row ? rowHighlight(row.src) : null),
     ),
   );
@@ -455,7 +455,7 @@ export function openRowDetail(row) {
   const num = (v, unit) => (typeof v === 'number' ? fmt(v, Math.abs(v) >= 1000 || unit === 'mm³' ? 0 : unit === '' ? 3 : 2) : v);
   const kv = (items) =>
     h('table', { class: 'grid compact kv' }, h('tbody', {}, items.map(([k, v, u]) => h('tr', {}, h('td', {}, k), h('td', { class: 'num' }, num(v, u)), h('td', { class: 'muted' }, u)))));
-  const ok = (row.coveredBy ? 0 : row.ratio) <= 1;
+  const ok = row.ratio <= 1;
   showModal(
     row.eqLabel,
     [
@@ -480,7 +480,7 @@ export function openRowDetail(row) {
         'div',
         { class: `verdict ${ok ? 'ok' : 'ko'}` },
         `${row.unit === 'mm' ? 'eₘ' : 'σ'} = ${fmt(row.stress, 2)} ${row.unit ?? 'MPa'} ; admissible ${fmt(row.allow, 2)} ${row.unit ?? 'MPa'} ; taux ${fmt(row.ratio, 3)}`,
-        row.coveredBy ? ` — couvert par l’éq. (${row.coveredBy})` : '',
+        row.coveredBy ? ` — éq. (${row.coveredBy}) satisfaite en ce point` : '',
       ),
     ],
     { label: 'Détail du calcul' },

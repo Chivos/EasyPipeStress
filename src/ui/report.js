@@ -19,7 +19,7 @@ export function buildReport(state, snapshot) {
   if (m.meta.notes) parts.push(`<p>${esc(m.meta.notes)}</p>`);
   if (r?.check) {
     const s = r.check.summary;
-    parts.push(`<div class="verdict ${s.ok ? 'ok' : 'ko'}">${s.ok ? 'Critères satisfaits' : 'Critère(s) non satisfait(s)'} — taux maximal ${fmt(s.maxRatio, 2)} — ${esc(r.code.label)}</div>`);
+    parts.push(`<div class="verdict ${s.ok ? 'ok' : 'ko'}">${s.ok ? 'Critères satisfaits' : 'Critère(s) non satisfait(s)'} — taux maximal ${fmt(s.maxRatio, 2)}${s.covered ? ` (éq. (7) dépassée en ${s.covered} point(s), où l’éq. (8) est satisfaite)` : ''} — ${esc(r.code.label)}</div>`);
   } else {
     parts.push('<div class="verdict ko">Résultats non disponibles : lancer le calcul avant d’éditer la note.</div>');
   }
@@ -98,7 +98,7 @@ export function buildReport(state, snapshot) {
     }
     if (r.check) {
       parts.push('<h3>Dépouillement — critères déterminants</h3>');
-      parts.push(table(['Critère', 'Cas', 'Nœud', 'Composant', 'σ', 'Admissible', 'Taux'], r.check.summary.governing.map((g) => [g.eqLabel, g.case, g.node, g.comp, fmt(g.stress, 1), fmt(g.allow, 1), `${fmt(g.effRatio, 2)}${g.coveredBy ? ` (via éq. ${g.coveredBy})` : ''}`])));
+      parts.push(table(['Critère', 'Cas', 'Nœud', 'Composant', 'σ', 'Admissible', 'Taux'], r.check.summary.governing.map((g) => [g.eqLabel, g.case, g.node, g.comp, fmt(g.stress, 1), fmt(g.allow, 1), fmt(g.ratio, 2)])));
       parts.push(`<ul>${r.check.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>`);
       parts.push('<h3>Dépouillement — détail aux nœuds (hors nœuds internes)</h3>');
       const rows = r.check.rows.filter((x) => r.mesh.nodes[r.mesh.nodeIndex.get(x.node)]?.kind !== 'internal');

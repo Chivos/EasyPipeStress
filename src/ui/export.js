@@ -34,7 +34,7 @@ function summarySheet(state, r) {
     [],
     ['Critère', 'Cas', 'Nœud', 'Élément', 'Composant', 'σ (MPa)', 'Admissible (MPa)', 'Taux'],
   ];
-  for (const g of r.check?.summary.governing ?? []) rows.push([g.eqLabel, g.case, g.node, g.elem, g.comp, r3(g.stress, 2), r3(g.allow, 2), r3(g.effRatio)]);
+  for (const g of r.check?.summary.governing ?? []) rows.push([g.eqLabel, g.case, g.node, g.elem, g.comp, r3(g.stress, 2), r3(g.allow, 2), r3(g.ratio)]);
   if (r.check) rows.push([], ['Conclusion', r.check.summary.ok ? 'Critères satisfaits' : 'Critère(s) non satisfait(s)', '', '', '', '', 'Taux max', r3(r.check.summary.maxRatio)]);
   if (r.warnings.length) rows.push([], ['Avertissements'], ...r.warnings.map((w) => [w]));
   return { name: 'Synthèse', rows, header: 1, widths: [34, 30, 10, 18, 16, 12, 16, 10] };

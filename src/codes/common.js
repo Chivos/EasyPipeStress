@@ -1,21 +1,26 @@
 // Outils communs aux codes de vérification.
 
 /**
- * Synthèse : critère le plus chargé par (équation, cas). L'épaisseur ('e') est
- * listée en premier, puis les équations dans l'ordre de leur numéro.
+ * Synthèse : critère le plus chargé par (équation, cas), avec son taux propre
+ * (une éq. (7) dépassée reste affichée dépassée, même si l'éq. (8) la couvre).
+ * L'épaisseur ('e') est listée en premier, puis les équations dans l'ordre de
+ * leur numéro. Conformité : chaque point satisfait son équation, ou celle qui la
+ * couvre (éq. (7) non satisfaite → éq. (8)) ; `covered` compte ces points et
+ * `maxRatio` est le taux maximal hors points couverts.
  */
 export function summarize(rows) {
   const groups = new Map();
   for (const r of rows) {
     const key = `${r.eqLabel}|${r.case}`;
     const g = groups.get(key);
-    const eff = r.coveredBy ? 0 : r.ratio;
-    if (!g || eff > g.effRatio) groups.set(key, { ...r, effRatio: eff });
+    if (!g || r.ratio > g.ratio) groups.set(key, r);
   }
   const rank = (eq) => (eq === 'e' ? -1 : Number.isFinite(parseFloat(eq)) ? parseFloat(eq) : 1e9);
   const list = [...groups.values()].sort((a, b) => rank(a.eq) - rank(b.eq));
-  const ok = list.every((g) => g.effRatio <= 1 + 1e-9);
-  return { ok, governing: list, maxRatio: Math.max(0, ...list.map((g) => g.effRatio)) };
+  const eff = rows.map((r) => (r.coveredBy ? 0 : r.ratio));
+  const ok = eff.every((x) => x <= 1 + 1e-9);
+  const covered = rows.filter((r) => r.coveredBy && r.ratio > 1).length;
+  return { ok, governing: list, covered, maxRatio: Math.max(0, ...eff) };
 }
 
 /**
