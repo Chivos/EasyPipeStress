@@ -18,6 +18,8 @@
 //  Épaisseur minimale (méthode `thickness`, si l'option du projet est cochée) :
 //            C 3641.1  e_m = P·De / (2(S/I + y·P)) + c,  y = 0,4
 // Facteurs des coudes : h = e·R/r² ; k = 1,65/h ≥ 1 ; i = 0,9/h^(2/3) ≥ 1.
+// Réductions concentriques ASME B16.9 / MSS SP 43 (C 3673) : k = 1, i = 0,5 + 0,01·α·(D₂/t₂)^½, 1 ≤ i ≤ 2,0 (α ≤ 60°,
+// D/t ≤ 100, sinon i = 2,0) ; chaque extrémité vérifiée avec sa propre section.
 // Tés (i = 0,9/h^(2/3) ≥ 1, k = 1) : forgé h = 4,4e/r, fabrication renforcé
 // h = (e + e_r/2)^(5/2)/(e^(3/2)·r), non renforcé h = e/r ; le SIF du té
 // s'applique aux extrémités des trois éléments qui aboutissent au nœud.
@@ -51,7 +53,9 @@ export function rangeReductionFactor(N) {
 }
 
 /** Facteurs de flexibilité k et d'intensification i d'un élément (appelé par le mailleur). */
-export function componentFactors({ kind, sec, bend, P = 0, Ec, params = {}, teeType, pad = 0, sif = null }) {
+export function componentFactors({ kind, sec, bend, reducer, P = 0, Ec, params = {}, teeType, pad = 0, sif = null }) {
+  // réduction (C 3673) : k = 1, i calculé par le composant (0,5 + 0,01·α·√(D₂/t₂), 1 ≤ i ≤ 2)
+  if (kind === 'reducer' && reducer) return { k: 1, i: reducer.i, h: null };
   if (kind === 'tee') {
     const T = sec.t;
     const r = sec.rm;
@@ -80,10 +84,10 @@ export function componentFactors({ kind, sec, bend, P = 0, Ec, params = {}, teeT
  * Module Z du C 3658 : π·r²·eₙ (rayon moyen, épaisseur nominale) ; pour le tronçon
  * réduit d'un té ou piquage réduit, π·r'ₘ²·tₛ, tₛ = min(Tᵣ, i·T_b).
  */
-export function sectionModulus(e, local) {
-  const { rm, t } = e.sec;
+export function sectionModulus(e, local, sec = e.sec) {
+  const { rm, t } = sec;
   const run = local?.runSec;
-  if (run && e.sec.od < run.od - 1e-6) {
+  if (run && sec.od < run.od - 1e-6) {
     const ts = Math.min(run.t, local.i * t);
     const Z = Math.PI * rm * rm * ts;
     return {
@@ -195,25 +199,27 @@ export const rccmC = {
 
     mesh.elements.forEach((e, ie) => {
       if (e.kind === 'valve') return; // corps de robinet rigide : vérifié par le fabricant, pas par le code
-      const { sec, mat } = e;
-      const { od: De, t } = sec;
+      const { mat } = e;
       const atD = materialAt(mat, e.Td);
       const atH = materialAt(mat, Math.max(e.T1, e.Td));
       const atC = materialAt(mat, tRef);
       const Sh = atD.S;
       const Sy = atD.Sy;
       for (const end of [0, 1]) {
+        // section de l'extrémité (réduction : section exacte du bout, sinon celle de l'élément)
+        const sec = e.endSec?.[end] ?? e.sec;
+        const { od: De, t } = sec;
         // facteurs de l'extrémité : le plus pénalisant entre l'élément et un té au nœud
         const local = e.endFactors?.[end];
         const fac = local && local.i >= e.factors.i ? local : e.factors;
         const i75 = Math.max(1, 0.75 * fac.i);
         const pTerm = (P) => (P * De) / (4 * t);
         const node = mesh.nodes[end === 0 ? e.n1 : e.n2].label;
-        const compLabel = fac === local ? `Té ${node}` : e.kind === 'bend' ? `Coude ${e.bend.node}` : 'Tube';
+        const compLabel = fac === local ? `Té ${node}` : e.kind === 'bend' ? `Coude ${e.bend.node}` : e.kind === 'reducer' ? `${e.reducer.type === 'eccentric' ? 'Réduction exc.' : 'Réduction'} ${e.reducer.label.replace('Réduction ', '')}` : 'Tube';
         const base = { node, elem: e.label, ie, end, comp: compLabel, kind: fac === local ? 'tee' : e.kind };
         // coudes : points intérieurs vérifiés ou non (option du projet)
         if (e.kind === 'bend' && model.settings?.bendInnerPoints === false && node !== `${e.bend.node}A` && node !== `${e.bend.node}B`) continue;
-        const { Z, zItems } = sectionModulus(e, local);
+        const { Z, zItems } = sectionModulus(e, local, sec);
         const MA = weightCases.reduce((s, c) => s + resultant(c.elemForces, ie, end), 0);
         // éléments communs au détail de calcul
         const geom = [
@@ -222,6 +228,13 @@ export const rccmC = {
           ...zItems,
           ['Facteur d’intensification i', fac.i, ''],
           ...(fac.h != null ? [['Caractéristique h', fac.h, '']] : []),
+          ...(e.kind === 'reducer' && fac !== local
+            ? [
+                ['Angle du cône α', e.reducer.alpha, '°'],
+                ['Petit bout D₂ / t₂', e.reducer.D2 / e.reducer.t2, ''],
+                [e.reducer.ok ? 'i = 0,5 + 0,01·α·√(D₂/t₂), 1 ≤ i ≤ 2 (C 3673)' : 'i = 2,0 (hors domaine : α > 60° ou D/t > 100)', e.reducer.i, ''],
+              ]
+            : []),
         ];
         const momA = weightCases.map((c) => moment(`M_A — ${c.id}`, c, ie, end));
         const pItems = (P) => [

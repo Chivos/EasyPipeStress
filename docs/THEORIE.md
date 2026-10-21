@@ -59,7 +59,30 @@ extrémités des trois éléments qui aboutissent au nœud, le plus pénalisant
 - i = 0,9/h^(2/3) ≥ 1, ou valeur imposée par l'utilisateur ;
 - facteur des charges primaires 0,75·i ≥ 1.
 
-### 1.4 Robinets
+### 1.4 Réductions
+
+La réduction (concentrique ou excentrique) relie deux sections : De₁, e₁ au nœud
+de départ, De₂, e₂ au nœud d'arrivée, sur la longueur donnée par DX, DY, DZ.
+Elle est découpée en six sous-éléments droits dont le diamètre et l'épaisseur
+varient linéairement (section du milieu de chaque sous-élément pour la raideur,
+la masse, le poids et le fluide) ; chaque extrémité de sous-élément est vérifiée
+avec la section exacte de ce point, en particulier le petit bout avec D₂, t₂.
+L'axe est la droite entre les deux nœuds : l'excentricité d'une réduction
+excentrique se représente, si on le souhaite, par les composantes DX, DY, DZ.
+
+Facteurs (RCC-M C 3673, ligne « Réductions concentriques (ASME B16.9 ou MSS SP 43) »,
+notes (2) et (7), identique à ASME NC-3673.2(b)-1) : k = 1 et
+i = 0,5 + 0,01·α·(D₂/t₂)^½, avec 1 ≤ i ≤ 2,0, D₂, t₂ au petit bout et α le
+demi-angle du cône en degrés (génératrice inclinée pour une excentrique). La
+formule vaut pour α ≤ 60° et D/t ≤ 100 aux deux extrémités ; hors de ce
+domaine, i = 2,0 (avertissement). Les réductions excentriques ne figurent pas au
+tableau : la formule de la concentrique leur est appliquée (avertissement). α est saisi, ou déduit de la géométrie :
+tan α = (D₁ − D₂)/(2L) pour une concentrique, (D₁ − D₂)/L pour une excentrique
+(cône occupant toute la longueur ; saisir α quand la partie conique est plus
+courte que le face-à-face). Un coude ne peut pas être placé directement
+contre une réduction.
+
+### 1.5 Robinets
 
 Le robinet est un élément de poutre « rigide » entre deux nœuds, de longueur
 égale à son face-à-face : sa masse (robinet vide, calorifuge compris) est
@@ -74,7 +97,7 @@ de ×10, la souplesse du robinet devient négligeable devant celle du reste de l
 ligne). Le corps du robinet n'est pas vérifié au titre du code (il relève de
 la qualification du fabricant) ; les extrémités des tubes raccordés le sont.
 
-### 1.5 Supports
+### 1.6 Supports
 
 Chaque support est un ensemble de ressorts linéaires orientés (translation ou
 rotation). Un blocage rigide est un ressort de pénalité (10¹⁰ N/mm,
@@ -86,14 +109,14 @@ est de l'ordre du rapport raideur structurelle / raideur de pénalité (< 10⁻�
 Types : ancrage (6 DDL), appui vertical, guide latéral, appui + guide, butée
 axiale, ressort vertical, blocage personnalisé par DDL globaux.
 
-### 1.6 Résolution
+### 1.7 Résolution
 
 - Renumérotation des nœuds par Cuthill-McKee inverse (réduction du profil).
 - Factorisation de Cholesky en profil (« skyline ») de la matrice de raideur.
 - Un pivot nul ou négatif signale un mécanisme : le message indique le nœud et
   le DDL non retenus.
 
-### 1.7 Repère local des résultats (U, V, W)
+### 1.8 Repère local des résultats (U, V, W)
 
 Déplacements et efforts sur supports peuvent être présentés dans le repère
 global (X, Y, Z) ou dans un repère local (U, V, W) propre à chaque nœud, utile

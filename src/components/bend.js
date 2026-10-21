@@ -39,6 +39,10 @@ export const bend = {
       ctx.error(`Coude au nœud ${B} : un coude ne peut pas être placé directement contre un robinet (ajouter un tube entre les deux).`);
       return;
     }
+    if (segs.some((s) => s.kind === 'reducer')) {
+      ctx.error(`Coude au nœud ${B} : un coude ne peut pas être placé directement contre une réduction (ajouter un tube entre les deux).`);
+      return;
+    }
     if (segs.length !== 2) {
       ctx.error(`Coude au nœud ${B} : le sommet doit relier exactement deux tubes (trouvé ${segs.length}).`);
       return;
