@@ -373,7 +373,7 @@ export function renderGeometry(app) {
     section('Tubes droits', help('T et P : température et pression intérieure du tube, utilisées pour la dilatation, les contraintes admissibles et les termes de pression du code.'), componentTable(app, 'pipe')),
     section(
       'Réductions',
-      help('Cône entre deux sections (« De » côté nœud de départ, « À » côté arrivée), DX, DY, DZ donnant sa longueur et son orientation. Raideur et masse : sous-éléments de section interpolée ; chaque extrémité est vérifiée avec sa propre section. RCC-M C 3673 : k = 1, i = 0,5 + 0,01·α·√(D₂/t₂) borné entre 1 et 2 (D₂, t₂ au petit bout ; α ≤ 60°, D/t ≤ 100, sinon i = 2). α : demi-angle du cône, déduit de la géométrie si vide (excentrique : angle de la génératrice inclinée). Soudures bout à bout aux deux extrémités : brutes de soudage par défaut (i = 1,8 sur tous les éléments qui y aboutissent, comme PIPESTRESS), ou arasées (i = 1,0), colonne « Soudures ».'),
+      help('Cône entre deux sections (« De » côté nœud de départ, « À » côté arrivée), DX, DY, DZ donnant sa longueur et son orientation. Raideur et masse : sous-éléments de section interpolée ; chaque extrémité est vérifiée avec sa propre section. RCC-M C 3673 : k = 1, i = 0,5 + 0,01·α·√(D₂/t₂) borné entre 1 et 2 (D₂, t₂ au petit bout ; α ≤ 60°, D/t ≤ 100, sinon i = 2). α : demi-angle du cône, déduit de la géométrie si vide (excentrique : angle de la génératrice inclinée). Soudures bout à bout aux deux extrémités : brutes de soudage par défaut (i = 1,8 sur tous les éléments qui y aboutissent), ou arasées (i = 1,0), colonne « Soudures ».'),
       componentTable(app, 'reducer'),
     ),
     section(
