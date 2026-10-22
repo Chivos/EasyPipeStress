@@ -73,7 +73,7 @@ export function emptyModel() {
   return {
     version: MODEL_VERSION,
     meta: { title: 'Nouvelle étude', author: '', notes: '' },
-    settings: { vertical: 'Z', tRef: 20, meshMaxLength: 500, bendDivisionAngle: 10, shear: true, checkThickness: false, allowances: false, bendInnerPoints: true },
+    settings: { vertical: 'Z', tRef: 20, meshMaxLength: 500, bendDivisionAngle: 10, shear: true, checkThickness: false, allowances: false, bendInnerPoints: true, thermalModulus: 'hot' },
     materials: structuredClone(DEFAULT_MATERIALS),
     sections: structuredClone(DEFAULT_SECTIONS),
     nodeCoords: [{ node: '10', x: 0, y: 0, z: 0 }],

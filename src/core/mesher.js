@@ -209,6 +209,7 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
       mat,
       nu: +mat.nu || 0.3,
       E: cold.E * (valve ? valve.stiffFactor : 1), // robinet : raideur = facteur × tube
+      Eh: hot.E * (valve ? valve.stiffFactor : 1), // module à chaud (dilatation, option du projet)
       T1: p.T1,
       P1: p.P1,
       Td: p.Td,

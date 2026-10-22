@@ -12,9 +12,19 @@ six degrés de liberté par nœud (3 translations, 3 rotations). La matrice de
 raideur est celle de Przemieniecki [1], avec déformation d'effort tranchant
 (poutre de Timoshenko, coefficient φ = 12EI/(G·Aₛ·L²)) et aire réduite de
 cisaillement d'un tube mince Aₛ = A/2 [2]. La raideur est évaluée au module
-d'Young à la température de référence (E froid), conformément à la pratique des
-codes pour le calcul de l'étendue des moments d'expansion (RCC-M C 3653.3,
-ASME III NC-3653.3).
+d'Young à la température de référence (Ec) pour le poids, la pression, l'analyse
+modale et le séisme. Pour la dilatation, l'option du projet choisit le module :
+- à chaud Eh (défaut, comme PIPESTRESS) : raideur au module à la température de
+  chaque tube ; déplacements et réactions sont ceux de l'état chaud, et
+  l'étendue de moments des éq. (7) et (8) est multipliée par Ec/Eh élément par
+  élément, le code imposant Ec (RCC-M C 3653.3, ASME III NC-3653.3) ;
+- à froid Ec : calcul direct avec Ec (contraintes identiques, réactions
+  majorées de Ec/Eh).
+
+Les efforts de dilatation étant imposés par des déplacements, ils sont
+proportionnels à E dans une ligne de module uniforme : les deux options donnent
+alors les mêmes contraintes ; elles diffèrent légèrement en présence de
+ressorts, de déplacements imposés ou de températures différentes selon les tubes.
 
 Repère local : x suivant l'axe de l'élément ; y dans le plan contenant l'axe
 vertical global (ou un axe horizontal si l'élément est vertical) ; z = x ∧ y.
@@ -142,7 +152,7 @@ l'enveloppe globale, non signée, serait faux.
 |---|---|
 | Poids propre | Charges réparties m·g (métal + fluide + calorifuge) par forces nodales équivalentes de poutre bi-encastrée, masses ponctuelles. |
 | Pression | Pression de calcul Pd et maximale de service P1 portées par les tubes, utilisées dans les équations de contraintes (terme de membrane longitudinale) et la correction de flexibilité. Effet de fond auto-équilibré dans un circuit fermé. |
-| Dilatation thermique | Déformation libre ε = ᾱ(T)·(T − T_réf), ᾱ coefficient moyen de dilatation entre T_réf et T, introduite par forces de blocage ±E·A·ε ; déplacements imposés des supports. |
+| Dilatation thermique | Déformation libre ε = ᾱ(T)·(T − T_réf), ᾱ coefficient moyen de dilatation entre T_réf et T, introduite par forces de blocage ±E·A·ε ; déplacements imposés des supports ; module à chaud par défaut (§ 1.1). |
 | Séisme (inertie) | Analyse modale spectrale ou statique équivalente (cf. § 3). |
 | Forces nodales | Forces et moments donnés aux nœuds (repère global). Cas présenté dans les résultats, non combiné dans les équations du code. |
 
@@ -313,7 +323,7 @@ Vérifications numériques (tests automatiques) :
 | Même ligne, poids propre (tube plein d'eau) + pression, éq. (6) | PIPESTRESS | Σ réactions < 0,1 % ; réactions et déplacements ≈ 1 % ; taux < 0,5 % (max 0,594 contre 0,592) |
 | Même ligne, analyse modale | PIPESTRESS | masse totale identique (239,3 kg) ; 6 premières fréquences < 0,8 % ; masses modales effectives ≈ 1 % |
 | Même ligne, séisme spectral (CQC, SRSS directions) + éq. (10C) | PIPESTRESS | contraintes de l'éq. (10C) < 0,5 % aux points critiques (taux 1,369 contre 1,368 en 50, 1,080 contre 1,079 au coude 40) ; déplacements W + S ≈ 1 % |
-| Ligne DN200 P265GH à supports à ressort (exemple 3) : supports variables 150 N/mm + précharge, support constant, robinet avec fluide, masse ponctuelle ; spectre à interpolation linéaire, modes jusqu'à 100 Hz + masse manquante | PIPESTRESS | poids : réactions < 0,1 % ; fréquences < 1 % ; éq. (6) < 0,5 % ; éq. (7) < 0,6 % ; éq. (10C) < 0,1 % ; efforts sismiques des ressorts < 0,1 % ; réactions thermiques des ressorts 3 à 4 % (PIPESTRESS les imprime à Eh) |
+| Ligne DN200 P265GH à supports à ressort (exemple 3) : supports variables 150 N/mm + précharge, support constant, robinet avec fluide, masse ponctuelle ; spectre à interpolation linéaire, modes jusqu'à 100 Hz + masse manquante | PIPESTRESS | poids : réactions < 0,1 % ; fréquences < 1 % ; éq. (6) < 0,5 % ; éq. (7) < 0,6 % ; éq. (10C) < 0,1 % ; efforts sismiques des ressorts < 0,1 % ; réactions thermiques des ressorts 3 à 4 % (calcul alors au module à froid ; PIPESTRESS les imprime à Eh) |
 | Problème de Hovgaard (Code_Aster SSLL101 ; Kellogg 1956, pb 5.9) : tuyauterie non plane à deux coudes R 922 mm, encastrée aux deux bouts, k = 1,65/h ; poids, dilatation ΔT = 472,22 °C, forces nodales | POUX, ADL, TITUS (poutre) | déplacements du point 3 < 0,2 % dans les trois cas ; moment résultant au point 1 sous poids < 0,05 % ; maillage du modèle A de SDLX02 (tubes droits non subdivisés, 4,5° par élément de coude) ; maillage fin (100 mm, 2,25°) : < 0,1 % |
 | Même ligne, analyse modale et réponse spectrale (Code_Aster SDLX02) : spectre 2 % (2 g de 10 à 30 Hz en X et Y, moitié en Z), interpolation log-log, SRSS modes et directions, sans correction statique | POUX, ADL, TITUS | fréquences (masses concentrées) < 2 % sur les 7 premiers modes ; déplacements < 1,3 % ; réactions aux encastrements < 3 % ; efforts généralisés aux points 3, 7, 11 de 1 à 4 % (Mz au point 3 : 7 %, axes locaux différents dans le coude) ; maillage fin : fréquences 0,2 à 3,3 % sous les valeurs à masse complète |
 | Fréquence propre d'une console | 1,875²/2π·√(EI/mL⁴) | < 0,5 % |

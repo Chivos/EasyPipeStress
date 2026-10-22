@@ -104,11 +104,14 @@ export function sectionModulus(e, local, sec = e.sec) {
 }
 
 /** Composantes locales du moment à une extrémité (torsion, flexions) et résultant, en N·m. */
-function moment(name, c, ie, end) {
+function moment(name, c, ie, end, k = 1) {
   const o = ie * 12 + (end === 0 ? 3 : 9);
   const f = c.elemForces;
-  return { name, signed: c.signed !== false, mt: f[o] / 1000, my: f[o + 1] / 1000, mz: f[o + 2] / 1000, res: Math.hypot(f[o], f[o + 1], f[o + 2]) / 1000 };
+  return { name, signed: c.signed !== false, mt: (k * f[o]) / 1000, my: (k * f[o + 1]) / 1000, mz: (k * f[o + 2]) / 1000, res: (k * Math.hypot(f[o], f[o + 1], f[o + 2])) / 1000 };
 }
+
+/** Cas de dilatation calculé au module à chaud : étendue de moments ramenée à Ec (C 3653.3). */
+const ecOverEh = (tc, e) => (tc.info?.modulus === 'hot' && e.Eh > 0 ? e.E / e.Eh : 1);
 
 function resultant(f, ie, end) {
   const o = ie * 12 + (end === 0 ? 3 : 9);
@@ -257,15 +260,17 @@ export const rccmC = {
         const SA = f * (1.25 * atC.S + 0.25 * atH.S);
         const saItems = [['Facteur de réduction f', f, ''], ['Sc (à T_réf)', atC.S, 'MPa'], ['Sh (à T)', atH.S, 'MPa'], ['S_A', SA, 'MPa']];
         for (const tc of thermalCases) {
-          const MC = resultant(tc.elemForces, ie, end);
+          const kE = ecOverEh(tc, e);
+          const MC = kE * resultant(tc.elemForces, ie, end);
           const SE = (fac.i * MC) / Z;
+          const ecItems = kE !== 1 ? [['Rapport Ec/Eh (moments calculés à chaud, ramenés à Ec)', kE, '']] : [];
           rows.push({
             ...base, eq: '7', eqLabel: 'Éq. (7) dilatation thermique', case: tc.id, stress: SE, allow: SA, ratio: SE / SA,
-            detail: { i: fac.i, MC, Z, SA, f, Sc: atC.S, Sh: atH.S },
+            detail: { i: fac.i, MC, Z, SA, f, Sc: atC.S, Sh: atH.S, kE },
             calc: {
               formula: 'S_E = i·M_C/Z ≤ S_A = f(1,25 Sc + 0,25 Sh)',
-              items: [...geom, ['Moment résultant M_C', MC / 1000, 'N·m'], ['Contrainte S_E = i·M_C/Z', SE, 'MPa']],
-              moments: [moment(`M_C — ${tc.id}`, tc, ie, end)],
+              items: [...geom, ...ecItems, ['Moment résultant M_C (à Ec)', MC / 1000, 'N·m'], ['Contrainte S_E = i·M_C/Z', SE, 'MPa']],
+              moments: [moment(`M_C — ${tc.id}${kE !== 1 ? ' (× Ec/Eh)' : ''}`, tc, ie, end, kE)],
               allow: saItems,
             },
           });
@@ -277,8 +282,8 @@ export const rccmC = {
               detail: { i: fac.i, i75, MA, MC, Z },
               calc: {
                 formula: 'P·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ Sh + S_A',
-                items: [...geom, ['0,75i (≥ 1)', i75, ''], ...pItems(e.Pd), ['Contrainte 0,75i·M_A/Z', (i75 * MA) / Z, 'MPa'], ['Contrainte i·M_C/Z', SE, 'MPa']],
-                moments: [...momA, moment(`M_C — ${tc.id}`, tc, ie, end)],
+                items: [...geom, ...ecItems, ['0,75i (≥ 1)', i75, ''], ...pItems(e.Pd), ['Contrainte 0,75i·M_A/Z', (i75 * MA) / Z, 'MPa'], ['Contrainte i·M_C/Z', SE, 'MPa']],
+                moments: [...momA, moment(`M_C — ${tc.id}${kE !== 1 ? ' (× Ec/Eh)' : ''}`, tc, ie, end, kE)],
                 allow: [...saItems, ['Admissible Sh + S_A', allow8, 'MPa']],
               },
             });

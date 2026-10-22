@@ -709,3 +709,21 @@ test('Réduction concentrique / excentrique : sections interpolées, i du RCC-M 
   m.components.push({ type: 'bend', node: '3', id: 'b3' });
   assert.throws(() => runAnalysis(m), /réduction/);
 });
+
+test('Dilatation au module à chaud (défaut) : réactions à Eh, étendue de moments ramenée à Ec', () => {
+  const m = setup({ maxLen: 250 });
+  m.materials[0].table = [{ T: 20, E: 200000, alpha: 12, S: 100, Sy: 200 }, { T: 400, E: 160000, alpha: 12, S: 100, Sy: 200 }];
+  m.components = ensureIds({ components: [pipe('1', '2', 2000, 0, 0, { T1: 400 }), pipe('2', '3', 0, 1500, 0, { T1: 400 }), sup('1', 'anchor'), sup('3', 'anchor')] }).components;
+  m.loadCases = [{ id: 'T1', type: 'thermal', enabled: true }];
+  const hot = runAnalysis(m);
+  m.settings.thermalModulus = 'cold';
+  const cold = runAnalysis(m);
+  const Eh = 160000; // E à 400 °C
+  // ligne de module uniforme : réactions ∝ E, déplacements identiques
+  for (let d = 0; d < 6; d++) near(hot.cases[0].supportLoads[d], (cold.cases[0].supportLoads[d] * Eh) / 200000, 1e-4, `réaction ${d} (ancrages par pénalité)`);
+  near(nodeDisp(hot, 'T1', '2')[0], nodeDisp(cold, 'T1', '2')[0], 1e-6, 'déplacement');
+  // éq. (7) : mêmes contraintes (moments × Ec/Eh)
+  const s7 = (r) => r.check.rows.filter((x) => x.eq === '7').map((x) => x.stress);
+  s7(hot).forEach((v, k) => near(v, s7(cold)[k], 1e-4, `éq. (7) ${k}`));
+  assert.equal(hot.check.rows.find((x) => x.eq === '7').detail.kE, 200000 / Eh);
+});
