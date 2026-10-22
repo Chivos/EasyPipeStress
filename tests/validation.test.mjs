@@ -676,7 +676,7 @@ test('Réduction concentrique / excentrique : sections interpolées, i du RCC-M 
   const { reducerSif } = await import('../src/components/reducer.js');
   const m = setup({ density: 7850, maxLen: 500 });
   m.sections.push({ id: 'B', od: 114.3, t: 6.02, millTol: 0, corrosion: 0, fluidDensity: 0, insulThk: 0, insulDensity: 0 });
-  const red = { type: 'reducer', n1: '2', n2: '3', dx: 152, dy: 0, dz: 0, kind: 'eccentric', section: 'S', section2: 'B', alpha: '', material: 'M', T1: 150, P1: 0 };
+  const red = { type: 'reducer', n1: '2', n2: '3', dx: 152, dy: 0, dz: 0, kind: 'eccentric', section: 'S', section2: 'B', weld: 'flush', alpha: '', material: 'M', T1: 150, P1: 0 };
   m.components = ensureIds({ components: [pipe('1', '2', 2000, 0, 0, { T1: 150 }), red, pipe('3', '4', 0, 2000, 0, { section: 'B', T1: 150 }), sup('1', 'anchor'), sup('4', 'anchor')] }).components;
   m.loadCases = [{ id: 'W', type: 'weight', enabled: true }, { id: 'T1', type: 'thermal', enabled: true }];
   let r = runAnalysis(m);
@@ -699,6 +699,11 @@ test('Réduction concentrique / excentrique : sections interpolées, i du RCC-M 
   const row = r.check.rows.find((x) => x.eq === '7' && x.node === '3' && x.kind === 'reducer');
   near(row.detail.Z, Math.PI * ((114.3 - 6.02) / 2) ** 2 * 6.02, 1e-9, 'Z au petit bout');
   near(row.detail.i, els[0].factors.i, 1e-12, 'i à l’extrémité');
+  // soudures brutes de soudage (défaut) : i = 1,8 aux extrémités, sur la réduction et les tubes voisins
+  m.components.find((c) => c.type === 'reducer').weld = 'aswelded';
+  const rw = runAnalysis(m);
+  for (const n of ['2', '3']) for (const x of rw.check.rows.filter((y) => y.eq === '7' && y.node === n)) near(x.detail.i, 1.8, 1e-12, `soudure au nœud ${n} (${x.elem})`);
+  assert.ok(rw.check.rows.filter((y) => y.eq === '7' && y.node === '2>3.3').every((x) => x.detail.i < 1.8), 'pas de soudure dans le cône');
   // concentrique : demi-angle, et domaine de validité
   m.components.find((c) => c.type === 'reducer').kind = 'concentric';
   r = runAnalysis(m);
@@ -726,4 +731,30 @@ test('Dilatation au module à chaud (défaut) : réactions à Eh, étendue de mo
   const s7 = (r) => r.check.rows.filter((x) => x.eq === '7').map((x) => x.stress);
   s7(hot).forEach((v, k) => near(v, s7(cold)[k], 1e-4, `éq. (7) ${k}`));
   assert.equal(hot.check.rows.find((x) => x.eq === '7').detail.kE, 200000 / Eh);
+});
+
+test('Té : tronçon rigide au départ de la dérivation (De/2 du collecteur), vérifiée au nœud du té', () => {
+  const m = setup({ density: 7850, maxLen: 200 });
+  m.sections.push({ id: 'B', od: 114.3, t: 6.02, millTol: 0, corrosion: 0, fluidDensity: 0, insulThk: 0, insulDensity: 0 });
+  m.components = ensureIds({
+    components: [
+      pipe('1', '2', 2000, 0, 0, { T1: 200 }), pipe('2', '3', 2000, 0, 0, { T1: 200 }), pipe('2', '4', 0, 1000, 0, { section: 'B', T1: 200 }),
+      { type: 'tee', node: '2', teeType: 'welding' }, sup('1', 'anchor'), sup('3', 'anchor'), sup('4', 'anchor'),
+    ],
+  }).components;
+  m.loadCases = [{ id: 'T1', type: 'thermal', enabled: true }];
+  const r = runAnalysis(m);
+  const rig = r.mesh.elements.filter((e) => e.rigid);
+  assert.equal(rig.length, 1);
+  near(rig[0].L, 168.3 / 2, 1e-9, 'longueur = De/2 du collecteur');
+  assert.equal(rig[0].sec.od, 114.3, 'section de la dérivation');
+  // vérification de la dérivation au nœud du té, avec le facteur du té
+  const row = r.check.rows.find((x) => x.eq === '7' && x.node === '2' && x.ie === rig[0].index);
+  assert.ok(row && row.comp.startsWith('Té'), 'dérivation vérifiée au té');
+  // sans l'option : pas de tronçon rigide, dérivation plus souple → moment plus faible
+  m.settings.teeRigidBranch = false;
+  const r0 = runAnalysis(m);
+  assert.equal(r0.mesh.elements.filter((e) => e.rigid).length, 0);
+  const anchor = (rr) => Math.abs(rr.cases[0].supportLoads[2 * 6 + 1]);
+  assert.ok(anchor(r) > anchor(r0), 'dérivation raidie');
 });

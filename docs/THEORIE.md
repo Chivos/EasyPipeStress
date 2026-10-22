@@ -69,6 +69,11 @@ extrémités des trois éléments qui aboutissent au nœud, le plus pénalisant
 - i = 0,9/h^(2/3) ≥ 1, ou valeur imposée par l'utilisateur ;
 - facteur des charges primaires 0,75·i ≥ 1.
 
+Tronçon rigide de dérivation (option du projet, activée par défaut comme dans
+PIPESTRESS) : la dérivation est rigide de l'axe du collecteur jusqu'à sa paroi
+(longueur De/2 du collecteur, raideur × 1000, masse du tube conservée) ; elle est
+vérifiée au nœud du té, avec le facteur i du té et la section de la dérivation.
+
 ### 1.4 Réductions
 
 La réduction (concentrique ou excentrique) relie deux sections : De₁, e₁ au nœud
@@ -89,7 +94,9 @@ domaine, i = 2,0 (avertissement). Les réductions excentriques ne figurent pas a
 tableau : la formule de la concentrique leur est appliquée (avertissement). α est saisi, ou déduit de la géométrie :
 tan α = (D₁ − D₂)/(2L) pour une concentrique, (D₁ − D₂)/L pour une excentrique
 (cône occupant toute la longueur ; saisir α quand la partie conique est plus
-courte que le face-à-face). Un coude ne peut pas être placé directement
+courte que le face-à-face). Soudures bout à bout aux deux extrémités : brutes de
+soudage par défaut (i = 1,8, comme PIPESTRESS), sur les extrémités de tous les
+éléments qui aboutissent à ces nœuds, ou arasées (i = 1,0). Un coude ne peut pas être placé directement
 contre une réduction.
 
 ### 1.5 Robinets
@@ -324,6 +331,7 @@ Vérifications numériques (tests automatiques) :
 | Même ligne, analyse modale | PIPESTRESS | masse totale identique (239,3 kg) ; 6 premières fréquences < 0,8 % ; masses modales effectives ≈ 1 % |
 | Même ligne, séisme spectral (CQC, SRSS directions) + éq. (10C) | PIPESTRESS | contraintes de l'éq. (10C) < 0,5 % aux points critiques (taux 1,369 contre 1,368 en 50, 1,080 contre 1,079 au coude 40) ; déplacements W + S ≈ 1 % |
 | Ligne DN200 P265GH à supports à ressort (exemple 3) : supports variables 150 N/mm + précharge, support constant, robinet avec fluide, masse ponctuelle ; spectre à interpolation linéaire, modes jusqu'à 100 Hz + masse manquante | PIPESTRESS | poids : réactions < 0,1 % ; fréquences < 1 % ; éq. (6) < 0,5 % ; éq. (7) < 0,6 % ; éq. (10C) < 0,1 % ; efforts sismiques des ressorts < 0,1 % ; réactions thermiques des ressorts 3 à 4 % (calcul alors au module à froid ; PIPESTRESS les imprime à Eh) |
+| Cas test collecteur DN200 (exemple « Cas test ») : té forgé avec tronçon rigide de dérivation, réduction concentrique α = 9,5° à soudures brutes, robinet, deux supports variables, appuis 876 kN/mm, dilatation au module à chaud | PIPESTRESS | éq. (6), (7), (8), (10C) < 1 % aux points critiques (té : 232,5 contre 232,3 MPa en éq. (7), 251,8 contre 251,5 en éq. (8)) ; réactions de dilatation < 0,5 % (AG1 suivant X : 3 %) ; poids < 1 % (ancrage Équipement 1,5 %) ; fréquences des modes 1 à 9 < 1 %, modes 10 à 12 + 3 à 4 % ; réactions sismiques poids + séisme ≈ 1 à 3 % |
 | Problème de Hovgaard (Code_Aster SSLL101 ; Kellogg 1956, pb 5.9) : tuyauterie non plane à deux coudes R 922 mm, encastrée aux deux bouts, k = 1,65/h ; poids, dilatation ΔT = 472,22 °C, forces nodales | POUX, ADL, TITUS (poutre) | déplacements du point 3 < 0,2 % dans les trois cas ; moment résultant au point 1 sous poids < 0,05 % ; maillage du modèle A de SDLX02 (tubes droits non subdivisés, 4,5° par élément de coude) ; maillage fin (100 mm, 2,25°) : < 0,1 % |
 | Même ligne, analyse modale et réponse spectrale (Code_Aster SDLX02) : spectre 2 % (2 g de 10 à 30 Hz en X et Y, moitié en Z), interpolation log-log, SRSS modes et directions, sans correction statique | POUX, ADL, TITUS | fréquences (masses concentrées) < 2 % sur les 7 premiers modes ; déplacements < 1,3 % ; réactions aux encastrements < 3 % ; efforts généralisés aux points 3, 7, 11 de 1 à 4 % (Mz au point 3 : 7 %, axes locaux différents dans le coude) ; maillage fin : fréquences 0,2 à 3,3 % sous les valeurs à masse complète |
 | Fréquence propre d'une console | 1,875²/2π·√(EI/mL⁴) | < 0,5 % |

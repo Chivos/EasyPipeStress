@@ -19,6 +19,14 @@ export const REDUCER_TYPES = {
 
 export const REDUCER_DIVISIONS = 6; // sous-éléments du cône
 
+// Soudures bout à bout aux deux extrémités : brutes de soudage (i = 1,8, valeur par
+// défaut, comme PIPESTRESS) ou arasées (i = 1,0) ; le facteur s'applique aux
+// extrémités de tous les éléments qui aboutissent aux nœuds de la réduction.
+export const REDUCER_WELDS = {
+  aswelded: { label: 'brutes (i = 1,8)', i: 1.8 },
+  flush: { label: 'arasées (i = 1,0)', i: 1.0 },
+};
+
 /** Angle α du cône (°) : saisi, sinon déduit des diamètres et de la longueur. */
 export function reducerAngle({ type, alpha }, D1, D2, L) {
   if (+alpha > 0) return +alpha;
@@ -46,6 +54,7 @@ export const reducer = {
     { key: 'kind', label: 'Type', type: 'select', options: () => Object.keys(REDUCER_TYPES), optionLabel: (v) => REDUCER_TYPES[v]?.label ?? v, width: 110 },
     { key: 'section', label: 'Section « De »', type: 'select', options: (m) => m.sections.map((s) => s.id), width: 100 },
     { key: 'section2', label: 'Section « À »', type: 'select', options: (m) => m.sections.map((s) => s.id), width: 100 },
+    { key: 'weld', label: 'Soudures', type: 'select', options: () => Object.keys(REDUCER_WELDS), optionLabel: (v) => REDUCER_WELDS[v]?.label ?? v, width: 120, title: 'Soudures bout à bout aux extrémités : brutes de soudage (i = 1,8) ou arasées (i = 1,0)' },
     { key: 'alpha', label: 'α', unit: '°', type: 'number', width: 52, placeholder: 'auto', title: 'Demi-angle du cône (génératrice inclinée pour une excentrique). Vide : déduit des diamètres et de la longueur.' },
     { key: 'material', label: 'Matériau', type: 'select', options: (m) => m.materials.map((s) => s.id), width: 100 },
     { key: 'T1', label: 'T', unit: '°C', type: 'number', width: 58 },
@@ -56,7 +65,7 @@ export const reducer = {
     const prev = [...model.components].reverse().find((c) => c.type === 'pipe');
     const s1 = prev?.section ?? model.sections[0]?.id;
     const s2 = model.sections.find((s) => s.id !== s1)?.id ?? s1;
-    return { type: 'reducer', n1: from ?? '', n2: to ?? '', dx, dy, dz, kind: 'concentric', section: s1, section2: s2, alpha: '', material: prev?.material ?? model.materials[0]?.id, T1: prev?.T1 ?? 20, P1: prev?.P1 ?? 0 };
+    return { type: 'reducer', n1: from ?? '', n2: to ?? '', dx, dy, dz, kind: 'concentric', section: s1, section2: s2, weld: 'aswelded', alpha: '', material: prev?.material ?? model.materials[0]?.id, T1: prev?.T1 ?? 20, P1: prev?.P1 ?? 0 };
   },
 
   mesh(comp, ctx) {
@@ -96,7 +105,7 @@ export const reducer = {
         P1: P,
         Td: T,
         Pd: P,
-        reducer: { type: comp.kind === 'eccentric' ? 'eccentric' : 'concentric', alpha, i, ok, D1: +big.od, t1: +big.t, D2: +small.od, t2: +small.t, label: name },
+        reducer: { type: comp.kind === 'eccentric' ? 'eccentric' : 'concentric', alpha, i, ok, weld: (REDUCER_WELDS[comp.weld] ?? REDUCER_WELDS.aswelded).i, D1: +big.od, t1: +big.t, D2: +small.od, t2: +small.t, label: name },
       },
     });
   },

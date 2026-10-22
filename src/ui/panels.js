@@ -35,6 +35,7 @@ export function renderProject(app) {
       optionLabel: (v) => (v === 'cold' ? 'à froid Ec (contraintes et réactions à Ec)' : 'à chaud Eh (réactions à chaud ; éq. 7 et 8 ramenées à Ec)'),
       title: 'À chaud (défaut, comme PIPESTRESS) : la dilatation est calculée avec le module à la température de chaque tube ; déplacements et réactions sont ceux de l’état chaud, et l’étendue de moments des éq. (7) et (8) est multipliée par Ec/Eh (C 3653.3). À froid : calcul direct avec Ec (réactions majorées de Ec/Eh).',
     },
+    { key: 'teeRigidBranch', label: 'Tés : tronçon rigide au départ de la dérivation (De/2 du collecteur)', type: 'checkbox', default: true, title: 'Coché (comme PIPESTRESS) : la dérivation est rigide de l’axe du collecteur jusqu’à sa paroi ; elle est vérifiée au nœud du té avec le facteur i du té.' },
     { key: 'bendInnerPoints', label: 'Coudes : vérifier aussi les nœuds intérieurs (sinon extrémités A et B seulement)', type: 'checkbox', default: true, title: 'Coché : contraintes vérifiées à tous les nœuds du coude (A, intermédiaires, M, B). Décoché : aux seules extrémités du coude, comme certains logiciels.' },
     { key: 'checkThickness', label: 'Vérifier l’épaisseur minimale (tenue à la pression seule)', type: 'checkbox', default: false },
     { key: 'allowances', label: 'Prendre en compte la tolérance de fabrication et la surépaisseur de corrosion', type: 'checkbox', default: false, title: 'Ajoute les colonnes « Tol. » et « Corr. » aux sections ; utilisées dans la vérification d’épaisseur minimale. Les contraintes des équations du code restent calculées avec l’épaisseur nominale.' },
@@ -372,7 +373,7 @@ export function renderGeometry(app) {
     section('Tubes droits', help('T et P : température et pression intérieure du tube, utilisées pour la dilatation, les contraintes admissibles et les termes de pression du code.'), componentTable(app, 'pipe')),
     section(
       'Réductions',
-      help('Cône entre deux sections (« De » côté nœud de départ, « À » côté arrivée), DX, DY, DZ donnant sa longueur et son orientation. Raideur et masse : sous-éléments de section interpolée ; chaque extrémité est vérifiée avec sa propre section. RCC-M C 3673 : k = 1, i = 0,5 + 0,01·α·√(D₂/t₂) borné entre 1 et 2 (D₂, t₂ au petit bout ; α ≤ 60°, D/t ≤ 100, sinon i = 2). α : demi-angle du cône, déduit de la géométrie si vide (excentrique : angle de la génératrice inclinée).'),
+      help('Cône entre deux sections (« De » côté nœud de départ, « À » côté arrivée), DX, DY, DZ donnant sa longueur et son orientation. Raideur et masse : sous-éléments de section interpolée ; chaque extrémité est vérifiée avec sa propre section. RCC-M C 3673 : k = 1, i = 0,5 + 0,01·α·√(D₂/t₂) borné entre 1 et 2 (D₂, t₂ au petit bout ; α ≤ 60°, D/t ≤ 100, sinon i = 2). α : demi-angle du cône, déduit de la géométrie si vide (excentrique : angle de la génératrice inclinée). Soudures bout à bout aux deux extrémités : brutes de soudage par défaut (i = 1,8 sur tous les éléments qui y aboutissent, comme PIPESTRESS), ou arasées (i = 1,0), colonne « Soudures ».'),
       componentTable(app, 'reducer'),
     ),
     section(

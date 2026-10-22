@@ -214,11 +214,14 @@ export const rccmC = {
         const { od: De, t } = sec;
         // facteurs de l'extrémité : le plus pénalisant entre l'élément et un té au nœud
         const local = e.endFactors?.[end];
-        const fac = local && local.i >= e.factors.i ? local : e.factors;
+        const fac0 = local && local.i >= e.factors.i ? local : e.factors;
+        // soudure bout à bout brute de soudage (extrémités de réduction) : i = max(composant, soudure)
+        const weld = e.weldI?.[end] ?? 1;
+        const fac = weld > fac0.i ? { ...fac0, i: weld, weld: true } : fac0;
         const i75 = Math.max(1, 0.75 * fac.i);
         const pTerm = (P) => (P * De) / (4 * t);
         const node = mesh.nodes[end === 0 ? e.n1 : e.n2].label;
-        const compLabel = fac === local ? `Té ${node}` : e.kind === 'bend' ? `Coude ${e.bend.node}` : e.kind === 'reducer' ? `${e.reducer.type === 'eccentric' ? 'Réduction exc.' : 'Réduction'} ${e.reducer.label.replace('Réduction ', '')}` : 'Tube';
+        const compLabel = fac.weld ? `Soudure réduction ${node}` : fac === local ? `Té ${node}` : e.kind === 'bend' ? `Coude ${e.bend.node}` : e.kind === 'reducer' ? `${e.reducer.type === 'eccentric' ? 'Réduction exc.' : 'Réduction'} ${e.reducer.label.replace('Réduction ', '')}` : 'Tube';
         const base = { node, elem: e.label, ie, end, comp: compLabel, kind: fac === local ? 'tee' : e.kind };
         // coudes : points intérieurs vérifiés ou non (option du projet)
         if (e.kind === 'bend' && model.settings?.bendInnerPoints === false && node !== `${e.bend.node}A` && node !== `${e.bend.node}B`) continue;
@@ -230,8 +233,9 @@ export const rccmC = {
           ['Épaisseur nominale eₙ', t, 'mm'],
           ...zItems,
           ['Facteur d’intensification i', fac.i, ''],
-          ...(fac.h != null ? [['Caractéristique h', fac.h, '']] : []),
-          ...(e.kind === 'reducer' && fac !== local
+          ...(fac.h != null && !fac.weld ? [['Caractéristique h', fac.h, '']] : []),
+          ...(fac.weld ? [['Soudure bout à bout brute de soudage (extrémité de réduction)', weld, '']] : []),
+          ...(e.kind === 'reducer' && fac0 !== local && !fac.weld
             ? [
                 ['Angle du cône α', e.reducer.alpha, '°'],
                 ['Petit bout D₂ / t₂', e.reducer.D2 / e.reducer.t2, ''],
