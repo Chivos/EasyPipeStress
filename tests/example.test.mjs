@@ -205,3 +205,30 @@ test('Cas test collecteur DN200 : éq. (7) dépassée, couverte par l’éq. (8)
   const W = r.cases.find((c) => c.id === 'W');
   for (const lab of ['25', '75']) assert.ok(Math.abs(W.u[r.mesh.nodeIndex.get(lab) * 6 + 2]) < 0.1, `uz ${lab}`);
 });
+
+test('Cas test collecteur DN200 : comparaison PIPESTRESS (module à chaud, té avec tronçon rigide, soudures de réduction)', async () => {
+  const { EXAMPLES } = await import('../src/core/examples.js');
+  const r = runAnalysis(normalizeModel(JSON.parse(JSON.stringify(EXAMPLES.find((e) => e.id === 'benchmark').build()))));
+  const max = (eq, pred) => Math.max(...r.check.rows.filter((x) => x.eq === eq && pred(x)).map((x) => x.stress));
+  const ref = [
+    ['7', (x) => x.node === '30' && x.comp.startsWith('Té') && r.mesh.elements[x.ie].rigid, 232.29, 0.01],
+    ['7', (x) => x.node === '60A', 203.84, 0.01],
+    ['7', (x) => x.node === '70B', 200.22, 0.01],
+    ['7', (x) => x.node === '41', 148.98, 0.01],
+    ['8', (x) => x.node === '30', 251.52, 0.01],
+    ['8', (x) => x.node === '60A', 227.49, 0.01],
+    ['6', (x) => x.node === '45', 31.44, 0.01],
+    ['6', (x) => x.node === '41', 28.91, 0.01],
+    ['10C', (x) => x.node === '45', 46.93, 0.01],
+    ['10C', (x) => x.node === '120', 43.11, 0.015],
+  ];
+  for (const [eq, pred, v, tol] of ref) {
+    const s = max(eq, pred);
+    assert.ok(Math.abs(s / v - 1) < tol, `éq. (${eq}) ${s} / ${v}`);
+  }
+  // réactions de dilatation (à chaud) et fréquences
+  const T = r.cases.find((c) => c.id === 'T1');
+  const sup = (lab, d) => -T.supportLoads[r.mesh.supports.findIndex((s) => s.label === lab) * 6 + d];
+  for (const [lab, d, v] of [['G1', 0, 26612], ['G1', 1, -14515], ['BA1', 0, -13057], ['AG2', 0, -15576], ['Pompe', 2, 4474], ['Équipement', 0, -17093]]) assert.ok(Math.abs(sup(lab, d) / v - 1) < 0.01, `${lab} ${d} : ${sup(lab, d)} / ${v}`);
+  [10.37, 14.78, 17.85, 19.36, 25.18, 29.71, 30.2, 43.16, 48.78].forEach((f, k) => assert.ok(Math.abs(r.modal.modes[k].freq / f - 1) < 0.012, `mode ${k + 1} : ${r.modal.modes[k].freq}`));
+});

@@ -186,7 +186,8 @@ function fullBenchmark() {
   m.meta.title = 'Cas test – collecteur DN200, té, réduction, robinet, supports variables';
   m.meta.notes =
     'Cas destiné à la comparaison avec un logiciel de référence. P265GH, 300 °C, 3 MPa, eau, calorifuge. ' +
-    'Coudes vérifiés à leurs extrémités. Séisme : spectre ξ = 5 %, interpolation linéaire, modes jusqu’à 100 Hz + masse manquante, CQC, SRSS des directions, vertical = 2/3 horizontal.';
+    'Coudes vérifiés à leurs extrémités. Té forgé avec tronçon rigide de dérivation, réduction α = 9,5° à soudures brutes (i = 1,8), appuis de raideur 876 kN/mm. ' +
+    'Séisme : spectre ξ = 5 %, interpolation linéaire, modes jusqu’à 100 Hz + masse manquante, CQC, SRSS des directions, vertical = 2/3 horizontal. Validé contre PIPESTRESS (docs/THEORIE.md).';
   m.settings.bendInnerPoints = false;
   m.sections = [
     { id: 'DN200', name: 'DN200 Sch 40 (219,1 × 8,18)', od: 219.1, t: 8.18, millTol: 12.5, corrosion: 0, fluidDensity: 1000, insulThk: 80, insulDensity: 120 },
@@ -224,11 +225,13 @@ function fullBenchmark() {
   m.components.push({ type: 'tee', node: '30', teeType: 'welding', pad: '', sif: '', label: 'Té DN200 × DN100' });
   m.components.push({ type: 'support', node: '10', kind: 'anchor', label: 'Réservoir' });
   m.components.push({ type: 'support', node: '25', kind: 'variable', stiffness: 100, preload: PRELOADS.V1, label: 'V1' });
-  m.components.push({ type: 'support', node: '45', kind: 'restguide', label: 'AG1' });
-  m.components.push({ type: 'support', node: '65', kind: 'guide', label: 'G1' });
+  // appuis : raideur 876 kN/mm (valeur par défaut de PIPESTRESS, cas de comparaison)
+  const kSup = 876000;
+  m.components.push({ type: 'support', node: '45', kind: 'restguide', stiffness: kSup, label: 'AG1' });
+  m.components.push({ type: 'support', node: '65', kind: 'guide', stiffness: kSup, label: 'G1' });
   m.components.push({ type: 'support', node: '75', kind: 'variable', stiffness: 100, preload: PRELOADS.V2, label: 'V2' });
-  m.components.push({ type: 'support', node: '78', kind: 'axial', label: 'BA1' });
-  m.components.push({ type: 'support', node: '85', kind: 'restguide', label: 'AG2' });
+  m.components.push({ type: 'support', node: '78', kind: 'axial', stiffness: kSup, label: 'BA1' });
+  m.components.push({ type: 'support', node: '85', kind: 'restguide', stiffness: kSup, label: 'AG2' });
   m.components.push({ type: 'support', node: '100', kind: 'anchor', label: 'Pompe' });
   m.components.push({ type: 'support', node: '120', kind: 'anchor', label: 'Équipement' });
   const seismic = m.loadCases.find((c) => c.type === 'seismic');

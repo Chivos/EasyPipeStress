@@ -32,7 +32,7 @@ export function buildReport(state, snapshot) {
       [
         ['Axe vertical', m.settings.vertical],
         ['Température de référence', `${m.settings.tRef} °C`],
-        ['Modélisation', `Poutres 3D ${m.settings.shear !== false ? 'Timoshenko' : 'Euler-Bernoulli'}, longueur max. ${m.settings.meshMaxLength} mm, coudes discrétisés (≤ ${m.settings.bendDivisionAngle}° par élément) avec facteur de flexibilité`],
+        ['Modélisation', `Poutres 3D ${m.settings.shear !== false ? 'Timoshenko' : 'Euler-Bernoulli'}, longueur max. ${m.settings.meshMaxLength} mm, coudes discrétisés (≤ ${m.settings.bendDivisionAngle}° par élément) avec facteur de flexibilité ; dilatation au module ${m.settings.thermalModulus === 'cold' ? 'à froid Ec' : 'à chaud Eh (réactions à chaud, moments des éq. (7) et (8) × Ec/Eh)'}`],
         ['Tolérance de fabrication et corrosion', m.settings.allowances ? 'prises en compte (épaisseur minimale)' : 'non prises en compte'],
         ['Épaisseur minimale (pression seule)', m.settings.checkThickness ? `vérifiée${r?.code?.thickness ? ` (${r.code.thickness.ref})` : ''}` : 'non vérifiée'],
         ['Supports', 'Linéaires bilatéraux, rigidité de pénalité 10¹⁰ N/mm / 10¹⁴ N·mm/rad'],

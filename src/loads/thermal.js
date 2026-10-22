@@ -1,10 +1,14 @@
 // Dilatation thermique : déformation libre ε = α_moy(T) · (T − T_réf) imposée à
 // chaque élément (forces de blocage équivalentes), plus déplacements imposés
-// des supports (mouvements de piquages). La raideur est évaluée au module
-// d'Young à froid, conformément à la pratique des codes (étendue de moments
-// d'expansion calculée avec Ec, RCC-M C 3653.3 / ASME NC-3653.3).
+// des supports (mouvements de piquages). Module (option du projet) :
+//  - 'hot' (défaut, comme PIPESTRESS) : raideur au module à chaud Eh de chaque
+//    tube → déplacements et réactions réels à chaud ; le code ramène l'étendue de
+//    moments à Ec (× Ec/Eh par élément, RCC-M C 3653.3 / ASME NC-3653.3) ;
+//  - 'cold' : raideur au module à froid Ec → contraintes directement à Ec,
+//    réactions « à froid » (majorées de Ec/Eh).
 
 import { axialStrainEquivalent } from '../fem/beam3d.js';
+import { FeSystem } from '../fem/system.js';
 import { materialAt } from '../core/materials.js';
 
 const T_TABLE = 20; // température de référence des coefficients moyens de dilatation
@@ -19,7 +23,10 @@ export const thermal = {
   create: () => ({ type: 'thermal', label: 'Dilatation thermique', enabled: true, imposed: true }),
 
   run(ctx, lc) {
-    const { sys, model } = ctx;
+    const { model } = ctx;
+    const hot = model.settings.thermalModulus !== 'cold';
+    // système au module à chaud, construit une fois par calcul (partagé entre cas thermiques)
+    const sys = hot ? (ctx.hotSys ??= new FeSystem({ ...ctx.sys.mesh, elements: ctx.sys.mesh.elements.map((e) => ({ ...e, E: e.Eh })) }, { shear: model.settings.shear !== false })) : ctx.sys;
     const tRef = +model.settings.tRef || 20;
     const elemEq = sys.mesh.elements.map((e) => {
       // α des tables = coefficient MOYEN entre 20 °C (référence des tables) et T :
@@ -34,6 +41,6 @@ export const thermal = {
       sys.mesh.supports.forEach((s, i) => s.imposed && imposed.set(i, s.imposed));
     }
     const r = sys.solveStatic({ F: null, elemEq, imposed });
-    return { signed: true, ...r, info: { tRef } };
+    return { signed: true, ...r, info: { tRef, modulus: hot ? 'hot' : 'cold' } };
   },
 };

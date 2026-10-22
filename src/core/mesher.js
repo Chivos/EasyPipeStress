@@ -26,6 +26,7 @@ export class ModelError extends Error {
   }
 }
 
+const RIGID_FACTOR = 1000; // raideur d'un tronçon rigide (× tube), assez grande sans dégrader le conditionnement
 const genericFactors = ({ kind }) => ({ k: 1, i: 1, B1: 0.5, B2: 1, note: kind });
 
 /**
@@ -91,6 +92,50 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
     markCorner: (label, info) => corners.set(label, info),
   };
   for (const c of byPhase('corner')) components.get(c.type).mesh(c, cornerCtx);
+
+  // --- 3 bis. tés : tronçon rigide au départ de chaque dérivation, de l'axe du
+  // collecteur jusqu'à sa paroi (De/2 du collecteur), comme PIPESTRESS (option)
+  if (settings.teeRigidBranch !== false) {
+    for (const t of model.components.filter((c) => c.type === 'tee')) {
+      const node = String(t.node ?? '').trim();
+      const at = segments.filter((s) => s.a === node || s.b === node);
+      if (at.length < 3) continue; // signalé par le composant té
+      const away = (s) => vec.unit(s.a === node ? vec.sub(s.pb, s.pa) : vec.sub(s.pa, s.pb));
+      // collecteur : paire de segments la plus opposée au nœud
+      let run = [0, 1];
+      let best = Infinity;
+      for (let i = 0; i < at.length; i++) for (let j = i + 1; j < at.length; j++) {
+        const c = vec.dot(away(at[i]), away(at[j]));
+        if (c < best) [best, run] = [c, [i, j]];
+      }
+      const runOd = Math.max(...run.map((k) => +sections.get(at[k].props.section)?.od || 0));
+      at.forEach((s, k) => {
+        if (run.includes(k)) return;
+        const d = runOd / 2;
+        const L = vec.norm(vec.sub(s.pb, s.pa));
+        if (s.kind !== 'pipe' || !(d > 0)) return;
+        if (L <= d + 1) {
+          warnings.push(`Té ${node} : dérivation trop courte pour le tronçon rigide (${L.toFixed(0)} mm ≤ De/2 du collecteur) ; tronçon rigide ignoré.`);
+          return;
+        }
+        const label = `${node}P${k > 2 ? k - 1 : ''}`;
+        const fromA = s.a === node;
+        const pNode = fromA ? s.pa : s.pb;
+        const p = vec.add(pNode, vec.scale(away(s), d));
+        const rigid = { ...s, nodeKinds: [fromA ? s.nodeKinds[0] : 'internal', fromA ? 'internal' : s.nodeKinds[1]], subdivide: false, nsub: 1, props: { ...s.props, rigid: true } };
+        if (fromA) {
+          Object.assign(rigid, { b: label, pb: p });
+          Object.assign(s, { a: label, pa: p });
+          s.nodeKinds = ['internal', s.nodeKinds[1]];
+        } else {
+          Object.assign(rigid, { a: label, pa: p });
+          Object.assign(s, { b: label, pb: p });
+          s.nodeKinds = [s.nodeKinds[0], 'internal'];
+        }
+        segments.push(rigid);
+      });
+    }
+  }
 
   // --- 4. nœuds et éléments
   // Segments de longueur nulle (coude soudé directement sur un piquage, coudes
@@ -208,7 +253,9 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
       matId: mat.id,
       mat,
       nu: +mat.nu || 0.3,
-      E: cold.E * (valve ? valve.stiffFactor : 1), // robinet : raideur = facteur × tube
+      E: cold.E * (valve ? valve.stiffFactor : p.rigid ? RIGID_FACTOR : 1), // robinet : raideur = facteur × tube
+      Eh: hot.E * (valve ? valve.stiffFactor : p.rigid ? RIGID_FACTOR : 1), // module à chaud (dilatation, option du projet)
+      rigid: !!p.rigid, // tronçon rigide de départ de piquage
       T1: p.T1,
       P1: p.P1,
       Td: p.Td,
@@ -222,6 +269,21 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
       massLength: re.massLength,
       mpl: { metal, fluid, insul }, // masse linéique (t/mm)
     });
+  }
+
+  // --- 5 bis. soudures bout à bout brutes de soudage aux extrémités des réductions :
+  // facteur i (1,8 par défaut) appliqué aux extrémités de tous les éléments qui y aboutissent
+  for (const s of segments) {
+    const w = s.props?.reducer?.weld;
+    if (!(w > 1)) continue;
+    for (const label of [s.a, s.b]) {
+      const i = nodeIndex.get(find(label));
+      if (i === undefined) continue;
+      for (const e of elements) {
+        if (e.n1 === i) e.weldI = [Math.max(e.weldI?.[0] ?? 1, w), e.weldI?.[1] ?? 1];
+        if (e.n2 === i) e.weldI = [e.weldI?.[0] ?? 1, Math.max(e.weldI?.[1] ?? 1, w)];
+      }
+    }
   }
 
   // --- 6. masses et supports

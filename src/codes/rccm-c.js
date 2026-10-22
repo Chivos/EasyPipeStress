@@ -104,11 +104,14 @@ export function sectionModulus(e, local, sec = e.sec) {
 }
 
 /** Composantes locales du moment à une extrémité (torsion, flexions) et résultant, en N·m. */
-function moment(name, c, ie, end) {
+function moment(name, c, ie, end, k = 1) {
   const o = ie * 12 + (end === 0 ? 3 : 9);
   const f = c.elemForces;
-  return { name, signed: c.signed !== false, mt: f[o] / 1000, my: f[o + 1] / 1000, mz: f[o + 2] / 1000, res: Math.hypot(f[o], f[o + 1], f[o + 2]) / 1000 };
+  return { name, signed: c.signed !== false, mt: (k * f[o]) / 1000, my: (k * f[o + 1]) / 1000, mz: (k * f[o + 2]) / 1000, res: (k * Math.hypot(f[o], f[o + 1], f[o + 2])) / 1000 };
 }
+
+/** Cas de dilatation calculé au module à chaud : étendue de moments ramenée à Ec (C 3653.3). */
+const ecOverEh = (tc, e) => (tc.info?.modulus === 'hot' && e.Eh > 0 ? e.E / e.Eh : 1);
 
 function resultant(f, ie, end) {
   const o = ie * 12 + (end === 0 ? 3 : 9);
@@ -211,11 +214,14 @@ export const rccmC = {
         const { od: De, t } = sec;
         // facteurs de l'extrémité : le plus pénalisant entre l'élément et un té au nœud
         const local = e.endFactors?.[end];
-        const fac = local && local.i >= e.factors.i ? local : e.factors;
+        const fac0 = local && local.i >= e.factors.i ? local : e.factors;
+        // soudure bout à bout brute de soudage (extrémités de réduction) : i = max(composant, soudure)
+        const weld = e.weldI?.[end] ?? 1;
+        const fac = weld > fac0.i ? { ...fac0, i: weld, weld: true } : fac0;
         const i75 = Math.max(1, 0.75 * fac.i);
         const pTerm = (P) => (P * De) / (4 * t);
         const node = mesh.nodes[end === 0 ? e.n1 : e.n2].label;
-        const compLabel = fac === local ? `Té ${node}` : e.kind === 'bend' ? `Coude ${e.bend.node}` : e.kind === 'reducer' ? `${e.reducer.type === 'eccentric' ? 'Réduction exc.' : 'Réduction'} ${e.reducer.label.replace('Réduction ', '')}` : 'Tube';
+        const compLabel = fac.weld ? `Soudure réduction ${node}` : fac === local ? `Té ${node}` : e.kind === 'bend' ? `Coude ${e.bend.node}` : e.kind === 'reducer' ? `${e.reducer.type === 'eccentric' ? 'Réduction exc.' : 'Réduction'} ${e.reducer.label.replace('Réduction ', '')}` : 'Tube';
         const base = { node, elem: e.label, ie, end, comp: compLabel, kind: fac === local ? 'tee' : e.kind };
         // coudes : points intérieurs vérifiés ou non (option du projet)
         if (e.kind === 'bend' && model.settings?.bendInnerPoints === false && node !== `${e.bend.node}A` && node !== `${e.bend.node}B`) continue;
@@ -227,8 +233,9 @@ export const rccmC = {
           ['Épaisseur nominale eₙ', t, 'mm'],
           ...zItems,
           ['Facteur d’intensification i', fac.i, ''],
-          ...(fac.h != null ? [['Caractéristique h', fac.h, '']] : []),
-          ...(e.kind === 'reducer' && fac !== local
+          ...(fac.h != null && !fac.weld ? [['Caractéristique h', fac.h, '']] : []),
+          ...(fac.weld ? [['Soudure bout à bout brute de soudage (extrémité de réduction)', weld, '']] : []),
+          ...(e.kind === 'reducer' && fac0 !== local && !fac.weld
             ? [
                 ['Angle du cône α', e.reducer.alpha, '°'],
                 ['Petit bout D₂ / t₂', e.reducer.D2 / e.reducer.t2, ''],
@@ -257,15 +264,17 @@ export const rccmC = {
         const SA = f * (1.25 * atC.S + 0.25 * atH.S);
         const saItems = [['Facteur de réduction f', f, ''], ['Sc (à T_réf)', atC.S, 'MPa'], ['Sh (à T)', atH.S, 'MPa'], ['S_A', SA, 'MPa']];
         for (const tc of thermalCases) {
-          const MC = resultant(tc.elemForces, ie, end);
+          const kE = ecOverEh(tc, e);
+          const MC = kE * resultant(tc.elemForces, ie, end);
           const SE = (fac.i * MC) / Z;
+          const ecItems = kE !== 1 ? [['Rapport Ec/Eh (moments calculés à chaud, ramenés à Ec)', kE, '']] : [];
           rows.push({
             ...base, eq: '7', eqLabel: 'Éq. (7) dilatation thermique', case: tc.id, stress: SE, allow: SA, ratio: SE / SA,
-            detail: { i: fac.i, MC, Z, SA, f, Sc: atC.S, Sh: atH.S },
+            detail: { i: fac.i, MC, Z, SA, f, Sc: atC.S, Sh: atH.S, kE },
             calc: {
               formula: 'S_E = i·M_C/Z ≤ S_A = f(1,25 Sc + 0,25 Sh)',
-              items: [...geom, ['Moment résultant M_C', MC / 1000, 'N·m'], ['Contrainte S_E = i·M_C/Z', SE, 'MPa']],
-              moments: [moment(`M_C — ${tc.id}`, tc, ie, end)],
+              items: [...geom, ...ecItems, ['Moment résultant M_C (à Ec)', MC / 1000, 'N·m'], ['Contrainte S_E = i·M_C/Z', SE, 'MPa']],
+              moments: [moment(`M_C — ${tc.id}${kE !== 1 ? ' (× Ec/Eh)' : ''}`, tc, ie, end, kE)],
               allow: saItems,
             },
           });
@@ -277,8 +286,8 @@ export const rccmC = {
               detail: { i: fac.i, i75, MA, MC, Z },
               calc: {
                 formula: 'P·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ Sh + S_A',
-                items: [...geom, ['0,75i (≥ 1)', i75, ''], ...pItems(e.Pd), ['Contrainte 0,75i·M_A/Z', (i75 * MA) / Z, 'MPa'], ['Contrainte i·M_C/Z', SE, 'MPa']],
-                moments: [...momA, moment(`M_C — ${tc.id}`, tc, ie, end)],
+                items: [...geom, ...ecItems, ['0,75i (≥ 1)', i75, ''], ...pItems(e.Pd), ['Contrainte 0,75i·M_A/Z', (i75 * MA) / Z, 'MPa'], ['Contrainte i·M_C/Z', SE, 'MPa']],
+                moments: [...momA, moment(`M_C — ${tc.id}${kE !== 1 ? ' (× Ec/Eh)' : ''}`, tc, ie, end, kE)],
                 allow: [...saItems, ['Admissible Sh + S_A', allow8, 'MPa']],
               },
             });
