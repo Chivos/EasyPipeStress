@@ -187,7 +187,7 @@ function fullBenchmark() {
   m.meta.notes =
     'Cas destiné à la comparaison avec un logiciel de référence. P265GH, 300 °C, 3 MPa, eau, calorifuge. ' +
     'Coudes vérifiés à leurs extrémités. Té forgé avec tronçon rigide de dérivation, réduction α = 9,5° à soudures brutes (i = 1,8), appuis de raideur 876 kN/mm. ' +
-    'Séisme : spectre ξ = 5 %, interpolation linéaire, modes jusqu’à 100 Hz + masse manquante, CQC, SRSS des directions, vertical = 2/3 horizontal. Validé contre PIPESTRESS (docs/THEORIE.md).';
+    'Séisme : spectre ξ = 5 %, interpolation linéaire, modes jusqu’à 100 Hz + masse manquante, CQC, SRSS des directions, vertical = 2/3 horizontal. Cas de validation (docs/THEORIE.md).';
   m.settings.bendInnerPoints = false;
   m.sections = [
     { id: 'DN200', name: 'DN200 Sch 40 (219,1 × 8,18)', od: 219.1, t: 8.18, millTol: 12.5, corrosion: 0, fluidDensity: 1000, insulThk: 80, insulDensity: 120 },
