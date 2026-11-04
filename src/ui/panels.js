@@ -247,9 +247,20 @@ export function componentTable(app, type, { emptyText } = {}) {
         if (type === 'pipe' && CASCADE_KEYS.includes(k) && app.state.quick.cascade !== false) {
           const same = (x) => String(x ?? '') === String(old ?? '');
           const list = mm.components.filter((x) => x.type === 'pipe');
+          const changed = [c];
           for (const next of list.slice(list.indexOf(c) + 1)) {
             if (!same(next[k])) break;
             next[k] = v;
+            changed.push(next);
+          }
+          // réductions raccordées à un tube modifié : matériau, T, P suivent ; pour la
+          // section, seule l'extrémité raccordée à ce tube (section « De » ou « À ») suit
+          const touches = (node) => changed.some((p) => String(p.n1) === String(node) || String(p.n2) === String(node));
+          for (const r of mm.components.filter((x) => x.type === 'reducer')) {
+            if (k === 'section') {
+              if (touches(r.n1) && same(r.section)) r.section = v;
+              if (touches(r.n2) && same(r.section2)) r.section2 = v;
+            } else if (same(r[k]) && (touches(r.n1) || touches(r.n2))) r[k] = v;
           }
         }
       }),
@@ -389,9 +400,9 @@ export function renderGeometry(app) {
       help('T et P : température et pression intérieure du tube, utilisées pour la dilatation, les contraintes admissibles et les termes de pression du code. Vue 3D, menu « Données » : couleur par matériau, section, température ou pression, pour contrôler leur répartition.'),
       h(
         'label',
-        { class: 'check', title: 'Une modification de section, de matériau, de T ou de P est reportée sur les lignes suivantes qui avaient la même valeur, jusqu’à la première ligne différente.' },
+        { class: 'check', title: 'Une modification de section, de matériau, de T ou de P est reportée sur les lignes suivantes qui avaient la même valeur, jusqu’à la première ligne différente, et sur les réductions raccordées à ces tubes (pour la section : l’extrémité raccordée).' },
         h('input', { type: 'checkbox', checked: q.cascade !== false, onchange: (e) => (q.cascade = e.target.checked) }),
-        ' report sur les lignes suivantes identiques (section, matériau, T, P)',
+        ' report sur les lignes suivantes identiques et les réductions raccordées (section, matériau, T, P)',
       ),
       componentTable(app, 'pipe'),
     ),
