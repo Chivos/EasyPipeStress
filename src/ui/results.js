@@ -68,8 +68,13 @@ export function buildScene(state) {
   const { result, preview, display } = state;
   const mesh = result?.mesh ?? preview;
   const scene = { mesh, selected: state.selected, labels: display.labels, showAllNodes: display.showAll, render: display.render, highlight: highlightOf(state, mesh) };
-  if (!result || !mesh) return scene;
   const [kind, arg] = display.mode.split(':');
+  // paramètres de modélisation (matériau, section, T, P) : disponibles sans calcul
+  if (kind === 'prop' && mesh) {
+    Object.assign(scene, propertyColors(mesh, arg));
+    return scene;
+  }
+  if (!result || !mesh) return scene;
   const size = modelSize(mesh);
   if (kind === 'case') {
     const c = displayCases(result).find((x) => x.id === arg);
@@ -153,6 +158,52 @@ function modelSize(mesh) {
   for (const n of mesh.nodes) [n.x, n.y, n.z].forEach((v, d) => ((mn[d] = Math.min(mn[d], v)), (mx[d] = Math.max(mx[d], v))));
   return Math.max(...mx.map((v, d) => v - mn[d]), 1000);
 }
+// Couleurs de catégories (matériaux, sections) : teintes bien distinctes
+const CATEGORY_COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#17becf', '#bcbd22', '#7f7f7f'];
+
+/** Paramètres de modélisation affichables dans la vue : matériau, section, température, pression. */
+export const PROPERTY_MODES = [
+  ['material', 'Matériaux'],
+  ['section', 'Sections'],
+  ['T', 'Température T'],
+  ['P', 'Pression P'],
+];
+
+/**
+ * Couleur de chaque élément selon un paramètre de modélisation, et légende.
+ * Matériau et section : une couleur par valeur (robinets en couleur propre, leur
+ * corps n'ayant ni matériau ni section de tube). T et P : couleur graduée du plus
+ * froid / plus faible (bleu) au plus chaud / plus fort (rouge), une ligne de
+ * légende par valeur distincte.
+ */
+function propertyColors(mesh, prop) {
+  const elems = mesh.elements;
+  if (prop === 'material' || prop === 'section') {
+    const name = (e) => {
+      if (prop === 'material') return e.matId;
+      if (e.kind === 'reducer' && e.reducer) return e.secId.split('→').length === 2 ? `${e.secId} (réduction)` : e.secId;
+      return e.secId;
+    };
+    const keys = [...new Set(elems.filter((e) => e.kind !== 'valve').map(name))];
+    const color = new Map(keys.map((k, i) => [k, CATEGORY_COLORS[i % CATEGORY_COLORS.length]]));
+    return {
+      elementColors: elems.map((e) => (e.kind === 'valve' ? null : color.get(name(e)))),
+      legend: { title: prop === 'material' ? 'Matériaux' : 'Sections', items: keys.map((k) => [color.get(k), k]) },
+    };
+  }
+  const val = (e) => (prop === 'T' ? e.T1 : e.P1);
+  const unit = prop === 'T' ? '°C' : 'MPa';
+  const values = [...new Set(elems.map(val))].sort((a, b) => a - b);
+  const lo = values[0] ?? 0;
+  const hi = values[values.length - 1] ?? 0;
+  const colorOf = (v) => (hi > lo ? dispColor((v - lo) / (hi - lo)) : dispColor(0.5));
+  const shown = values.length > 10 ? [lo, ...values.slice(1, -1).filter((_, i, a) => i % Math.ceil(a.length / 8) === 0), hi] : values;
+  return {
+    elementColors: elems.map((e) => colorOf(val(e))),
+    legend: { title: prop === 'T' ? 'Température T' : 'Pression P', items: shown.slice().reverse().map((v) => [colorOf(v), `${fmt(v, prop === 'T' ? 0 : 2)} ${unit}`]) },
+  };
+}
+
 const dispColor = (x) => `hsl(${(220 - 220 * Math.min(1, x)).toFixed(0)}, 70%, 45%)`;
 
 // ------------------------------------------------------------ panneau latéral

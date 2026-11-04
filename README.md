@@ -22,6 +22,10 @@ exportables/importables en JSON.
    calcul), des coudes (rayon saisi ou normalisé ASME B16.9, épaisseur), des
    réductions concentriques ou excentriques (facteur i du RCC-M C 3673) et des
    tés. Sections normalisées ASME B36.10M / B36.19M proposées par catalogue.
+   Une modification de section, de matériau, de T ou de P d'un tube est reportée
+   sur les lignes suivantes qui avaient la même valeur (option). La vue 3D
+   colore le modèle par matériau, section, température ou pression (menu
+   « Données »), sans calcul préalable.
 2. **Supports & masses** : ancrages, appuis, guides, butées, ressorts, blocages
    personnalisés, déplacements imposés de piquage ; masses ponctuelles.
 3. **Chargements** : poids (fluide, calorifuge), pression, dilatation, séisme

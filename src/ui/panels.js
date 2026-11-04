@@ -217,6 +217,9 @@ function renderMaterials(app) {
 }
 
 // ---------------------------------------------------------------- Géométrie
+/** Champs des tubes reportés sur les lignes suivantes identiques lors d'une modification. */
+const CASCADE_KEYS = ['section', 'material', 'T1', 'P1'];
+
 export function componentTable(app, type, { emptyText } = {}) {
   const def = components.get(type);
   const m = app.state.model;
@@ -237,7 +240,18 @@ export function componentTable(app, type, { emptyText } = {}) {
     onEdit: (i, k, v) =>
       app.update((mm) => {
         const c = mm.components.find((x) => x.id === rows[i].id);
+        const old = c[k];
         c[k] = v;
+        // tubes : la nouvelle valeur (section, matériau, T, P) est reportée sur les
+        // lignes suivantes du tableau qui avaient la même valeur, jusqu'à la première différente
+        if (type === 'pipe' && CASCADE_KEYS.includes(k) && app.state.quick.cascade !== false) {
+          const same = (x) => String(x ?? '') === String(old ?? '');
+          const list = mm.components.filter((x) => x.type === 'pipe');
+          for (const next of list.slice(list.indexOf(c) + 1)) {
+            if (!same(next[k])) break;
+            next[k] = v;
+          }
+        }
       }),
     onDelete: (i) => app.update((mm) => mm.components.splice(mm.components.findIndex((x) => x.id === rows[i].id), 1)),
     onAdd: () =>
@@ -370,7 +384,17 @@ export function renderGeometry(app) {
       ),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: q.tee !== false, onchange: (e) => (q.tee = e.target.checked) }), ' té automatique quand un troisième tube part d’un nœud'),
     ),
-    section('Tubes droits', help('T et P : température et pression intérieure du tube, utilisées pour la dilatation, les contraintes admissibles et les termes de pression du code.'), componentTable(app, 'pipe')),
+    section(
+      'Tubes droits',
+      help('T et P : température et pression intérieure du tube, utilisées pour la dilatation, les contraintes admissibles et les termes de pression du code. Vue 3D, menu « Données » : couleur par matériau, section, température ou pression, pour contrôler leur répartition.'),
+      h(
+        'label',
+        { class: 'check', title: 'Une modification de section, de matériau, de T ou de P est reportée sur les lignes suivantes qui avaient la même valeur, jusqu’à la première ligne différente.' },
+        h('input', { type: 'checkbox', checked: q.cascade !== false, onchange: (e) => (q.cascade = e.target.checked) }),
+        ' report sur les lignes suivantes identiques (section, matériau, T, P)',
+      ),
+      componentTable(app, 'pipe'),
+    ),
     section(
       'Réductions',
       help('Cône entre deux sections (« De » côté nœud de départ, « À » côté arrivée), DX, DY, DZ donnant sa longueur et son orientation. Raideur et masse : sous-éléments de section interpolée ; chaque extrémité est vérifiée avec sa propre section. RCC-M C 3673 : k = 1, i = 0,5 + 0,01·α·√(D₂/t₂) borné entre 1 et 2 (D₂, t₂ au petit bout ; α ≤ 60°, D/t ≤ 100, sinon i = 2). α : demi-angle du cône, déduit de la géométrie si vide (excentrique : angle de la génératrice inclinée). Soudures bout à bout aux deux extrémités : brutes de soudage par défaut (i = 1,8 sur tous les éléments qui y aboutissent), ou arasées (i = 1,0), colonne « Soudures ».'),
