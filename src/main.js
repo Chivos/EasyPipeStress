@@ -4,7 +4,7 @@
 import { h, download } from './ui/dom.js';
 import { Viewer } from './ui/viewer.js';
 import { renderProject, renderGeometry, renderSupports, renderLoads, renderCode } from './ui/panels.js';
-import { renderResultsPanel, renderBottom, BOTTOM_TABS, buildScene, displayCases, showModal } from './ui/results.js';
+import { renderResultsPanel, renderBottom, BOTTOM_TABS, buildScene, displayCases, showModal, PROPERTY_MODES } from './ui/results.js';
 import { buildReport } from './ui/report.js';
 import { exampleModel, emptyModel, normalizeModel } from './core/model.js';
 import { initSplitters, initGridKeys } from './ui/layout.js';
@@ -63,7 +63,8 @@ const app = {
     fn(state.model);
     state.result = null;
     state.runError = null;
-    if (state.display.mode !== 'geom') state.display.mode = 'geom';
+    // affichage des données de modélisation conservé pendant la saisie ; résultats effacés
+    if (state.display.mode !== 'geom' && !state.display.mode.startsWith('prop:')) state.display.mode = 'geom';
     persist();
     refreshPreview();
     queueRender();
@@ -189,7 +190,7 @@ function render() {
 
 function renderViewToolbar() {
   const r = state.result;
-  const opts = [['geom', 'Géométrie']];
+  const opts = [['geom', 'Géométrie'], ...PROPERTY_MODES.map(([k, l]) => [`prop:${k}`, `Données : ${l}`])];
   if (r) {
     for (const c of displayCases(r)) opts.push([`case:${c.id}`, `${c.signed ? 'Déformée' : 'Enveloppe'} ${c.id} – ${c.label}`]);
     if (r.check) {
