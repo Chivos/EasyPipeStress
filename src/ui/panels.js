@@ -13,6 +13,8 @@ import { seismicAxes, seismicLevels, defaultLevels, LEVELS } from '../loads/seis
 import { COMPONENTS } from '../loads/forces.js';
 import { PIPE_SIZES, schedulesOf } from '../core/pipeCatalog.js';
 import { fmt } from '../core/units.js';
+import { splitPipe, proposeLabels } from '../core/edit.js';
+import { showModal } from './results.js';
 
 const section = (title, ...content) => h('section', { class: 'card' }, h('h3', {}, title), ...content);
 const help = (...t) => h('p', { class: 'help' }, ...t);
@@ -272,7 +274,105 @@ export function componentTable(app, type, { emptyText } = {}) {
         mm.components.push(c);
       }),
     addLabel: def.label.toLowerCase(),
+    extraButtons: type === 'pipe' ? [h('button', { class: 'small', title: 'Découper un tube en plusieurs tubes (nouveaux nœuds), par exemple pour insérer un robinet ou un support', onclick: () => openSplitDialog(app) }, '✂ diviser un tube')] : [],
   });
+}
+
+/** Fenêtre « Diviser un tube » : parties égales ou longueurs saisies, repères des nouveaux nœuds. */
+function openSplitDialog(app) {
+  const m = app.state.model;
+  const pipes = m.components.filter((c) => c.type === 'pipe');
+  if (!pipes.length) return app.toast('Aucun tube à diviser.');
+  const len = (p) => Math.hypot(+p.dx || 0, +p.dy || 0, +p.dz || 0);
+  const sel = app.state.selected;
+  const st = { id: (pipes.find((p) => String(p.n1) === sel || String(p.n2) === sel) ?? pipes[0]).id, mode: 'equal', parts: 2, lengths: '', labels: '' };
+  const body = h('div', { class: 'split-dialog' });
+  const render = () => {
+    const p = pipes.find((x) => x.id === st.id);
+    const k = st.mode === 'equal' ? Math.max(1, Math.round(+st.parts || 2) - 1) : Math.max(1, String(st.lengths).split(/[;\s]+/).filter(Boolean).length);
+    const auto = proposeLabels(m, p, k).join(' ; ');
+    const L = len(p);
+    const preview = (() => {
+      const n = Math.round(+st.parts || 0);
+      if (st.mode === 'equal') return n >= 2 ? `${n} tubes de ${fmt(L / n, 1)} mm` : '';
+      const ls = String(st.lengths).split(/[;\s]+/).filter(Boolean).map(parseNumber);
+      const rest = L - ls.reduce((s, x) => s + (x || 0), 0);
+      return ls.length ? `tubes de ${ls.map((x) => fmt(x, 1)).join(' + ')} + ${fmt(rest, 1)} (reste) mm` : '';
+    })();
+    body.replaceChildren(
+      h('p', { class: 'help' }, 'Le tube est remplacé par plusieurs tubes de mêmes section, matériau, T et P, reliés par de nouveaux nœuds (pour y placer un robinet, un support, une masse…).'),
+      h(
+        'div',
+        { class: 'row' },
+        h('label', {}, 'Tube'),
+        h('select', { onchange: (e) => ((st.id = e.target.value), (st.labels = ''), render()) }, pipes.map((x) => h('option', { value: x.id, selected: x.id === st.id }, `${x.n1} → ${x.n2} (${fmt(len(x), 1)} mm)`))),
+      ),
+      h(
+        'div',
+        { class: 'row' },
+        h('label', {}, 'Découpage'),
+        h(
+          'select',
+          { onchange: (e) => ((st.mode = e.target.value), (st.labels = ''), render()) },
+          h('option', { value: 'equal', selected: st.mode === 'equal' }, 'en parties égales'),
+          h('option', { value: 'lengths', selected: st.mode === 'lengths' }, 'longueurs saisies'),
+        ),
+      ),
+      st.mode === 'equal'
+        ? h('div', { class: 'row' }, h('label', {}, 'Nombre de parties'), h('input', { type: 'number', min: 2, step: 1, value: st.parts, class: 'num', oninput: (e) => ((st.parts = e.target.value), (st.labels = ''), refresh()) }))
+        : h(
+            'div',
+            { class: 'row' },
+            h('label', { title: 'Longueurs successives depuis le nœud de départ, séparées par « ; » ; la dernière partie prend le reste' }, 'Longueurs (mm)'),
+            h('input', { type: 'text', placeholder: 'ex. 500 ; 400', value: st.lengths, oninput: (e) => ((st.lengths = e.target.value), (st.labels = ''), refresh()) }),
+          ),
+      h('div', { class: 'row' }, h('label', { title: 'Repères des nouveaux nœuds, dans l’ordre depuis le nœud de départ, séparés par « ; »' }, 'Nouveaux nœuds'), h('input', { type: 'text', placeholder: auto, value: st.labels, oninput: (e) => (st.labels = e.target.value) })),
+      h('p', { class: 'muted' }, preview),
+      h(
+        'div',
+        { class: 'toolbar' },
+        h(
+          'button',
+          {
+            class: 'primary',
+            onclick: () => {
+              const labelInput = String(st.labels);
+              const opts = {
+                parts: st.mode === 'equal' ? +st.parts : undefined,
+                lengths: st.mode === 'lengths' ? String(st.lengths).split(/[;\s]+/).filter(Boolean).map(parseNumber) : undefined,
+                labels: labelInput.trim() ? labelInput.split(/[;,\s]+/).filter(Boolean) : undefined,
+              };
+              try {
+                // essai sur une copie, puis application (une seule mise à jour du modèle)
+                splitPipe(structuredClone(m), st.id, opts);
+              } catch (err) {
+                return app.toast(err.message);
+              }
+              let names = [];
+              app.update((mm) => (names = splitPipe(mm, st.id, opts)));
+              document.querySelector('.modal-backdrop')?.remove();
+              app.toast(`Tube divisé : nouveaux nœuds ${names.join(', ')}.`);
+            },
+          },
+          'Diviser',
+        ),
+      ),
+    );
+  };
+  // mise à jour de l'aperçu et des repères proposés sans perdre le focus du champ saisi
+  const refresh = () => {
+    const active = document.activeElement;
+    const pos = active?.selectionStart;
+    const idx = [...body.querySelectorAll('input')].indexOf(active);
+    render();
+    const again = body.querySelectorAll('input')[idx];
+    if (again) {
+      again.focus();
+      if (pos != null && again.setSelectionRange && again.type === 'text') again.setSelectionRange(pos, pos);
+    }
+  };
+  render();
+  showModal('Diviser un tube', body, { label: 'Diviser un tube' });
 }
 
 function nextNodeId(model, from) {

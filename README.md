@@ -25,7 +25,9 @@ exportables/importables en JSON.
    Une modification de section, de matériau, de T ou de P d'un tube est reportée
    sur les lignes suivantes qui avaient la même valeur (option). La vue 3D
    colore le modèle par matériau, section, température ou pression (menu
-   « Données »), sans calcul préalable.
+   « Données »), sans calcul préalable. Le bouton « diviser un tube » découpe un
+   tube en parties égales ou de longueurs saisies (nouveaux nœuds pour y placer
+   un robinet, un support…).
 2. **Supports & masses** : ancrages, appuis, guides, butées, ressorts, blocages
    personnalisés, déplacements imposés de piquage ; masses ponctuelles.
 3. **Chargements** : poids (fluide, calorifuge), pression, dilatation, séisme
