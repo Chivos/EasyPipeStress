@@ -230,3 +230,12 @@ tr.total td { font-weight: 600; border-top: 2px solid var(--border); }
 .modal table.kv td:first-child { width: auto; }
 .modal table.kv td.num { width: 110px; white-space: nowrap; }
 .modal table.kv td:last-child { width: 56px; white-space: nowrap; }
+
+/* Barre d'état : erreurs et avertissements cliquables (liste complète en fenêtre) */
+footer#status .status-link { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; text-decoration: underline dotted; overflow: hidden; text-overflow: ellipsis; }
+footer#status .status-link.err { color: var(--danger, #c0392b); }
+footer#status .status-link.warn { color: var(--warn, #b7791f); }
+.msg-list { margin: 0; padding-left: 20px; line-height: 1.5; }
+.msg-list li { margin: 4px 0; }
+.msg-list.err li::marker { color: var(--danger, #c0392b); }
+.msg-list.warn li::marker { color: var(--warn, #b7791f); }

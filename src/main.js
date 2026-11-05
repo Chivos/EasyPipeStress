@@ -235,8 +235,12 @@ function renderStatus() {
   const errs = state.previewErrors ?? [];
   const parts = [];
   if (p) parts.push(h('span', {}, `${p.nodes.length} nœuds · ${p.elements.length} éléments · ${p.supports.length} supports`));
-  if (errs.length) parts.push(h('span', { class: 'err', title: errs.join('\n') }, `⚠ ${errs.length} erreur(s) de modèle : ${errs[0]}`));
-  else if (p?.warnings?.length) parts.push(h('span', { class: 'warn', title: p.warnings.join('\n') }, `${p.warnings.length} avertissement(s)`));
+  // erreurs et avertissements : un clic ouvre la liste complète
+  const list = (title, items, cls) =>
+    showModal(title, h('ul', { class: `msg-list ${cls}` }, items.map((x) => h('li', {}, x))), { label: 'Messages du modèle' });
+  const warns = [...new Set([...(p?.warnings ?? []), ...(state.result?.warnings ?? [])])];
+  if (errs.length) parts.push(h('button', { class: 'status-link err', title: 'Voir toutes les erreurs', onclick: () => list(`Erreurs de modèle (${errs.length})`, errs, 'err') }, `⚠ ${errs.length} erreur(s) de modèle : ${errs[0]}`));
+  if (warns.length) parts.push(h('button', { class: 'status-link warn', title: 'Voir tous les avertissements', onclick: () => list(`Avertissements (${warns.length})`, warns, 'warn') }, `${warns.length} avertissement(s)`));
   if (state.selected) {
     const info = nodeInfo(state.selected);
     parts.push(h('span', { class: 'sel' }, `Nœud ${state.selected}${info}`));
