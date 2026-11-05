@@ -13,7 +13,7 @@ import { seismicAxes, seismicLevels, defaultLevels, LEVELS } from '../loads/seis
 import { COMPONENTS } from '../loads/forces.js';
 import { PIPE_SIZES, schedulesOf } from '../core/pipeCatalog.js';
 import { fmt } from '../core/units.js';
-import { splitPipe, proposeLabels } from '../core/edit.js';
+import { splitPipe, proposeLabels, SPLIT_TOL } from '../core/edit.js';
 import { showModal } from './results.js';
 
 const section = (title, ...content) => h('section', { class: 'card' }, h('h3', {}, title), ...content);
@@ -289,16 +289,23 @@ function openSplitDialog(app) {
   const body = h('div', { class: 'split-dialog' });
   const render = () => {
     const p = pipes.find((x) => x.id === st.id);
-    const k = st.mode === 'equal' ? Math.max(1, Math.round(+st.parts || 2) - 1) : Math.max(1, String(st.lengths).split(/[;\s]+/).filter(Boolean).length);
-    const auto = proposeLabels(m, p, k).join(' ; ');
     const L = len(p);
+    const ls = String(st.lengths).split(/[;\s]+/).filter(Boolean).map(parseNumber);
+    const sum = ls.reduce((s, x) => s + (x || 0), 0);
+    const rest = L - sum;
+    // nombre de nouveaux nœuds : parties − 1 (le reste éventuel forme une partie de plus)
+    const k = st.mode === 'equal' ? Math.max(1, Math.round(+st.parts || 2) - 1) : Math.max(1, ls.length - (Math.abs(rest) <= SPLIT_TOL ? 1 : 0));
+    const auto = proposeLabels(m, p, k).join(' ; ');
     const preview = (() => {
       const n = Math.round(+st.parts || 0);
       if (st.mode === 'equal') return n >= 2 ? `${n} tubes de ${fmt(L / n, 1)} mm` : '';
-      const ls = String(st.lengths).split(/[;\s]+/).filter(Boolean).map(parseNumber);
-      const rest = L - ls.reduce((s, x) => s + (x || 0), 0);
-      return ls.length ? `tubes de ${ls.map((x) => fmt(x, 1)).join(' + ')} + ${fmt(rest, 1)} (reste) mm` : '';
+      if (!ls.length) return '';
+      const head = `Somme ${fmt(sum, 1)} mm sur ${fmt(L, 1)} mm`;
+      if (Math.abs(rest) <= SPLIT_TOL) return `${head} : longueur complète, ${ls.length} tubes.`;
+      if (rest > 0) return `${head} : reste ${fmt(rest, 1)} mm, affecté à une dernière partie (${ls.length + 1} tubes).`;
+      return `${head} : dépassement de ${fmt(-rest, 1)} mm.`;
     })();
+    const over = st.mode === 'lengths' && rest < -SPLIT_TOL;
     body.replaceChildren(
       h('p', { class: 'help' }, 'Le tube est remplacé par plusieurs tubes de mêmes section, matériau, T et P, reliés par de nouveaux nœuds (pour y placer un robinet, un support, une masse…).'),
       h(
@@ -323,11 +330,11 @@ function openSplitDialog(app) {
         : h(
             'div',
             { class: 'row' },
-            h('label', { title: 'Longueurs successives depuis le nœud de départ, séparées par « ; » ; la dernière partie prend le reste' }, 'Longueurs (mm)'),
+            h('label', { title: 'Longueurs successives depuis le nœud de départ, séparées par « ; » ; s’il reste une longueur, elle forme une dernière partie' }, 'Longueurs (mm)'),
             h('input', { type: 'text', placeholder: 'ex. 500 ; 400', value: st.lengths, oninput: (e) => ((st.lengths = e.target.value), (st.labels = ''), refresh()) }),
           ),
       h('div', { class: 'row' }, h('label', { title: 'Repères des nouveaux nœuds, dans l’ordre depuis le nœud de départ, séparés par « ; »' }, 'Nouveaux nœuds'), h('input', { type: 'text', placeholder: auto, value: st.labels, oninput: (e) => (st.labels = e.target.value) })),
-      h('p', { class: 'muted' }, preview),
+      h('p', { class: over ? 'err' : 'muted' }, preview),
       h(
         'div',
         { class: 'toolbar' },

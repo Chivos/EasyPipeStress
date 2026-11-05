@@ -31,11 +31,16 @@ export function proposeLabels(model, pipe, k) {
  * Divise un tube droit en plusieurs tubes de mêmes caractéristiques.
  * @param pipeId identifiant du tube
  * @param opts.parts nombre de parties égales (≥ 2), ou
- * @param opts.lengths longueurs successives (mm) des premières parties, la
- *   dernière partie prenant le reste
+ * @param opts.lengths longueurs successives (mm) des parties ; s'il reste une
+ *   longueur, elle forme la dernière partie (somme égale à la longueur du tube :
+ *   pas de partie ajoutée)
  * @param opts.labels repères des nouveaux nœuds (sinon proposés)
  * @returns repères des nœuds créés ; les nouveaux tubes suivent l'original dans la liste
  */
+/** Écart de longueur (mm) en deçà duquel la somme saisie est égale à la longueur du tube. */
+export const SPLIT_TOL = 0.05;
+const round1 = (x) => Math.round(x * 10) / 10;
+
 export function splitPipe(model, pipeId, { parts, lengths, labels } = {}) {
   const i = model.components.findIndex((c) => c.id === pipeId);
   const p = model.components[i];
@@ -48,8 +53,10 @@ export function splitPipe(model, pipeId, { parts, lengths, labels } = {}) {
     const ls = lengths.map(Number);
     if (ls.some((x) => !(x > 0))) throw new Error('Les longueurs doivent être positives.');
     const sum = ls.reduce((s, x) => s + x, 0);
-    if (sum >= L - 1e-6) throw new Error(`La somme des longueurs (${sum} mm) doit être inférieure à la longueur du tube (${Math.round(L * 10) / 10} mm).`);
-    fr = [...ls, L - sum].map((x) => x / L);
+    const rest = L - sum;
+    if (rest < -SPLIT_TOL) throw new Error(`Somme des longueurs ${round1(sum)} mm : dépassement de ${round1(-rest)} mm sur la longueur du tube (${round1(L)} mm).`);
+    fr = (rest > SPLIT_TOL ? [...ls, rest] : ls).map((x) => x / L);
+    if (fr.length < 2) throw new Error('Saisir au moins deux longueurs, ou une longueur inférieure à celle du tube.');
   } else {
     const n = Math.round(+parts);
     if (!(n >= 2)) throw new Error('Nombre de parties : au moins 2.');

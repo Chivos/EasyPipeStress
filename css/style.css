@@ -243,3 +243,4 @@ footer#status .status-link.warn { color: var(--warn, #b7791f); }
 /* Fenêtre « Diviser un tube » */
 .split-dialog .row { display: grid; grid-template-columns: 150px 1fr; align-items: center; gap: 8px; margin: 6px 0; }
 .split-dialog .row input, .split-dialog .row select { width: 100%; }
+.split-dialog p.err { color: var(--danger); }

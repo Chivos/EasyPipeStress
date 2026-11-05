@@ -777,6 +777,10 @@ test('Division d’un tube : parties égales ou longueurs saisies, géométrie e
   // longueurs saisies : la dernière partie prend le reste ; repères imposés
   splitPipe(m, pipes[3].id, { lengths: [500, 300], labels: ['21', 'V'] });
   assert.deepEqual(m.components.filter((c) => c.type === 'pipe').slice(3).map((c) => [c.n1, c.n2, c.dy]), [['20', '21', 500], ['21', 'V', 300], ['V', '30', 1200]]);
-  assert.throws(() => splitPipe(m, pipes[3].id, { lengths: [3000] }), /inférieure/);
+  assert.throws(() => splitPipe(m, pipes[3].id, { lengths: [3000] }), /dépassement/);
+  // somme égale à la longueur : pas de partie ajoutée
+  const last = m.components.filter((c) => c.type === 'pipe').find((c) => c.n1 === 'V');
+  assert.deepEqual(splitPipe(m, last.id, { lengths: [1000, 200] }), ['V_1']);
+  assert.deepEqual(m.components.filter((c) => c.type === 'pipe').filter((c) => ['V', 'V_1'].includes(c.n1)).map((c) => c.dy), [1000, 200]);
   assert.throws(() => splitPipe(m, pipes[0].id, { parts: 2, labels: ['12'] }), /déjà utilisé/);
 });
