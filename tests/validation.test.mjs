@@ -758,3 +758,25 @@ test('Té : tronçon rigide au départ de la dérivation (De/2 du collecteur), v
   const anchor = (rr) => Math.abs(rr.cases[0].supportLoads[2 * 6 + 1]);
   assert.ok(anchor(r) > anchor(r0), 'dérivation raidie');
 });
+
+test('Division d’un tube : parties égales ou longueurs saisies, géométrie et résultats inchangés', async () => {
+  const { splitPipe, proposeLabels } = await import('../src/core/edit.js');
+  const m = setup({ density: 7850, maxLen: 100 });
+  m.components = ensureIds({ components: [pipe('10', '20', 3000, 0, 0, { T1: 150 }), pipe('20', '30', 0, 2000, 0, { T1: 150 }), sup('10', 'anchor'), sup('30', 'anchor')] }).components;
+  m.loadCases = [{ id: 'W', type: 'weight', enabled: true }, { id: 'T1', type: 'thermal', enabled: true }];
+  const before = runAnalysis(structuredClone(m));
+  const id = m.components[0].id;
+  assert.deepEqual(proposeLabels(m, m.components[0], 2), ['11', '12']);
+  const names = splitPipe(m, id, { parts: 3 });
+  assert.deepEqual(names, ['11', '12']);
+  const pipes = m.components.filter((c) => c.type === 'pipe');
+  assert.deepEqual(pipes.slice(0, 3).map((c) => [c.n1, c.n2, c.dx]), [['10', '11', 1000], ['11', '12', 1000], ['12', '20', 1000]]);
+  assert.equal(new Set(m.components.map((c) => c.id)).size, m.components.length, 'identifiants uniques');
+  const after = runAnalysis(m);
+  for (let k = 0; k < 12; k++) near(after.cases[1].supportLoads[k], before.cases[1].supportLoads[k], 1e-6, `réaction ${k}`);
+  // longueurs saisies : la dernière partie prend le reste ; repères imposés
+  splitPipe(m, pipes[3].id, { lengths: [500, 300], labels: ['21', 'V'] });
+  assert.deepEqual(m.components.filter((c) => c.type === 'pipe').slice(3).map((c) => [c.n1, c.n2, c.dy]), [['20', '21', 500], ['21', 'V', 300], ['V', '30', 1200]]);
+  assert.throws(() => splitPipe(m, pipes[3].id, { lengths: [3000] }), /inférieure/);
+  assert.throws(() => splitPipe(m, pipes[0].id, { parts: 2, labels: ['12'] }), /déjà utilisé/);
+});

@@ -76,7 +76,7 @@ export function fieldForm(fields, obj, onChange, opts = {}) {
 }
 
 /** Tableau éditable. */
-export function editableTable({ columns, rows, model, onEdit, onDelete, onAdd, addLabel = 'Ajouter', focusPrefix, rowAttrs, empty = 'Aucune ligne.' }) {
+export function editableTable({ columns, rows, model, onEdit, onDelete, onAdd, addLabel = 'Ajouter', extraButtons = [], focusPrefix, rowAttrs, empty = 'Aucune ligne.' }) {
   const table = h(
     'table',
     { class: 'grid' },
@@ -96,7 +96,8 @@ export function editableTable({ columns, rows, model, onEdit, onDelete, onAdd, a
         : h('tr', {}, h('td', { colspan: columns.length + 1, class: 'muted' }, empty)),
     ),
   );
-  return h('div', { class: 'grid-wrap' }, table, onAdd ? h('button', { class: 'small', onclick: onAdd }, `+ ${addLabel}`) : null);
+  const add = onAdd ? h('button', { class: 'small', onclick: onAdd }, `+ ${addLabel}`) : null;
+  return h('div', { class: 'grid-wrap' }, table, extraButtons.length ? h('div', { class: 'toolbar' }, add, ...extraButtons) : add);
 }
 
 export function download(filename, text, type = 'application/json') {
