@@ -2,7 +2,8 @@
 // ressorts linéaires orientés (translation ou rotation) au nœud ; un blocage
 // « rigide » est un ressort de très grande raideur (méthode de pénalité, comme
 // dans les logiciels industriels), ce qui traite naturellement les directions
-// biaises et permet d'imposer des déplacements (mouvements de piquage).
+// biaises et permet d'imposer des déplacements (mouvements de piquage). Cette
+// raideur est proportionnée au tube retenu (voir rigidStiffness).
 // Supports variables (ressorts) : raideur verticale k active dans tous les cas
 // (poids, dilatation, séisme, modal) et précharge P appliquée vers le haut dans
 // le cas poids propre ; l'effort repris vaut P − k·u (u déplacement vertical vers
@@ -14,6 +15,23 @@ import { vec } from '../core/linalg.js';
 
 export const RIGID_T = 1e10; // N/mm
 export const RIGID_R = 1e14; // N·mm/rad
+// Un blocage « rigide » doit l'être devant le tube qu'il retient : pour les gros
+// diamètres, la raideur de pénalité est portée à RIGID_RATIO fois la raideur d'un
+// tronçon de tube d'un diamètre de long (E·A/De en translation, E·I/De en
+// rotation). L'ancrage se comporte alors comme De/10⁴ de tube supplémentaire.
+export const RIGID_RATIO = 1e4;
+
+/** Raideurs de pénalité (translation, rotation) d'un blocage rigide au nœud. */
+export function rigidStiffness(elements) {
+  let kt = RIGID_T;
+  let kr = RIGID_R;
+  for (const e of elements ?? []) {
+    if (e.valve || e.rigid) continue; // raideur déjà majorée (robinet, tronçon rigide)
+    kt = Math.max(kt, (RIGID_RATIO * e.E * e.sec.A) / e.sec.od);
+    kr = Math.max(kr, (RIGID_RATIO * e.E * e.sec.I) / e.sec.od);
+  }
+  return { kt, kr };
+}
 
 const GLOBAL = { X: [1, 0, 0], Y: [0, 1, 0], Z: [0, 0, 1] };
 
@@ -117,8 +135,9 @@ export const support = {
       imposed,
       ...(kindDef.hanger ? { preload, dir: ctx.up, k: comp.kind === 'variable' ? kUser : 0 } : {}),
     });
+    const rigid = rigidStiffness(ctx.elementsAt(idx));
     for (const s of specs) {
-      const k = s.rot ? RIGID_R : kUser > 0 ? kUser : RIGID_T;
+      const k = s.rot ? rigid.kr : kUser > 0 ? kUser : rigid.kt;
       ctx.addSpring({ node: idx, rot: s.rot, dir: vec.unit(s.dir), k, support: supIdx });
     }
   },

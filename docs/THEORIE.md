@@ -117,11 +117,14 @@ la qualification du fabricant) ; les extrémités des tubes raccordés le sont.
 ### 1.6 Supports
 
 Chaque support est un ensemble de ressorts linéaires orientés (translation ou
-rotation). Un blocage rigide est un ressort de pénalité (10¹⁰ N/mm,
-10¹⁴ N·mm/rad), ce qui permet de traiter les directions biaises (guide d'un tube
+rotation). Un blocage rigide est un ressort de pénalité (au moins 10¹⁰ N/mm et
+10¹⁴ N·mm/rad, porté pour les gros diamètres à 10⁴ fois la raideur d'un tronçon
+de tube d'un diamètre de long, E·A/De et E·I/De), ce qui permet de traiter les directions biaises (guide d'un tube
 incliné) et les déplacements imposés (mouvements de piquage, appliqués dans les
-cas thermiques) sans modification de la numérotation. L'erreur relative induite
-est de l'ordre du rapport raideur structurelle / raideur de pénalité (< 10⁻⁴).
+cas thermiques) sans modification de la numérotation. L'ancrage équivaut à
+De/10⁴ de tube supplémentaire : erreur < 0,05 % sur une console d'un diamètre
+de long, quel que soit le diamètre (elle atteignait 7 % sur un DN1200 épais avec
+une pénalité fixe).
 
 Types : ancrage (6 DDL), appui vertical, guide latéral, appui + guide, butée
 axiale, ressort vertical, blocage personnalisé par DDL globaux.

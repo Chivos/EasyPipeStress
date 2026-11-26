@@ -848,3 +848,12 @@ test('Avertissements de validité : poids cumulés, appui soulevé, coupure en z
   m.components = m.components.filter((c) => c.kind !== 'rest');
   assert.deepEqual(runAnalysis(m).warnings, []);
 });
+
+test('Ancrage rigide devant le tube retenu : console de gros diamètre (flèche PL³/3EI à 0,1 % près)', () => {
+  const m = setup({ maxLen: 250 });
+  m.sections = [{ id: 'S', od: 1219, t: 25.4, millTol: 0, corrosion: 0, fluidDensity: 0, insulThk: 0, insulDensity: 0 }];
+  m.components = ensureIds({ components: [pipe('1', '2', 1500, 0, 0), sup('1', 'anchor')] }).components;
+  m.loadCases = [{ id: 'F1', type: 'forces', enabled: true, forces: [{ node: '2', FZ: -10000 }] }];
+  const r = runAnalysis(m);
+  near(nodeDisp(r, 'F1', '2')[2], (-10000 * 1500 ** 3) / (3 * 200000 * r.mesh.elements[0].sec.I), 1e-3, 'flèche');
+});
