@@ -183,6 +183,15 @@ fréquence de coupure (ou au nombre maximal de modes), au prix d'une résolution
 par itération. Les résultats sont identiques à la résolution complète (écart
 ~10⁻¹³) pour un coût très inférieur (×13 plus rapide à 1 160 DDL).
 
+**Contrôle de Sturm.** La méthode de Lanczos à un vecteur de départ peut en
+théorie omettre un mode multiple ou très proche d'un autre (tuyauterie à
+symétrie de révolution, par exemple une colonne verticale). Le nombre de modes
+sous la fréquence de coupure est donc vérifié indépendamment : c'est le nombre
+de pivots négatifs de la factorisation L·D·Lᵀ de K − (2πf)²·M (loi d'inertie de
+Sylvester ; Bathe, *Finite Element Procedures*, § 10.2.2). En cas d'écart, les
+modes sont recalculés par la résolution complète (jusqu'à 1 500 DDL massiques),
+sinon un avertissement est émis.
+
 ### 3.2 Réponse spectrale
 
 Par défaut, les deux directions horizontales (déduites de l'axe vertical du
@@ -358,11 +367,39 @@ analytiques : console sous charge ponctuelle (avec et sans cisaillement) et
 répartie, effort thermique bridé E·A·α·ΔT, dilatation libre, équilibre global
 des réactions, fréquence propre d'une console (1,875²/2π·√(EI/mL⁴)), oscillateur
 simple sous spectre plat, correction de masse manquante (égalité avec la réponse
-statique rigide), coefficients CQC, facteurs k et i des coudes.
+statique rigide), coefficients CQC, facteurs k et i des coudes, contrôle de
+Sturm (modes doubles), température de référence de 0 °C, plafond du renfort des
+tés.
+
+### 5.4 Avertissements de validité
+
+Le calcul signale les situations où ses hypothèses conduisent à un résultat à
+interpréter avec prudence (`src/diagnostics.js`), sans modifier les résultats :
+
+- **appui simple soulevé** : effort de la tuyauterie vers le haut sur un appui
+  vertical sous poids, ou poids + dilatation (le calcul linéaire retient la
+  tuyauterie, un appui réel décollerait) ;
+- **plusieurs cas de poids actifs** : leurs moments sont cumulés dans M_A ;
+- **coupure dans la zone amplifiée du spectre** : la masse manquante, prise à
+  l'accélération à période nulle, sous-estime alors les modes non retenus ;
+- **SRSS avec des modes de fréquences voisines** (écart ≤ 10 %) : la CQC est
+  recommandée (USNRC RG 1.92) ;
+- **maillage trop lâche pour la coupure** : moins de deux éléments par demi-onde
+  de flexion λ/2 = √(π/(2f))·(EI/m)^¼ (masses concentrées) ;
+- **modes omis** : écart au contrôle de Sturm non corrigé.
 
 ## 6. Limites actuelles et évolutions
 
-- Supports linéaires bilatéraux (pas de jeux, frottement, décollement).
+- Supports linéaires bilatéraux (pas de jeux, frottement, décollement) ; un
+  appui simple soulevé est signalé par un avertissement.
+- Poids, analyse modale et séisme au module à froid Ec (seule la dilatation a
+  l'option du module à chaud) : en service à haute température, les fréquences
+  réelles sont plus basses d'environ ½·(1 − Eh/Ec), soit 5 % à 300 °C.
+- Réponse rigide (Gupta) : la fréquence f_ZPA de la formule f₂ = (f₁ + 2·f_ZPA)/3
+  est prise égale à la fréquence de coupure saisie ; la coupure doit donc être la
+  fréquence où le spectre rejoint l'accélération à période nulle.
+- Coudes : pas de correction de k et i pour les extrémités à brides ; tés : pas
+  de distinction collecteur / dérivation des piquages non forgés.
 - Supports variables (ressorts) : raideur verticale k dans tous les cas, précharge P
   vers le haut dans le cas poids propre (effort repris P − k·u) ; supports constants :
   précharge P seule. Variabilité thermique |ΔF|/P indiquée par support.

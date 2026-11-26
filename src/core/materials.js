@@ -7,6 +7,15 @@
 // entre 20 °C et T), S (contrainte admissible classe 2, MPa), Sy (limite
 // d'élasticité Rp0,2, MPa).
 
+/**
+ * Température de référence (montage) du projet : 20 °C par défaut. Une valeur
+ * de 0 °C est valide (à ne pas confondre avec une saisie vide).
+ */
+export function refTemperature(settings) {
+  const v = settings?.tRef;
+  return v === '' || v == null || !Number.isFinite(+v) ? 20 : +v;
+}
+
 export function interpTable(table, T, key) {
   const rows = table;
   if (!rows.length) return NaN;

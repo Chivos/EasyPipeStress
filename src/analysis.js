@@ -8,6 +8,7 @@ import { codes } from './codes/index.js';
 import { summarize, thicknessRows } from './codes/common.js';
 import { seismicLevels } from './loads/seismic.js';
 import { localResponses } from './core/frames.js';
+import { seismicDiagnostics, resultDiagnostics } from './diagnostics.js';
 
 export function runAnalysis(model) {
   const t0 = Date.now();
@@ -57,10 +58,12 @@ export function runAnalysis(model) {
     if (r.info?.method === 'spectral' && r.modal) {
       const last = r.modal.modes[r.modal.modes.length - 1];
       if (last && last.freq < (r.info.cutoff ?? 33) && r.modal.modes.length >= (+lc.maxModes || 60)) {
-        warnings.push(`${lc.label} : le nombre maximal de modes (${lc.maxModes}) est atteint avant la fréquence de coupure (${last.freq.toFixed(1)} Hz < ${r.info.cutoff} Hz) ; augmenter le nombre de modes.`);
+        warnings.push(`${lc.label} : le nombre maximal de modes (${+lc.maxModes || 60}) est atteint avant la fréquence de coupure (${last.freq.toFixed(1)} Hz < ${r.info.cutoff} Hz) ; augmenter le nombre de modes.`);
       }
     }
+    if (lc.type === 'seismic') warnings.push(...seismicDiagnostics(lc, r, mesh));
   }
+  warnings.push(...resultDiagnostics({ mesh, cases }));
   const modal = cases.find((c) => c.modal)?.modal ?? null;
   let check = code ? code.check({ model, mesh, cases }) : null;
   // épaisseur minimale (pression seule) : option du projet, formule fournie par le code

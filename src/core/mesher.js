@@ -13,7 +13,7 @@
 import { components } from '../components/index.js';
 import { resolveCoordinates } from './model.js';
 import { pipeSection } from './sections.js';
-import { materialAt } from './materials.js';
+import { materialAt, refTemperature } from './materials.js';
 import { densityToInternal, kgToT, AXES } from './units.js';
 import { vec } from './linalg.js';
 import { elementFrame } from '../fem/beam3d.js';
@@ -194,7 +194,7 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
   for (const l of parent.keys()) if (!nodeIndex.has(l) && nodeIndex.has(find(l))) nodeIndex.set(l, nodeIndex.get(find(l)));
 
   // --- 5. caractéristiques des éléments
-  const tRef = +settings.tRef || 20;
+  const tRef = refTemperature(settings);
   const elements = [];
   for (const re of rawElems) {
     const { seg } = re;

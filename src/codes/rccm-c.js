@@ -26,7 +26,7 @@
 // Correction de pression (option) : k/[1 + 6(P/E)(r/e)^(7/3)(R/r)^(1/3)],
 // i/[1 + 3,25(P/E)(r/e)^(5/2)(R/r)^(2/3)].
 
-import { materialAt } from '../core/materials.js';
+import { materialAt, refTemperature } from '../core/materials.js';
 import { summarize } from './common.js';
 import { seismicLevels } from '../loads/seismic.js';
 
@@ -60,7 +60,8 @@ export function componentFactors({ kind, sec, bend, reducer, P = 0, Ec, params =
     const T = sec.t;
     const r = sec.rm;
     let h;
-    if (teeType === 'reinforced') h = (T + pad / 2) ** 2.5 / (T ** 1.5 * r);
+    // renfort pris en compte jusqu'à 1,5·e (au-delà : h = 4·e/r, note du tableau des facteurs)
+    if (teeType === 'reinforced') h = (T + Math.min(pad, 1.5 * T) / 2) ** 2.5 / (T ** 1.5 * r);
     else if (teeType === 'unreinforced') h = T / r;
     else h = (4.4 * T) / r;
     const i = teeType === 'user' && sif >= 1 ? sif : Math.max(1, 0.9 / h ** (2 / 3));
@@ -190,7 +191,7 @@ export const rccmC = {
    */
   check({ model, mesh, cases }) {
     const params = { ...DEFAULT_PARAMS, ...(model.code?.params ?? {}) };
-    const tRef = +model.settings.tRef || 20;
+    const tRef = refTemperature(model.settings);
     const f = rangeReductionFactor(+params.cycles || 7000);
     const weightCases = cases.filter((c) => c.type === 'weight' && c.fe !== false);
     const thermalCases = cases.filter((c) => c.type === 'thermal');
