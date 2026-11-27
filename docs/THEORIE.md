@@ -126,8 +126,32 @@ De/10⁴ de tube supplémentaire : erreur < 0,05 % sur une console d'un diamètr
 de long, quel que soit le diamètre (elle atteignait 7 % sur un DN1200 épais avec
 une pénalité fixe).
 
-Types : ancrage (6 DDL), appui vertical, guide latéral, appui + guide, butée
-axiale, ressort vertical, blocage personnalisé par DDL globaux.
+Les supports sont saisis par familles, chacune avec ses réglages avancés :
+
+- **points fixes et blocages** : ancrage (6 DDL), guide latéral, butée axiale,
+  appui vertical bilatéral (étrier), blocage personnalisé par DDL globaux ;
+- **appuis simples** (tuyauterie posée), avec ou sans guide latéral ;
+- **supports à ressort** : variable (raideur + précharge) ou constant ;
+- **dispositifs auto-bloquants**.
+
+**Supports à contact et calcul linéaire.** Le solveur est linéaire : il ne
+cherche pas l'état des contacts. Chaque support à contact reçoit une hypothèse,
+contrôlée après calcul sur les états statiques (poids, poids + dilatation) et
+sous séisme ; un avertissement signale l'hypothèse mise en défaut :
+
+| Support | Hypothèse du calcul | Contrôle |
+|---|---|---|
+| Appui simple | bilatéral dans tous les cas | effort vers le haut (appui soulevé) ; effort sismique vertical supérieur à la charge portée |
+| Jeu sur une direction bloquée | direction libre en poids et en dilatation (jeu ouvert), bloquée en modal et en séisme (jeu fermé) | déplacement libre supérieur au jeu (jeu rattrapé) |
+| Dispositif auto-bloquant | libre en poids et en dilatation, bloqué en modal et en séisme | aucun (comportement exact) ; le détail donne la course thermique |
+| Butées d'un support à ressort | ressort toujours actif, sans butée | déplacement vertical supérieur à la course haute ou basse, y compris sous séisme |
+
+Deux systèmes de raideur sont donc assemblés quand le modèle contient un
+auto-bloquant ou un jeu : le système statique, sans ces ressorts, et le système
+dynamique, avec eux (analyse modale, réponse spectrale, masse manquante,
+statique équivalent). Les constats de contact sont conservés dans le résultat
+(`contacts`) : ils désignent les supports qu'un calcul non linéaire par états
+aurait à modifier (appui à retirer, jeu ou butée à activer).
 
 ### 1.7 Résolution
 
@@ -384,8 +408,9 @@ Le calcul signale les situations où ses hypothèses conduisent à un résultat 
 interpréter avec prudence (`src/diagnostics.js`), sans modifier les résultats :
 
 - **appui simple soulevé** : effort de la tuyauterie vers le haut sur un appui
-  vertical sous poids, ou poids + dilatation (le calcul linéaire retient la
-  tuyauterie, un appui réel décollerait) ;
+  simple sous poids, ou poids + dilatation (le calcul linéaire retient la
+  tuyauterie, un appui réel décollerait) ; appui qui décollerait sous séisme ;
+- **jeu rattrapé** et **course de support à ressort dépassée** (§ 1.6) ;
 - **plusieurs cas de poids actifs** : leurs moments sont cumulés dans M_A ;
 - **coupure dans la zone amplifiée du spectre** : la masse manquante, prise à
   l'accélération à période nulle, sous-estime alors les modes non retenus ;
@@ -397,8 +422,8 @@ interpréter avec prudence (`src/diagnostics.js`), sans modifier les résultats 
 
 ## 6. Limites actuelles et évolutions
 
-- Supports linéaires bilatéraux (pas de jeux, frottement, décollement) ; un
-  appui simple soulevé est signalé par un avertissement.
+- Supports linéaires : décollement, jeux et butées sont contrôlés après calcul
+  et signalés (§ 1.6), sans recherche de l'état des contacts ; pas de frottement.
 - Poids, analyse modale et séisme au module à froid Ec (seule la dilatation a
   l'option du module à chaud) : en service à haute température, les fréquences
   réelles sont plus basses d'environ ½·(1 − Eh/Ec), soit 5 % à 300 °C.

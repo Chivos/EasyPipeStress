@@ -45,6 +45,18 @@ function lateralDirs(axis, up) {
   return [vec.unit(vec.cross(up, axis))];
 }
 
+/** Direction(s) d'un dispositif auto-bloquant selon le choix de l'utilisateur. */
+function snubberDirs(dir, axis, up) {
+  if (GLOBAL[dir]) return [GLOBAL[dir]];
+  if (dir === 'vertical') return [up];
+  if (dir === 'lateral') return lateralDirs(axis, up);
+  return [axis];
+}
+
+// Chaque type fournit ses ressorts { rot, dir } ; marqueurs :
+//  - bearing : appui vertical d'une tuyauterie posée (unilatéral en réalité : le
+//    calcul linéaire le prend bilatéral et signale le soulèvement) ;
+//  - dynamicOnly : actif seulement dans les cas dynamiques (modal, séisme).
 export const SUPPORT_KINDS = {
   anchor: {
     label: 'Ancrage (6 DDL bloqués)',
@@ -54,16 +66,20 @@ export const SUPPORT_KINDS = {
     ],
   },
   rest: {
-    label: 'Appui vertical',
-    springs: ({ up }) => [{ rot: false, dir: up }],
+    label: 'Appui simple (posé)',
+    springs: ({ up }) => [{ rot: false, dir: up, bearing: true }],
   },
   guide: {
     label: 'Guide latéral',
     springs: ({ axis, up }) => lateralDirs(axis, up).map((d) => ({ rot: false, dir: d })),
   },
   restguide: {
-    label: 'Appui + guide',
-    springs: ({ axis, up }) => [{ rot: false, dir: up }, ...lateralDirs(axis, up).map((d) => ({ rot: false, dir: d }))],
+    label: 'Appui simple + guide latéral',
+    springs: ({ axis, up }) => [{ rot: false, dir: up, bearing: true }, ...lateralDirs(axis, up).map((d) => ({ rot: false, dir: d }))],
+  },
+  clamp: {
+    label: 'Appui vertical bilatéral (étrier)',
+    springs: ({ up }) => [{ rot: false, dir: up }],
   },
   axial: {
     label: 'Butée axiale',
@@ -79,6 +95,10 @@ export const SUPPORT_KINDS = {
     springs: () => [],
     hanger: true,
   },
+  snubber: {
+    label: 'Dispositif auto-bloquant',
+    springs: ({ axis, up, comp }) => snubberDirs(comp.dir, axis, up).map((d) => ({ rot: false, dir: d, dynamicOnly: true })),
+  },
   custom: {
     label: 'Blocage personnalisé (DDL globaux)',
     springs: ({ comp }) => {
@@ -90,22 +110,104 @@ export const SUPPORT_KINDS = {
   },
 };
 
+export const SNUBBER_DIRS = { axial: 'Axiale (suivant le tube)', lateral: 'Latérale', vertical: 'Verticale', X: 'Globale X', Y: 'Globale Y', Z: 'Globale Z' };
+
+const F = {
+  node: { key: 'node', label: 'Nœud', type: 'node', width: 60 },
+  label: { key: 'label', label: 'Repère', type: 'text', width: 90 },
+  kind: (kinds) => ({ key: 'kind', label: 'Type', type: 'select', options: () => kinds, optionLabel: (k) => SUPPORT_KINDS[k]?.label ?? k, width: 170 }),
+  stiffness: (title) => ({ key: 'stiffness', label: 'Raideur', unit: 'N/mm', type: 'number', width: 80, placeholder: 'rigide', title }),
+  gap: (title) => ({ key: 'gap', label: 'Jeu', unit: 'mm', type: 'text', width: 80, placeholder: 'aucun', title }),
+};
+const GAP_HELP =
+  'Jeu avant contact, de part et d’autre : une valeur pour toutes les directions bloquées, ou une valeur par direction (dans l’ordre des directions du support, séparées par un espace). ' +
+  'Calcul linéaire : la direction est libre en poids et en dilatation (un avertissement signale un jeu rattrapé) et bloquée en séisme.';
+
+/**
+ * Familles de supports de l'onglet de saisie : chacune a ses types, ses colonnes
+ * de base et ses réglages avancés (masqués tant qu'ils ne servent pas).
+ */
+export const SUPPORT_FAMILIES = [
+  {
+    id: 'fixed',
+    label: 'Points fixes et blocages',
+    addLabel: 'blocage',
+    kinds: ['anchor', 'guide', 'axial', 'clamp', 'custom'],
+    help: 'Blocages bilatéraux, rigides par défaut. Le blocage personnalisé se définit par ses DDL globaux (réglages avancés).',
+    fields: [F.node, F.kind(['anchor', 'guide', 'axial', 'clamp', 'custom']), F.label],
+    advanced: [
+      { key: 'dofs', label: 'DDL (perso.)', type: 'text', width: 110, placeholder: 'DX DY RZ…', title: 'Pour le blocage personnalisé : DX DY DZ RX RY RZ' },
+      F.stiffness('Raideur en translation (vide = rigide)'),
+      F.gap(GAP_HELP),
+      { key: 'imposed', label: 'Dépl. imposé thermique', unit: 'mm', type: 'text', width: 120, placeholder: 'dx dy dz', title: 'Déplacement imposé appliqué dans les cas thermiques (mouvement de piquage), composantes globales' },
+    ],
+  },
+  {
+    id: 'rest',
+    label: 'Appuis simples (tuyauterie posée)',
+    addLabel: 'appui simple',
+    kinds: ['rest', 'restguide'],
+    help: 'La tuyauterie repose sur l’appui sans y être tenue. Le calcul est linéaire : un avertissement signale tout appui soulevé (poids, dilatation) ou qui décollerait sous séisme.',
+    fields: [F.node, F.kind(['rest', 'restguide']), F.label],
+    advanced: [F.stiffness('Raideur en translation (vide = rigide)'), F.gap(`Jeu du guide latéral. ${GAP_HELP}`)],
+  },
+  {
+    id: 'spring',
+    label: 'Supports à ressort',
+    addLabel: 'support à ressort',
+    kinds: ['variable', 'constant'],
+    help: 'Support variable : ressort vertical de raideur k, actif dans tous les cas, et précharge P (effort de réglage vers le haut) appliquée dans le cas poids propre ; effort repris = P − k·u. Support constant : précharge P seule, sans raideur.',
+    fields: [
+      F.node,
+      F.kind(['variable', 'constant']),
+      { key: 'stiffness', label: 'Raideur', unit: 'N/mm', type: 'number', width: 80, placeholder: '—', title: 'Raideur du ressort (support variable) ; sans objet pour un support constant' },
+      { key: 'preload', label: 'Précharge', unit: 'N', type: 'number', width: 80, placeholder: '—', title: 'Effort vertical de réglage (vers le haut) exercé par le support sur la tuyauterie, appliqué dans le cas poids propre' },
+      F.label,
+    ],
+    advanced: [
+      { key: 'travelUp', label: 'Course haut', unit: 'mm', type: 'number', width: 80, placeholder: 'libre', title: 'Course disponible vers le haut depuis la position de réglage, avant la butée haute. Un avertissement signale une butée atteinte (poids, dilatation, séisme).' },
+      { key: 'travelDown', label: 'Course bas', unit: 'mm', type: 'number', width: 80, placeholder: 'libre', title: 'Course disponible vers le bas depuis la position de réglage, avant la butée basse.' },
+    ],
+  },
+  {
+    id: 'snubber',
+    label: 'Dispositifs auto-bloquants',
+    addLabel: 'dispositif auto-bloquant',
+    kinds: ['snubber'],
+    help: 'Libres en poids et en dilatation, bloqués en analyse modale et en séisme. Le détail du support donne le déplacement thermique suivant sa direction (course à prévoir).',
+    fields: [F.node, { key: 'dir', label: 'Direction', type: 'select', options: () => Object.keys(SNUBBER_DIRS), optionLabel: (k) => SNUBBER_DIRS[k] ?? k, width: 150 }, F.label],
+    advanced: [F.stiffness('Raideur du dispositif bloqué (vide = rigide)')],
+  },
+];
+
+/** Famille d'un type de support. */
+export const familyOf = (kind) => SUPPORT_FAMILIES.find((f) => f.kinds.includes(kind)) ?? SUPPORT_FAMILIES[0];
+
+/** Vrai si le champ avancé est renseigné (les réglages avancés s'affichent alors d'office). */
+export const hasAdvanced = (family, comp) => family.advanced.some((f) => comp[f.key] != null && String(comp[f.key]).trim() !== '') || comp.kind === 'custom';
+
 export const support = {
   id: 'support',
   label: 'Support',
   phase: 'point',
+  // toutes les colonnes (note de calcul) ; la saisie se fait par famille (SUPPORT_FAMILIES)
   fields: [
-    { key: 'node', label: 'Nœud', type: 'node', width: 60 },
-    { key: 'kind', label: 'Type', type: 'select', options: () => Object.keys(SUPPORT_KINDS), optionLabel: (k) => SUPPORT_KINDS[k]?.label ?? k, width: 170 },
-    { key: 'stiffness', label: 'Raideur', unit: 'N/mm', type: 'number', width: 80, placeholder: 'rigide', title: 'Raideur en translation (vide = rigide). Obligatoire pour un support variable ; sans objet pour un support constant.' },
-    { key: 'preload', label: 'Précharge', unit: 'N', type: 'number', width: 80, placeholder: '—', title: 'Supports variable et constant : effort vertical de réglage (vers le haut) exercé par le support sur la tuyauterie, appliqué dans le cas poids propre.' },
-    { key: 'dofs', label: 'DDL (perso.)', type: 'text', width: 110, placeholder: 'DX DY RZ…', title: 'Pour le blocage personnalisé : DX DY DZ RX RY RZ' },
-    { key: 'imposed', label: 'Dépl. imposé thermique', unit: 'mm', type: 'text', width: 120, placeholder: 'dx dy dz', title: 'Déplacement imposé appliqué dans les cas thermiques (mouvement de piquage), composantes globales' },
-    { key: 'label', label: 'Repère', type: 'text', width: 90 },
+    F.node,
+    F.kind(Object.keys(SUPPORT_KINDS)),
+    F.stiffness('Raideur en translation (vide = rigide)'),
+    { key: 'preload', label: 'Précharge', unit: 'N', type: 'number', width: 80 },
+    { key: 'dofs', label: 'DDL (perso.)', type: 'text', width: 110 },
+    { key: 'dir', label: 'Direction (auto-bloquant)', type: 'text', width: 110 },
+    { key: 'gap', label: 'Jeu', unit: 'mm', type: 'text', width: 80 },
+    { key: 'travelUp', label: 'Course haut', unit: 'mm', type: 'number', width: 80 },
+    { key: 'travelDown', label: 'Course bas', unit: 'mm', type: 'number', width: 80 },
+    { key: 'imposed', label: 'Dépl. imposé thermique', unit: 'mm', type: 'text', width: 120 },
+    F.label,
   ],
 
   create(model, { node, kind } = {}) {
-    return { type: 'support', node: node ?? '', kind: kind ?? 'rest', stiffness: '', preload: '', dofs: '', imposed: '', label: '' };
+    const k = kind ?? 'rest';
+    return { type: 'support', node: node ?? '', kind: k, stiffness: '', preload: '', dofs: '', imposed: '', label: '', ...(k === 'snubber' ? { dir: 'axial' } : {}) };
   },
 
   mesh(comp, ctx) {
@@ -127,21 +229,47 @@ export const support = {
     const preload = kindDef.hanger && Number.isFinite(+comp.preload) ? +comp.preload : 0;
     if (comp.kind === 'constant' && !(preload > 0)) ctx.warn(`Support constant au nœud ${comp.node} : précharge nulle, le support ne reprend aucun effort.`);
     const imposed = parseVec(comp.imposed);
+    // jeux : sur les directions de translation bloquées, hors appui de la tuyauterie posée
+    const gapped = specs.filter((s) => !s.rot && !s.bearing && !s.dynamicOnly && !kindDef.hanger);
+    const gaps = parseGaps(comp.gap, gapped.length);
+    if (gaps === null) ctx.warn(`Support au nœud ${comp.node} : jeu « ${comp.gap} » non compris (une valeur, ou ${gapped.length} valeur(s) séparées par un espace) ; jeu ignoré.`);
+    else if (gaps.some((g) => g > 0) && comp.kind === 'anchor') ctx.warn(`Ancrage au nœud ${comp.node} : un jeu n’a pas de sens sur un ancrage ; jeu ignoré.`);
+    const travel = (v) => (v === '' || v == null || !(+v >= 0) ? null : +v);
     const supIdx = ctx.addSupport({
       comp: comp.id,
       node: idx,
       kind: comp.kind,
       label: comp.label || comp.kind,
       imposed,
-      ...(kindDef.hanger ? { preload, dir: ctx.up, k: comp.kind === 'variable' ? kUser : 0 } : {}),
+      ...(kindDef.hanger ? { preload, dir: ctx.up, k: comp.kind === 'variable' ? kUser : 0, travelUp: travel(comp.travelUp), travelDown: travel(comp.travelDown) } : {}),
     });
     const rigid = rigidStiffness(ctx.elementsAt(idx));
     for (const s of specs) {
       const k = s.rot ? rigid.kr : kUser > 0 ? kUser : rigid.kt;
-      ctx.addSpring({ node: idx, rot: s.rot, dir: vec.unit(s.dir), k, support: supIdx });
+      const gap = comp.kind !== 'anchor' && gaps ? gaps[gapped.indexOf(s)] ?? 0 : 0;
+      ctx.addSpring({
+        node: idx,
+        rot: s.rot,
+        dir: vec.unit(s.dir),
+        k,
+        support: supIdx,
+        bearing: !!s.bearing,
+        // direction à jeu : libre en statique (jeu supposé ouvert, contrôlé), bloquée en dynamique
+        gap: gap > 0 ? gap : 0,
+        dynamicOnly: !!s.dynamicOnly || gap > 0,
+      });
     }
   },
 };
+
+/** Jeux par direction : '' → aucun ; une valeur → toutes les directions ; n valeurs → une par direction ; null si incompris. */
+function parseGaps(text, n) {
+  if (text == null || String(text).trim() === '') return new Array(n).fill(0);
+  const parts = String(text).trim().replace(/,/g, '.').split(/[\s;]+/).map(Number);
+  if (parts.some((v) => !Number.isFinite(v) || v < 0)) return null;
+  if (parts.length === 1) return new Array(n).fill(parts[0]);
+  return parts.length === n ? parts : null;
+}
 
 function parseVec(text) {
   if (text == null || String(text).trim() === '') return null;

@@ -5,6 +5,7 @@
 
 import { h, editableTable, fieldForm, fieldInput, parseNumber } from './dom.js';
 import { components } from '../components/index.js';
+import { SUPPORT_FAMILIES, hasAdvanced } from '../components/support.js';
 import { loadTypes } from '../loads/index.js';
 import { codes } from '../codes/index.js';
 import { newId } from '../core/model.js';
@@ -532,16 +533,53 @@ export function renderGeometry(app) {
   );
 }
 
+/** Tableau d'une famille de supports : colonnes de base, réglages avancés à la demande. */
+function supportFamilyTable(app, family) {
+  const m = app.state.model;
+  const rows = m.components.filter((c) => c.type === 'support' && family.kinds.includes(c.kind));
+  const sel = app.state.selected;
+  const adv = (app.state.quick.adv ??= {});
+  // réglages avancés : à la demande, et d'office dès qu'une ligne en utilise un
+  const forced = rows.some((c) => hasAdvanced(family, c));
+  const open = forced || adv[family.id] === true;
+  const toggle = h(
+    'label',
+    { class: `check${forced ? ' muted' : ''}`, title: forced ? 'Affichés parce qu’une ligne les utilise' : 'Afficher les colonnes des réglages avancés de cette famille' },
+    h('input', { type: 'checkbox', checked: open, disabled: forced, onchange: (e) => app.setUi(() => (adv[family.id] = e.target.checked)) }),
+    ` réglages avancés (${family.advanced.map((f) => f.label.toLowerCase()).join(', ')})`,
+  );
+  const def = components.get('support');
+  return [
+    toggle,
+    editableTable({
+      columns: open ? [...family.fields.slice(0, -1), ...family.advanced, family.fields[family.fields.length - 1]] : family.fields,
+      rows,
+      model: m,
+      focusPrefix: `support-${family.id}`,
+      empty: 'Aucun.',
+      rowAttrs: (row) => ({
+        class: sel && row.node === sel ? 'sel' : '',
+        onfocusin: () => app.highlight(row.id),
+        onfocusout: (e) => !e.currentTarget.contains(e.relatedTarget) && app.highlight(null),
+      }),
+      onEdit: (i, k, v) => app.update((mm) => (mm.components.find((x) => x.id === rows[i].id)[k] = v)),
+      onDelete: (i) => app.update((mm) => mm.components.splice(mm.components.findIndex((x) => x.id === rows[i].id), 1)),
+      onAdd: () =>
+        app.update((mm) => {
+          const c = def.create(mm, { node: sel ?? '', kind: family.kinds[0] });
+          c.id = newId(mm);
+          mm.components.push(c);
+        }),
+      addLabel: family.addLabel,
+    }),
+  ];
+}
+
 export function renderSupports(app) {
   return h(
     'div',
     {},
-    section(
-      'Supports et blocages',
-      help('Supports linéaires bilatéraux. « Rigide » = raideur de pénalité 10¹⁰ N/mm. Le déplacement imposé (dx dy dz en mm, repère global) est appliqué dans les cas thermiques : mouvement de piquage d’équipement.'),
-      help('Support variable : ressort vertical de raideur k, actif dans tous les cas, et précharge P (effort de réglage vers le haut) appliquée dans le cas poids propre ; effort repris = P − k·u. Support constant : précharge P seule, sans raideur. La variabilité thermique |ΔF|/P est donnée dans le détail du support (clic sur la ligne d’efforts).'),
-      componentTable(app, 'support'),
-    ),
+    ...SUPPORT_FAMILIES.map((family) => section(family.label, help(family.help), ...supportFamilyTable(app, family))),
     section('Masses ponctuelles', help('Robinets, brides, instruments… Prises en compte en poids propre et en séisme.'), componentTable(app, 'mass')),
   );
 }

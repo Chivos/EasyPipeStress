@@ -2,7 +2,7 @@
 
 import { fmt } from '../core/units.js';
 import { components } from '../components/index.js';
-import { SUPPORT_KINDS } from '../components/support.js';
+import { SUPPORT_KINDS, SNUBBER_DIRS } from '../components/support.js';
 import { displayCases, modalSums } from './results.js';
 import { spectrumFor, seismicLevels } from '../loads/seismic.js';
 import { codes } from '../codes/index.js';
@@ -62,7 +62,10 @@ export function buildReport(state, snapshot) {
     const rows = m.components.filter((c) => c.type === def.id);
     if (!rows.length) continue;
     parts.push(`<h3>${esc(def.label)}</h3>`);
-    parts.push(table(def.fields.map((f) => f.label + (f.unit ? ` (${f.unit})` : '')), rows.map((c) => def.fields.map((f) => (f.key === 'kind' ? SUPPORT_KINDS[c.kind]?.label ?? c.kind : c[f.key] ?? '')))));
+    // colonnes renseignées sur au moins une ligne (les supports ont des réglages propres à chaque famille)
+    const fields = def.fields.filter((f) => rows.some((c) => c[f.key] != null && String(c[f.key]).trim() !== ''));
+    const cell = (c, f) => (f.key === 'kind' && def.id === 'support' ? SUPPORT_KINDS[c.kind]?.label ?? c.kind : f.key === 'dir' && def.id === 'support' ? SNUBBER_DIRS[c.dir] ?? c.dir ?? '' : c[f.key] ?? '');
+    parts.push(table(fields.map((f) => f.label + (f.unit ? ` (${f.unit})` : '')), rows.map((c) => fields.map((f) => cell(c, f)))));
   }
   parts.push('<h2>3. Chargements</h2>');
   parts.push(table(['Id', 'Libellé', 'Type', 'Actif', 'Paramètres'], m.loadCases.map((lc) => [lc.id, lc.label, lc.type, lc.enabled === false ? 'non' : 'oui', loadParams(lc, m.settings.vertical)])));

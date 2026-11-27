@@ -10,6 +10,7 @@
 
 import { G_STD } from '../core/units.js';
 import { bodyForceLoads, pack, unpack } from './common.js';
+import { FeSystem } from '../fem/system.js';
 import { spectrumAt, zpa, combineModal, combineDirectional, srss2, guptaAlpha } from '../fem/spectral.js';
 
 const DIRS = ['X', 'Y', 'Z'];
@@ -86,7 +87,8 @@ export const seismic = {
   create: () => ({ type: 'seismic', label: 'Séisme', enabled: true, rigid: 'gupta', levels: defaultLevels() }),
 
   run(ctx, lc) {
-    const { sys } = ctx;
+    // système dynamique : avec les dispositifs auto-bloquants et les directions à jeu (fermées)
+    const sys = (ctx.dynSys ??= ctx.sys.mesh.springs.some((s) => s.dynamicOnly) ? new FeSystem(ctx.sys.mesh, { shear: ctx.sys.shear, dynamic: true }) : ctx.sys);
     if (lc.method === 'static') return runStatic(sys, lc);
     return runSpectral(sys, lc);
   },
