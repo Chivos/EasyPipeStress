@@ -34,8 +34,11 @@ exportables/importables en JSON.
    blocages (ancrage, guide, butée, étrier, blocage personnalisé, déplacement
    imposé de piquage), appuis simples (tuyauterie posée), supports à ressort
    (variables, constants) et dispositifs auto-bloquants — avec réglages avancés
-   à la demande (raideur, jeux, courses) ; masses ponctuelles. Le calcul reste
-   linéaire : appui soulevé, jeu rattrapé et butée atteinte sont signalés.
+   à la demande (raideur, jeux, courses) ; masses ponctuelles. Avec le solveur
+   linéaire (par défaut), appui soulevé, jeu rattrapé et butée atteinte sont
+   signalés. Un solveur non linéaire expérimental, au choix dans l'onglet
+   Projet, calcule l'état réel de ces contacts (poids et dilatation par états,
+   sans frottement ; séisme linéaire).
 3. **Chargements** : poids (fluide, calorifuge), pression, dilatation, séisme
    (niveaux B, C, D vérifiés avec un coefficient chacun sur le même séisme,
    spectre horizontal commun aux deux directions horizontales et
@@ -98,12 +101,15 @@ src/
   fem/       beam3d.js      élément de poutre 3D Timoshenko
              system.js      assemblage, statique, réponses, analyse modale
              spectral.js    spectres, CQC/SRSS, combinaisons directionnelles
+             contact.js     supports à contact : raideur par zones
+             nonlinear.js   résolution statique non linéaire (itération sur les zones)
   loads/                    types de chargement (registre)
              weight.js  pressure.js  thermal.js  seismic.js
   codes/                    codes de vérification (registre)
              rccm-c.js  en13480.js  codeti.js  b31-3.js
              moment-family.js  shared.js  common.js
   analysis.js               orchestration (utilisable hors navigateur)
+  nonlinear.js              calcul statique non linéaire par états (expérimental)
   ui/                       vue 3D canvas, panneaux, résultats, note de calcul
 tests/                      validation analytique et non-régression
 docs/THEORIE.md             formulation et références bibliographiques

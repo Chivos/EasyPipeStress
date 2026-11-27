@@ -75,7 +75,7 @@ export function seismicDiagnostics(lc, r, mesh) {
  * les avertissements ; ils désignent aussi les contacts qu'un calcul non linéaire
  * aurait à modifier (appui à retirer, jeu ou butée à activer).
  */
-export function contactFindings({ mesh, cases }) {
+export function contactFindings({ mesh, cases, nonlinear = null }) {
   const W = cases.filter((c) => c.type === 'weight' && c.fe !== false);
   const T = cases.filter((c) => c.type === 'thermal');
   const S = cases.filter((c) => c.type === 'seismic');
@@ -88,8 +88,12 @@ export function contactFindings({ mesh, cases }) {
   const out = [];
   mesh.supports.forEach((sup, k) => {
     const springs = mesh.springs.filter((sp) => sp.support === k && !sp.rot);
-    // appui simple : effort de la tuyauterie sur l'appui (positif vers le haut = soulèvement)
-    if (springs.some((sp) => sp.bearing)) {
+    // solveur non linéaire : appui décollé dans un état calculé, compté actif (bilatéral) sous séisme
+    const liftedIn = nonlinear ? nonlinear.states.filter((st) => st.contacts.some((cs, i) => cs.status === 'lifted' && nonlinear.contacts[i].support === k)) : [];
+    if (liftedIn.length) {
+      if (S.length) out.push({ type: 'seismicRestLifted', support: k, state: liftedIn.map((st) => st.name).join(', '), value: 0, limit: 0 });
+    } else if (springs.some((sp) => sp.bearing)) {
+      // appui simple : effort de la tuyauterie sur l'appui (positif vers le haut = soulèvement)
       const loads = states.map((st) => ({ st, f: sum(st.list, (c) => along(c.supportLoads, k * 6, up)) }));
       const worst = loads.reduce((a, b) => (b.f > a.f ? b : a));
       if (worst.f > 1) out.push({ type: 'liftoff', support: k, state: worst.st.name, value: worst.f, limit: 0 });
@@ -107,13 +111,15 @@ export function contactFindings({ mesh, cases }) {
       if (!(sp.gap > 0)) continue;
       const moves = states.map((st) => ({ st, d: sum(st.list, (c) => along(c.u, sup.node * 6, sp.dir)) }));
       const worst = moves.reduce((a, b) => (Math.abs(b.d) > Math.abs(a.d) ? b : a));
-      if (Math.abs(worst.d) > sp.gap + 1e-6) out.push({ type: 'gap', support: k, state: worst.st.name, value: Math.abs(worst.d), limit: sp.gap, dir: sp.dir });
+      // solveur non linéaire : le jeu rattrapé est déjà porté par le support
+      if (!nonlinear && Math.abs(worst.d) > sp.gap + 1e-6) out.push({ type: 'gap', support: k, state: worst.st.name, value: Math.abs(worst.d), limit: sp.gap, dir: sp.dir });
     }
     // supports à ressort : course depuis la position de réglage
     if (sup.travelUp != null || sup.travelDown != null) {
       const over = (uz) => (sup.travelUp != null && uz > sup.travelUp + 1e-6 ? ['haute', uz, sup.travelUp] : sup.travelDown != null && -uz > sup.travelDown + 1e-6 ? ['basse', -uz, sup.travelDown] : null);
       const moves = states.map((st) => ({ st, uz: sum(st.list, (c) => along(c.u, sup.node * 6, up)) }));
-      const hit = moves.map((m) => ({ ...m, o: over(m.uz) })).filter((m) => m.o).sort((a, b) => b.o[1] - b.o[2] - (a.o[1] - a.o[2]))[0];
+      // solveur non linéaire : la butée est active, le déplacement s'y arrête
+      const hit = nonlinear ? null : moves.map((m) => ({ ...m, o: over(m.uz) })).filter((m) => m.o).sort((a, b) => b.o[1] - b.o[2] - (a.o[1] - a.o[2]))[0];
       if (hit) out.push({ type: 'travel', support: k, state: hit.st.name, value: hit.o[1], limit: hit.o[2], side: hit.o[0] });
       else {
         for (const sc of S) {
@@ -127,6 +133,14 @@ export function contactFindings({ mesh, cases }) {
       }
     }
   });
+  // solveur non linéaire : le séisme compte actifs des supports qui ne le sont pas en service
+  if (nonlinear && S.length) {
+    nonlinear.contacts.forEach((c, i) => {
+      if (c.kind !== 'gap') return;
+      const open = nonlinear.states.filter((st) => st.contacts[i].status === 'open');
+      if (open.length) out.push({ type: 'seismicGapOpen', support: c.support, state: open.map((st) => st.name).join(', '), value: Math.max(...open.map((st) => Math.abs(st.contacts[i].d))), limit: c.d2, dir: c.dir });
+    });
+  }
   return out;
 }
 
@@ -157,6 +171,10 @@ export function resultDiagnostics({ mesh, cases, contacts = contactFindings({ me
   }
   const travel = of('travel').map((c) => `${name(c)} : butée ${c.side}, déplacement ${round(c.value, 2)} mm pour une course de ${round(c.limit, 2)} mm sous ${c.state}`);
   if (travel.length) out.push(`Course de support à ressort dépassée — ${travel.join(' ; ')}. Le calcul ne bloque pas le support sur sa butée : choisir un support de course suffisante ou revoir son réglage.`);
+  const restLifted = of('seismicRestLifted').map((c) => `${name(c)} : décollé sous ${c.state}`);
+  if (restLifted.length) out.push(`Appui(s) décollé(s) en service, compté(s) actif(s) sous séisme — ${restLifted.join(' ; ')}. L’analyse sismique est linéaire : elle prend l’appui bilatéral.`);
+  const gapOpen = of('seismicGapOpen').map((c) => `${name(c)}, direction ${axis(c.dir)} : jeu de ${round(c.limit, 2)} mm ouvert sous ${c.state}`);
+  if (gapOpen.length) out.push(`Jeu(x) ouvert(s) en service, support(s) compté(s) actif(s) sous séisme — ${gapOpen.join(' ; ')}. L’analyse sismique est linéaire : elle ignore le jeu.`);
   const seismicTravel = of('seismicTravel').map((c) => `${name(c)} : butée ${c.side}, ${round(c.value, 2)} mm pour une course de ${round(c.limit, 2)} mm (${c.state})`);
   if (seismicTravel.length) out.push(`Course de support à ressort dépassée sous séisme — ${seismicTravel.join(' ; ')}.`);
   return out;

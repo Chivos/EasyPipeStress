@@ -141,10 +141,13 @@ sur le calcul statique non linéaire de PIPESTRESS (aide en ligne).
 | Supports sous séisme | supports non linéaires comptés actifs, avec leur raideur | état figé dans l'état de service, ou enveloppe de deux calculs (supports libres / actifs) |
 | Modèle et algorithme | raideur par zones (d₁, d₂, k₁ à k₄), frottement par raideur transversale ajustée, mêmes critères de convergence | — |
 
-- **Découpage** : A — calcul par états, raideur par zones (appuis unilatéraux,
-  jeux, butées) ; B — équations des codes alimentées par les états ;
-  C — frottement. Le séisme ne demande pas de lot propre.
-- **Non commencé.**
+- **Fait (lot A)** : choix du solveur dans l'onglet Projet, calcul statique par
+  états, raideur par zones (appuis simples, jeux, butées des supports à ressort),
+  état des contacts affiché. Les équations des codes sont alimentées par les
+  états sans autre changement (le lot B prévu n'a plus d'objet).
+- **Reste à faire** : frottement ; comparaison avec PIPESTRESS sur un cas à jeux
+  ou à appui qui décolle ; un exemple livré dédié.
+- **Limites** : un seul cas de poids actif, forces nodales en linéaire.
 
 ## Validation
 
