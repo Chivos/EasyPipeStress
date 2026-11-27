@@ -68,6 +68,49 @@ export class ProfileCholesky {
 }
 
 /**
+ * Nombre de pivots négatifs de la factorisation L·D·Lᵀ (sans pivotage, en profil,
+ * sur place) d'une matrice symétrique A stockée en dense. Par la loi d'inertie de
+ * Sylvester, pour A = K − σ·M c'est le nombre de valeurs propres du problème
+ * K·φ = ω²·M·φ inférieures à σ (suite de Sturm ; Bathe, « Finite Element
+ * Procedures », § 10.2.2) : contrôle qu'aucun mode n'a été omis sous σ.
+ */
+export function countNegativePivots(A, n) {
+  const fc = new Int32Array(n);
+  for (let i = 0; i < n; i++) {
+    let j = 0;
+    const row = i * n;
+    while (j < i && A[row + j] === 0) j++;
+    fc[i] = j;
+  }
+  const D = new Float64Array(n);
+  let negative = 0;
+  for (let i = 0; i < n; i++) {
+    const ri = i * n;
+    const scale = Math.abs(A[ri + i]);
+    // gᵢⱼ = Lᵢⱼ·Dⱼ (ligne i non encore normée)
+    for (let j = fc[i]; j < i; j++) {
+      const rj = j * n;
+      let s = A[ri + j];
+      const k0 = fc[i] > fc[j] ? fc[i] : fc[j];
+      for (let k = k0; k < j; k++) s -= A[ri + k] * A[rj + k];
+      A[ri + j] = s;
+    }
+    let d = A[ri + i];
+    for (let j = fc[i]; j < i; j++) {
+      const g = A[ri + j];
+      const l = g / D[j];
+      d -= g * l;
+      A[ri + j] = l;
+    }
+    // pivot nul (σ égal à une valeur propre d'une sous-matrice) : perturbation infime
+    if (Math.abs(d) <= 1e-14 * (scale || 1)) d = 1e-14 * (scale || 1);
+    D[i] = d;
+    if (d < 0) negative++;
+  }
+  return negative;
+}
+
+/**
  * Valeurs et vecteurs propres d'une matrice symétrique A (tableau de tableaux n×n).
  * Retourne { values (croissantes), vectors } où vectors[k] est le k-ième vecteur propre.
  */

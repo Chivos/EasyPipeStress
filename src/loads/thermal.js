@@ -9,7 +9,7 @@
 
 import { axialStrainEquivalent } from '../fem/beam3d.js';
 import { FeSystem } from '../fem/system.js';
-import { materialAt } from '../core/materials.js';
+import { materialAt, refTemperature } from '../core/materials.js';
 
 const T_TABLE = 20; // température de référence des coefficients moyens de dilatation
 
@@ -27,7 +27,7 @@ export const thermal = {
     const hot = model.settings.thermalModulus !== 'cold';
     // système au module à chaud, construit une fois par calcul (partagé entre cas thermiques)
     const sys = hot ? (ctx.hotSys ??= new FeSystem({ ...ctx.sys.mesh, elements: ctx.sys.mesh.elements.map((e) => ({ ...e, E: e.Eh })) }, { shear: model.settings.shear !== false })) : ctx.sys;
-    const tRef = +model.settings.tRef || 20;
+    const tRef = refTemperature(model.settings);
     const elemEq = sys.mesh.elements.map((e) => {
       // α des tables = coefficient MOYEN entre 20 °C (référence des tables) et T :
       // la déformation entre l'état de montage T_réf et l'état chaud T est donc

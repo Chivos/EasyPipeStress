@@ -12,6 +12,8 @@
 //  - pas de vérification de contraintes du code sur le corps du robinet (les
 //    extrémités des tubes raccordés sont vérifiées).
 
+import { refTemperature } from '../core/materials.js';
+
 export const valve = {
   id: 'valve',
   label: 'Robinet',
@@ -39,7 +41,8 @@ export const valve = {
     // conditions (matériau, T, P) reprises du tube raccordé
     const adj = ctx.model.components.find((c) => c.type === 'pipe' && [String(c.n1), String(c.n2)].some((n) => n === a || n === b));
     if (!adj) ctx.warn(`Robinet ${comp.label || `${a}-${b}`} : aucun tube raccordé, matériau et température par défaut.`);
-    const T = +adj?.T1 || +ctx.model.settings.tRef || 20;
+    // température du tube raccordé (0 °C valide), sinon température de référence
+    const T = adj && Number.isFinite(+adj.T1) && adj.T1 !== '' ? +adj.T1 : refTemperature(ctx.model.settings);
     const P = +adj?.P1 || 0;
     ctx.addSegment({
       comp: comp.id,

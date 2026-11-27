@@ -1,11 +1,12 @@
 // Système éléments finis global : assemblage, résolution statique, réponses
 // (efforts d'extrémité des éléments, efforts sur supports) et analyse modale.
 
-import { ProfileCholesky, SingularMatrixError, symmetricEigen } from '../core/linalg.js';
+import { ProfileCholesky, SingularMatrixError, symmetricEigen, countNegativePivots } from '../core/linalg.js';
 import { localStiffness, toGlobalMatrix, toLocalVector, toGlobalVector } from './beam3d.js';
 import { DOF_NAMES } from '../core/units.js';
 
 const LANCZOS_THRESHOLD = 120; // DDL massiques au-delà desquels Lanczos remplace la résolution complète
+const DENSE_FALLBACK_MAX = 1500; // DDL massiques jusqu'auxquels la résolution complète sert de repli
 
 export class FeSystem {
   constructor(mesh, { shear = true } = {}) {
@@ -18,6 +19,21 @@ export class FeSystem {
       const k = e.factors?.k ?? 1; // flexibilité des coudes : I_eff = I / k
       return localStiffness({ E, G, A: sec.A, Iy: sec.I / k, Iz: sec.I / k, J: sec.J, L, Asy: shear ? sec.As : 0, Asz: shear ? sec.As : 0 });
     });
+    const K = this.assemble();
+    try {
+      this.chol = new ProfileCholesky(K, n);
+    } catch (err) {
+      if (err instanceof SingularMatrixError) {
+        const node = mesh.nodes[Math.floor(err.dof / 6)];
+        throw new Error(`Modèle instable (mécanisme) : le degré de liberté ${DOF_NAMES[err.dof % 6]} du nœud ${node?.label} n'est pas retenu. Vérifier les supports (au moins un ancrage ou des blocages suffisants dans les 6 directions).`);
+      }
+      throw err;
+    }
+  }
+
+  /** Matrice de raideur globale (dense, ligne majeure) : éléments et ressorts des supports. */
+  assemble() {
+    const { mesh, n } = this;
     const K = new Float64Array(n * n);
     mesh.elements.forEach((e, ie) => {
       const kg = toGlobalMatrix(this.kLocal[ie], e.R);
@@ -31,15 +47,22 @@ export class FeSystem {
       const base = s.node * 6 + (s.rot ? 3 : 0);
       for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) K[(base + a) * n + base + b] += s.k * s.dir[a] * s.dir[b];
     }
-    try {
-      this.chol = new ProfileCholesky(K, n);
-    } catch (err) {
-      if (err instanceof SingularMatrixError) {
-        const node = mesh.nodes[Math.floor(err.dof / 6)];
-        throw new Error(`Modèle instable (mécanisme) : le degré de liberté ${DOF_NAMES[err.dof % 6]} du nœud ${node?.label} n'est pas retenu. Vérifier les supports (au moins un ancrage ou des blocages suffisants dans les 6 directions).`);
-      }
-      throw err;
-    }
+    return K;
+  }
+
+  /**
+   * Contrôle de Sturm : nombre de modes propres de fréquence inférieure à f (Hz),
+   * par le nombre de pivots négatifs de la factorisation de K − (2πf)²·M.
+   * Indépendant du calcul des modes : détecte un mode omis (modes multiples ou
+   * très proches, que la méthode de Lanczos à un vecteur peut manquer).
+   */
+  sturmCount(f) {
+    const { n } = this;
+    const sigma = (2 * Math.PI * f) ** 2;
+    const m = this.lumpedMass();
+    const A = this.assemble();
+    for (let i = 0; i < n; i++) A[i * n + i] -= sigma * m[i];
+    return countNegativePivots(A, n);
   }
 
   /**
@@ -140,6 +163,23 @@ export class FeSystem {
     const useLanczos = method === 'lanczos' || (method === 'auto' && nm > LANCZOS_THRESHOLD && maxModes < nm / 2);
     const muMin = Number.isFinite(fmax) && fmax > 0 ? 1 / (2 * Math.PI * fmax) ** 2 : 0;
     let pairs = useLanczos ? this.lanczosPairs(mdofs, sq, Math.min(maxModes, nm), muMin) : this.densePairs(mdofs, sq, maxModes);
+    // Lanczos : contrôle de Sturm du nombre de modes sous la fréquence de coupure
+    // (sauf liste tronquée par le nombre maximal de modes demandé)
+    let sturm = null;
+    let usedDense = !useLanczos;
+    if (useLanczos && muMin > 0) {
+      const below = pairs.filter((pr) => pr.mu > muMin * (1 + 1e-6)).length;
+      if (below < Math.min(maxModes, nm)) {
+        const expected = this.sturmCount(fmax * (1 - 5e-7));
+        sturm = { expected, found: below, missing: Math.max(0, expected - below), corrected: false };
+        if (sturm.missing > 0 && nm <= DENSE_FALLBACK_MAX) {
+          // repli : résolution complète (exacte)
+          pairs = this.densePairs(mdofs, sq, maxModes);
+          usedDense = true;
+          sturm.corrected = true;
+        }
+      }
+    }
     // modes utiles : jusqu'au premier mode au-dessus de fmax inclus
     const cut = pairs.findIndex((pr) => pr.mu < muMin);
     if (cut >= 0) pairs = pairs.slice(0, cut + 1);
@@ -167,7 +207,7 @@ export class FeSystem {
       for (const node of fixed) sum += m[node * 6 + d];
       return sum;
     });
-    this._modal = { maxModes, fmax, modes, mass: m, totalMass, supportedMass, method: useLanczos ? 'lanczos' : 'dense' };
+    this._modal = { maxModes, fmax, modes, mass: m, totalMass, supportedMass, method: usedDense ? 'dense' : 'lanczos', sturm };
     return this._modal;
   }
 

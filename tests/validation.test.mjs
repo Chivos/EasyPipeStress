@@ -784,3 +784,76 @@ test('Division d’un tube : parties égales ou longueurs saisies, géométrie e
   assert.deepEqual(m.components.filter((c) => c.type === 'pipe').filter((c) => ['V', 'V_1'].includes(c.n1)).map((c) => c.dy), [1000, 200]);
   assert.throws(() => splitPipe(m, pipes[0].id, { parts: 2, labels: ['12'] }), /déjà utilisé/);
 });
+
+test('Température de référence 0 °C prise en compte (et non remplacée par 20 °C)', () => {
+  const m = setup({ alpha: 12 });
+  m.settings.tRef = 0;
+  m.settings.thermalModulus = 'cold';
+  m.components = ensureIds({ components: [pipe('1', '2', 1000, 0, 0, { T1: 100 }), sup('1', 'anchor')] }).components;
+  m.loadCases = [{ id: 'T1', type: 'thermal', enabled: true }];
+  // dilatation libre de 0 à 100 °C : ᾱ·(100 − 20) + ᾱ·(20 − 0) = ᾱ·100
+  near(nodeDisp(runAnalysis(m), 'T1', '2')[0], 12e-6 * 100 * 1000, 1e-6, 'allongement depuis 0 °C');
+  m.settings.tRef = '';
+  near(nodeDisp(runAnalysis(m), 'T1', '2')[0], 12e-6 * 80 * 1000, 1e-6, 'saisie vide : 20 °C');
+});
+
+test('Té de fabrication renforcé : renfort pris en compte jusqu’à 1,5 e', () => {
+  const sec = pipeSection({ od: 168.3, t: 7.11 });
+  const i = (pad) => componentFactors({ kind: 'tee', teeType: 'reinforced', pad, sec }).i;
+  near(i(7.11), 0.9 / ((7.11 * 1.5) ** 2.5 / (7.11 ** 1.5 * sec.rm)) ** (2 / 3), 1e-12, 'renfort = e');
+  near(i(30), i(1.5 * 7.11), 1e-12, 'renfort plafonné à 1,5 e');
+  near(componentFactors({ kind: 'tee', teeType: 'reinforced', pad: 30, sec }).h, (1.75 ** 2.5 * 7.11) / sec.rm, 1e-12, 'h ≈ 4 e/r');
+});
+
+test('Contrôle de Sturm : nombre de modes sous une fréquence, modes doubles compris', async () => {
+  const { buildMesh } = await import('../src/core/mesher.js');
+  const { FeSystem } = await import('../src/fem/system.js');
+  // colonne verticale encastrée : modes de flexion doubles (symétrie de révolution)
+  const m = setup({ density: 7850, maxLen: 60 });
+  m.components = ensureIds({ components: [pipe('1', '2', 0, 0, 6000), sup('1', 'anchor')] }).components;
+  const sys = new FeSystem(buildMesh(m));
+  const dense = sys.modal({ maxModes: 30, method: 'dense' }).modes.map((x) => x.freq);
+  near(dense[0], dense[1], 1e-6, 'premier mode double');
+  for (const f of [0.5 * dense[0], 0.5 * (dense[1] + dense[2]), 0.5 * (dense[5] + dense[6]), 1.01 * dense[9]]) {
+    assert.equal(sys.sturmCount(f), dense.filter((x) => x < f).length, `Sturm à ${f.toFixed(1)} Hz`);
+  }
+  // Lanczos : mêmes modes que la résolution complète, contrôle de Sturm satisfait
+  const sys2 = new FeSystem(buildMesh(m));
+  const lz = sys2.modal({ maxModes: 30, method: 'lanczos', fmax: dense[6] * 1.05 });
+  assert.equal(lz.sturm.missing, 0);
+  assert.equal(lz.sturm.expected, dense.filter((x) => x < dense[6] * 1.05).length);
+  lz.modes.forEach((x, k) => near(x.freq, dense[k], 1e-7, `mode ${k + 1}`));
+});
+
+test('Avertissements de validité : poids cumulés, appui soulevé, coupure en zone amplifiée, SRSS et modes voisins, maillage lâche', () => {
+  const m = setup({ density: 7850, maxLen: 3000 });
+  m.components = ensureIds({
+    components: [pipe('1', '2', 3000, 0, 0, { T1: 200 }), pipe('2', '3', 0, 0, 3000, { T1: 200 }), pipe('3', '4', 3000, 0, 0, { T1: 200 }), sup('1', 'anchor'), sup('3', 'rest', { label: 'R1' }), sup('4', 'anchor')],
+  }).components;
+  const spectrum = { factor: 1, points: [[1, 0.2], [5, 1], [20, 1], [40, 0.3], [100, 0.3]] };
+  m.loadCases = [
+    { id: 'W', type: 'weight', enabled: true },
+    { id: 'W2', type: 'weight', enabled: true, fluid: false },
+    { id: 'T1', type: 'thermal', enabled: true },
+    { id: 'S1', type: 'seismic', enabled: true, method: 'spectral', cutoff: 25, modal: 'SRSS', directional: 'SRSS', rigid: 'none', missingMass: true, levels: [{ level: 'C', enabled: true, factor: 1 }], spectra: { X: spectrum, Y: spectrum, Z: spectrum } },
+  ];
+  const w = runAnalysis(m).warnings.join('\n');
+  assert.match(w, /2 cas de poids propre actifs/);
+  assert.match(w, /Appui\(s\) soulevé\(s\) — R1 \(nœud 3\)/);
+  assert.match(w, /zone amplifiée du spectre/);
+  assert.match(w, /trop long\(s\)/);
+  // modèle sain : aucun avertissement
+  m.settings.meshMaxLength = 300;
+  m.loadCases = [m.loadCases[0], { ...m.loadCases[3], cutoff: 40, modal: 'CQC' }];
+  m.components = m.components.filter((c) => c.kind !== 'rest');
+  assert.deepEqual(runAnalysis(m).warnings, []);
+});
+
+test('Ancrage rigide devant le tube retenu : console de gros diamètre (flèche PL³/3EI à 0,1 % près)', () => {
+  const m = setup({ maxLen: 250 });
+  m.sections = [{ id: 'S', od: 1219, t: 25.4, millTol: 0, corrosion: 0, fluidDensity: 0, insulThk: 0, insulDensity: 0 }];
+  m.components = ensureIds({ components: [pipe('1', '2', 1500, 0, 0), sup('1', 'anchor')] }).components;
+  m.loadCases = [{ id: 'F1', type: 'forces', enabled: true, forces: [{ node: '2', FZ: -10000 }] }];
+  const r = runAnalysis(m);
+  near(nodeDisp(r, 'F1', '2')[2], (-10000 * 1500 ** 3) / (3 * 200000 * r.mesh.elements[0].sec.I), 1e-3, 'flèche');
+});
