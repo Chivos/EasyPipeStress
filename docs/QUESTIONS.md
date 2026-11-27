@@ -28,7 +28,7 @@ séisme restent ouverts.
 | Chargement | Module utilisé | État |
 |---|---|---|
 | Dilatation thermique | à chaud par défaut, option du projet pour revenir à froid ; contraintes ramenées à l'équivalent froid selon le code | **réglé** (PR #43) |
-| Poids propre | à froid | sans enjeu : les efforts du poids dépendent très peu du module |
+| Poids propre | à froid | peu d'enjeu : la répartition des efforts dépend très peu du module ; seules les flèches augmenteraient de E_c/E_h |
 | Analyse modale, séisme | à froid, sans option | **ouvert** |
 
 - **Question** : ajouter une option « module à chaud pour le modal et le
