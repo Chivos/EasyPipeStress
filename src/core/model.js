@@ -108,7 +108,7 @@ export function exampleModel() {
   m.components.push({ type: 'valve', n1: '45', n2: '46', dx: 400, dy: 0, dz: 0, mass: 180, stiffFactor: 10, section: 'DN150-40S', label: 'Robinet DN150' });
   m.components.push({ type: 'mass', node: '35', mass: 25, label: 'Instrument' });
   m.components.push({ type: 'support', node: '10', kind: 'anchor', stiffness: '', dofs: '', imposed: '', label: 'Piquage A' });
-  m.components.push({ type: 'support', node: '35', kind: 'restguide', stiffness: '', dofs: '', imposed: '', label: 'S1' });
+  m.components.push({ type: 'support', node: '35', kind: 'clampguide', stiffness: '', dofs: '', imposed: '', label: 'S1' });
   m.components.push({ type: 'support', node: '50', kind: 'anchor', stiffness: '', dofs: '', imposed: '0 0 3', label: 'Piquage B' });
   m.components.push({ type: 'support', node: '60', kind: 'anchor', stiffness: '', dofs: '', imposed: '', label: 'Piquage C' });
   return ensureIds(m);

@@ -81,6 +81,10 @@ export const SUPPORT_KINDS = {
     label: 'Appui vertical bilatéral (étrier)',
     springs: ({ up }) => [{ rot: false, dir: up }],
   },
+  clampguide: {
+    label: 'Appui bilatéral + guide latéral',
+    springs: ({ axis, up }) => [{ rot: false, dir: up }, ...lateralDirs(axis, up).map((d) => ({ rot: false, dir: d }))],
+  },
   axial: {
     label: 'Butée axiale',
     springs: ({ axis }) => [{ rot: false, dir: axis }],
@@ -132,9 +136,9 @@ export const SUPPORT_FAMILIES = [
     id: 'fixed',
     label: 'Points fixes et blocages',
     addLabel: 'blocage',
-    kinds: ['anchor', 'guide', 'axial', 'clamp', 'custom'],
+    kinds: ['anchor', 'guide', 'axial', 'clamp', 'clampguide', 'custom'],
     help: 'Blocages bilatéraux, rigides par défaut. Le blocage personnalisé se définit par ses DDL globaux (réglages avancés).',
-    fields: [F.node, F.kind(['anchor', 'guide', 'axial', 'clamp', 'custom']), F.label],
+    fields: [F.node, F.kind(['anchor', 'guide', 'axial', 'clamp', 'clampguide', 'custom']), F.label],
     advanced: [
       { key: 'dofs', label: 'DDL (perso.)', type: 'text', width: 110, placeholder: 'DX DY RZ…', title: 'Pour le blocage personnalisé : DX DY DZ RX RY RZ' },
       F.stiffness('Raideur en translation (vide = rigide)'),

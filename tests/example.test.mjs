@@ -194,9 +194,16 @@ test('Cas test collecteur DN200 : éq. (7) dépassée, couverte par l’éq. (8)
   const { EXAMPLES } = await import('../src/core/examples.js');
   const m = normalizeModel(JSON.parse(JSON.stringify(EXAMPLES.find((e) => e.id === 'benchmark').build())));
   const r = runAnalysis(m);
-  // seul avertissement : l'appui AG2, soulevé en dilatation (calcul linéaire, comme la référence)
-  assert.equal(r.warnings.length, 1);
-  assert.match(r.warnings[0], /Appui\(s\) soulevé\(s\) — AG2 \(nœud 85\)/);
+  // appuis AG1, AG2 bloqués dans les deux sens, comme la référence : aucun avertissement
+  assert.deepEqual(r.warnings, []);
+  assert.ok(m.components.filter((c) => c.kind === 'clampguide').length === 2);
+  // le même modèle avec un appui simple en AG2 : mêmes résultats, soulèvement signalé
+  const m2 = normalizeModel(JSON.parse(JSON.stringify(m)));
+  m2.components.find((c) => c.label === 'AG2').kind = 'restguide';
+  const r2 = runAnalysis(m2);
+  assert.equal(r2.warnings.length, 1);
+  assert.match(r2.warnings[0], /Appui\(s\) soulevé\(s\) — AG2 \(nœud 85\)/);
+  assert.deepEqual(r2.check.summary.governing.map((g) => g.stress), r.check.summary.governing.map((g) => g.stress));
   for (const t of ['tee', 'reducer', 'valve']) assert.ok(m.components.some((c) => c.type === t), t);
   const over7 = r.check.rows.filter((x) => x.eq === '7' && x.ratio > 1);
   assert.ok(over7.length >= 2, 'éq. (7) dépassée');

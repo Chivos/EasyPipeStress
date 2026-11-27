@@ -11,7 +11,7 @@ const PS_V = [[0.2, 0.032], [0.25, 0.04091], [0.3, 0.05], [0.35, 0.0593], [0.4, 
 /** Ligne DN100 × 3,6 inox comparée à PIPESTRESS (poids, dilatation, modal, séisme 10C). */
 function pipestressBenchmark() {
   const m = emptyModel();
-  m.meta.title = 'Ligne DN100 × 3,6 inox – coudes, appui-guide, séisme niveau C';
+  m.meta.title = 'Ligne DN100 × 3,6 inox – coudes, appui bilatéral guidé, séisme niveau C';
   m.meta.notes = 'Coudes vérifiés à leurs extrémités ; Sc = 117 MPa à 20 °C.';
   m.settings.bendInnerPoints = false;
   m.materials = [
@@ -46,7 +46,7 @@ function pipestressBenchmark() {
   for (const [n1, n2, dx, dy, dz] of pipes) m.components.push({ type: 'pipe', n1, n2, dx, dy, dz, ...base });
   for (const node of ['20', '30', '40']) m.components.push({ type: 'bend', node, radiusType: '', radius: 152, t: '', divisions: '' });
   m.components.push({ type: 'support', node: '10', kind: 'anchor', label: 'PF A' });
-  m.components.push({ type: 'support', node: '35', kind: 'restguide', label: 'S1' });
+  m.components.push({ type: 'support', node: '35', kind: 'clampguide', label: 'S1' });
   m.components.push({ type: 'support', node: '50', kind: 'anchor', label: 'PF B' });
   const seismic = m.loadCases.find((c) => c.type === 'seismic');
   seismic.levels = [
@@ -178,7 +178,7 @@ function hovgaard() {
  * d'un réservoir vers l'aspiration d'une pompe (descente verticale sur la bride),
  * réduction concentrique DN200 × DN150, robinet,
  * piquage DN100 par té forgé vers un second équipement ; points fixes, supports
- * variables, appui-guide, guide, butée axiale. Poids, dilatation à 300 °C et
+ * variables, appui bilatéral guidé, guide, butée axiale. Poids, dilatation à 300 °C et
  * séisme spectral niveau C ; la dilatation dépasse l'admissible de l'éq. (7) au té
  * et aux coudes 60 et 70, ce qui fait jouer l'éq. (8).
  */
@@ -226,13 +226,14 @@ function fullBenchmark() {
   m.components.push({ type: 'tee', node: '30', teeType: 'welding', pad: '', sif: '', label: 'Té DN200 × DN100' });
   m.components.push({ type: 'support', node: '10', kind: 'anchor', label: 'Réservoir' });
   m.components.push({ type: 'support', node: '25', kind: 'variable', stiffness: 100, preload: PRELOADS.V1, label: 'V1' });
-  // appuis : raideur 876 kN/mm (valeur par défaut de PIPESTRESS, cas de comparaison)
+  // appuis : blocage vertical dans les deux sens, comme dans le modèle de comparaison ;
+  // raideur 876 kN/mm (valeur par défaut de PIPESTRESS)
   const kSup = 876000;
-  m.components.push({ type: 'support', node: '45', kind: 'restguide', stiffness: kSup, label: 'AG1' });
+  m.components.push({ type: 'support', node: '45', kind: 'clampguide', stiffness: kSup, label: 'AG1' });
   m.components.push({ type: 'support', node: '65', kind: 'guide', stiffness: kSup, label: 'G1' });
   m.components.push({ type: 'support', node: '75', kind: 'variable', stiffness: 100, preload: PRELOADS.V2, label: 'V2' });
   m.components.push({ type: 'support', node: '78', kind: 'axial', stiffness: kSup, label: 'BA1' });
-  m.components.push({ type: 'support', node: '85', kind: 'restguide', stiffness: kSup, label: 'AG2' });
+  m.components.push({ type: 'support', node: '85', kind: 'clampguide', stiffness: kSup, label: 'AG2' });
   m.components.push({ type: 'support', node: '100', kind: 'anchor', label: 'Pompe' });
   m.components.push({ type: 'support', node: '120', kind: 'anchor', label: 'Équipement' });
   const seismic = m.loadCases.find((c) => c.type === 'seismic');
@@ -258,10 +259,10 @@ function fullBenchmark() {
 const PRELOADS = { V1: 3490, V2: 2990 }; // réglées sur le poids repris (supports bloqués verticalement)
 
 export const EXAMPLES = [
-  { id: 'dn150', title: 'Ligne DN150 inox entre trois piquages', description: 'Trois coudes LR, un té forgé, un robinet, une masse ponctuelle, appui-guide, déplacement imposé de piquage ; poids, pression, dilatation, séisme B/C/D.', build: exampleModel },
-  { id: 'pipestress', title: 'Ligne DN100 × 3,6 inox – séisme niveau C', description: 'Trois coudes, un appui-guide, deux points fixes (coudes vérifiés aux extrémités, Sc = 117 MPa). Poids, dilatation, modal et séisme niveau C (SMS).', build: pipestressBenchmark },
+  { id: 'dn150', title: 'Ligne DN150 inox entre trois piquages', description: 'Trois coudes LR, un té forgé, un robinet, une masse ponctuelle, appui bilatéral guidé, déplacement imposé de piquage ; poids, pression, dilatation, séisme B/C/D.', build: exampleModel },
+  { id: 'pipestress', title: 'Ligne DN100 × 3,6 inox – séisme niveau C', description: 'Trois coudes, un appui bilatéral guidé, deux points fixes (coudes vérifiés aux extrémités, Sc = 117 MPa). Poids, dilatation, modal et séisme niveau C (SMS).', build: pipestressBenchmark },
   { id: 'springs', title: 'Ligne DN200 acier carbone – supports à ressort', description: 'Pompe → échangeur : colonne montante, robinet de 350 kg, débitmètre de 60 kg, deux supports variables et un support constant réglés sur le poids.', build: springSupportedLine },
-  { id: 'benchmark', title: 'Cas test – collecteur DN200 (té, réduction, robinet, supports variables)', description: 'Poids, dilatation à 300 °C (éq. (7) dépassée au té et aux coudes, éq. (8) jouée), séisme spectral niveau C ; points fixes, supports variables, appui-guide, guide, butée axiale ; té forgé, réduction concentrique, robinet.', build: fullBenchmark },
+  { id: 'benchmark', title: 'Cas test – collecteur DN200 (té, réduction, robinet, supports variables)', description: 'Poids, dilatation à 300 °C (éq. (7) dépassée au té et aux coudes, éq. (8) jouée), séisme spectral niveau C ; points fixes, supports variables, appui bilatéral guidé, guide, butée axiale ; té forgé, réduction concentrique, robinet.', build: fullBenchmark },
   { id: 'hovgaard', title: 'Validation – problème de Hovgaard (SSLL101, SDLX02)', description: 'Cas test Code_Aster SSLL101 (Kellogg 1956) : tuyauterie non plane à deux coudes, encastrée aux extrémités ; poids, dilatation et forces nodales (SSLL101), analyse modale et réponse spectrale (SDLX02) comparées aux valeurs de référence.', build: hovgaard },
   { id: 'nureg1677-1', title: 'Validation – Hovgaard à masses concentrées (NUREG/CR-1677, problème 1)', description: 'Benchmark NRC : tube sans masse, neuf masses ponctuelles, spectre tabulé en période, cinq modes en SRSS sans masse manquante ; fréquences, déplacements et réactions comparés au rapport.', build: nureg1677p1 },
   { id: 'bm3', title: 'Validation – ligne BM3 (NUREG/CR-6645)', description: 'Benchmark NRC : ligne à trois diamètres, dix coudes, trois ancrages et sept appuis élastiques ; spectre à 1 % suivant X, 14 modes en SRSS avec masse manquante ; fréquences et réactions comparées.', build: bm3 },
