@@ -129,7 +129,8 @@ une pénalité fixe).
 Les supports sont saisis par familles, chacune avec ses réglages avancés :
 
 - **points fixes et blocages** : ancrage (6 DDL), guide latéral, butée axiale,
-  appui vertical bilatéral (étrier), blocage personnalisé par DDL globaux ;
+  appui vertical bilatéral (étrier), avec ou sans guide latéral, blocage
+  personnalisé par DDL globaux ;
 - **appuis simples** (tuyauterie posée), avec ou sans guide latéral ;
 - **supports à ressort** : variable (raideur + précharge) ou constant ;
 - **dispositifs auto-bloquants**.
@@ -335,34 +336,55 @@ matériaux est la contrainte admissible de base **du code retenu** (S du RCC-M o
 du B31.3, f de l'EN 13480-3 ou du CODETI) : les valeurs par défaut de la
 bibliothèque, établies pour le RCC-M, sont à remplacer.
 
-**EN 13480-3:2017 (chapitre 12, facteur i unique de l'annexe H, tableau H.1).**
+**EN 13480-3:2017 (F), version 1 (décembre 2017) — article 12 et annexe H.**
+Module contrôlé sur le texte de la norme.
 
 | Réf. | Critère | Formule |
 |---|---|---|
 | (12.3.2-1) | Charges permanentes | σ₁ = p_c·d_o/(4eₙ) + 0,75i·M_A/Z ≤ f_f |
 | (12.3.3-1) | Charges occasionnelles ou exceptionnelles (séisme) | σ₂ = p_c·d_o/(4eₙ) + 0,75i·M_A/Z + 0,75i·M_B/Z ≤ k·f_f |
-| (12.3.4-1) | Étendue de dilatation | σ₃ = i·M_C/Z ≤ f_a = U·(1,25·f_c + 0,25·f_h)·E_h/E_c |
-| (12.3.4-2) | Si (12.3.4-1) non satisfaite | σ₄ = σ₁ + σ₃ ≤ f_h + f_a |
+| (12.3.4-1) | Étendue de variation de contrainte | σ₃ = i·M_C/Z ≤ f_a = U·(1,25·f_c + 0,25·f_h)·E_h/E_c |
+| (12.3.4-2) | Si (12.3.4-1) non satisfaite | σ₄ = p_c·d_o/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ f_f + f_a |
 | §6.1, §6.2.3 | Épaisseur minimale (option) | e = p_c·D_o/(2f·z + p_c), z = 1 ; intrados des coudes : e·(R/D_o − 0,25)/(R/D_o − 0,5) |
 
-Moments résultants, épaisseur nominale, Z = π(d_o⁴ − d_i⁴)/(32d_o) (piquage
-réduit : π/4·d_m,b²·e_b, e_b = min(eₙ ; i·eₙ,b)), 0,75i ≥ 1. U suit le tableau
-12.1.3-1 (mêmes valeurs que le facteur f du RCC-M). Le coefficient k de
-l'admissible occasionnel se choisit par niveau du cas sismique : 1,0 (charge
-agissant plus de 10 % de toute période de 24 h), 1,15 (moins de 10 %), 1,2
-(moins de 1 %, séisme de dimensionnement ; défaut du niveau 1), 1,3 (charge
-exceptionnelle ; niveau 2), 1,8 (séisme majoré de sécurité ; niveau 3).
-*Module d'élasticité* : la norme calcule l'étendue M_C au module à chaud et
-réduit l'admissible de E_h/E_c (même étendue de déformation). Avec l'option du
-projet « module à chaud » (défaut), les moments sont pris tels quels et f_a porte
-le rapport ; avec un calcul à froid, le rapport n'est pas appliqué : le taux est
-le même dans les deux cas. Les facteurs du tableau H.1 ont les mêmes expressions
-que ceux du RCC-M classe 2 (d_m = 2r) : coude h = 4R·eₙ/d_m², k_B = 1,65/h,
-i = 0,9/h^(2/3) ; té forgé h = 8,8eₙ/d_m ; piquage h = 2eₙ/d_m ; avec renfort
-h = 2(eₙ + e_pl/2)^2,5/(d_m·eₙ^1,5) ; réduction i = 0,5 + α/100·√(d/eₙ) ≤ 2.
-Non repris : effort axial, section corrodée et facteurs i_i, i_o, i_t du tableau
-H.3 (amendement A4:2021, édition 2024), fluage (12.3.5), déplacement d'appui non
-répété (12.3.6), plafond R_m/3 de f_c (à intégrer dans la valeur saisie).
+Moments résultants (12.3.7), Z = π(d_o⁴ − d_i⁴)/(32d_o) (tubulure réduite :
+π/4·d_m,b²·e_x, e_x = min(eₙ ; i·eₙ,b)), 0,75i ≥ 1 (§12.3.1). f_f est la
+contrainte de calcul f à la température de calcul, f_c celle à froid,
+f_h = min(f_c ; f à chaud) (12.1.3-3, hors fluage). U suit le tableau 12.1.3-1
+(mêmes valeurs que le facteur f du RCC-M). Le coefficient k de l'admissible
+occasionnel se choisit par niveau du cas sismique : 1 (durée d'application
+supérieure à 10 % de toute période de 24 h), 1,15 (inférieure à 10 %), 1,2
+(inférieure à 1 %, séisme de dimensionnement ; défaut du niveau 1), 1,3 (charges
+exceptionnelles ; niveau 2), 1,8 (séisme majoré de sécurité ; niveau 3).
+
+*Module d'élasticité* (§12.3.4) : M_C est « la plus grande différence entre les
+moments en prenant les modules d'élasticité aux températures correspondantes » ;
+l'admissible f_a porte le rapport E_h/E_c. Avec l'option du projet « module à
+chaud » (défaut), les moments sont pris tels quels et f_a porte le rapport ; avec
+un calcul à froid, le rapport n'est pas appliqué : le taux est le même.
+
+*Corrosion* (§12.3.1) : si une corrosion considérable est attendue, le module
+d'inertie et le coefficient i se calculent avec (eₙ − c₀), les charges et
+réactions restant en épaisseur nominale. C'est fait quand l'option « tolérance et
+corrosion » du projet est cochée (le terme de pression suit la même épaisseur).
+
+*Coefficients* (tableau H.1), mêmes expressions que le RCC-M classe 2
+(d_m = 2r) : coude lisse h = 4R·eₙ/d_m², k_B = 1,65/h, i = 0,9/h^(2/3) ; té forgé
+h = 8,8eₙ/d_m ; té à tubulure posée, pénétrante ou extrudée h = 2eₙ/d_m ; réduction
+forgée i = 0,5 + α/100·√(d_o/eₙ) ≤ 2 ; soudure bout à bout 1,0 ou 1,8. Seule
+différence : l'anneau de renfort d'un piquage, h = 2(eₙ + e_pl/2)^(5/2)/(d_m·eₙ^(3/2)),
+est compté jusqu'à e_pl = eₙ (1,5·e au RCC-M). La correction de pression de i et
+k_B des coudes (notes h et i) est une option du code.
+
+*Autre méthode* (§12.3.8), paramètre du code : les contraintes i·M/Z peuvent être
+calculées par σ = √[(i_i·M_i)² + (i_o·M_o)² + M_t²]/Z (12.3.8-1), avec les
+coefficients du tableau H.3 : coude i_o = 0,75/h^(2/3), i_i = 0,9/h^(2/3) ; tés
+i_o = 0,9/h^(2/3), i_i = 0,75·i_o + 0,25 ; 0,75·i_i et 0,75·i_o ≥ 1 pour σ₁ et σ₂.
+
+Non repris : brides aux extrémités des coudes (note c), coudes à sections,
+tableau H.2, tés extrudés et piquages forgés du tableau H.3, fluage σ₅
+(12.3.5-1), mouvement d'ancrage unique non répété σ₆ (12.3.6-1), plafond R_m/3
+de f_c (à intégrer dans la valeur saisie), amendements postérieurs à la version 1.
 
 **ASME B31.3-2018 (§320.2, §319.4.4, §302.3.6, Appendix D).** Les flexions sont
 séparées dans le plan (M_i) et hors plan (M_o) du coude ou du té, avec des
@@ -441,10 +463,10 @@ valeur M_T/(2Z) est retenue, seule à redonner la méthode directe pour un tube
 droit (i = 1) et conforme à l'usage (ASME B31.3, EN 13480-3). Ce point est une
 interprétation à valider par l'utilisateur.
 
-*Module d'élasticité* : comme pour l'EN 13480-3, l'étendue M_C est prise au module
-à chaud et f_a porte le rapport E_chaud/E_froid (le texte ne précise pas le module
-du calcul de M_C ; avec un calcul à froid le rapport n'est pas appliqué, ce qui
-donne le même taux).
+*Module d'élasticité* : comme pour l'EN 13480-3 (qui le précise au §12.3.4),
+l'étendue M_C est prise au module à chaud et f_a porte le rapport E_chaud/E_froid ;
+le CODETI ne précise pas le module du calcul de M_C. Avec un calcul à froid le
+rapport n'est pas appliqué, ce qui donne le même taux.
 
 Non repris : brides aux extrémités des coudes (note 3), coudes à sections,
 piquages forgés, extrudés et à selle insérée (lignes 8 à 10, 12, 13 et tableau
@@ -488,7 +510,7 @@ Vérifications numériques (tests automatiques) :
 | Coude 90°, flexion hors plan + torsion | Castigliano avec I/k | < 0,5 % (10°/élément) |
 | Cadre 3D bi-encastré, dilatation (moments aux nœuds) | méthode des forces (EI, GJ, EA) | < 10⁻⁴ |
 | Cadre 3D à deux coudes LR, dilatation | méthode des forces sur l'arc exact, EI/k | < 0,1 % |
-| Ligne DN100 × 3,6 (3 coudes LR, 2 ancrages, appui-guide), éq. (7) RCC-M C | PIPESTRESS (même modèle, coudes vérifiés aux extrémités) | < 0,3 % sur S_E et le taux |
+| Ligne DN100 × 3,6 (3 coudes LR, 2 ancrages, appui bilatéral guidé), éq. (7) RCC-M C | PIPESTRESS (même modèle, coudes vérifiés aux extrémités) | < 0,3 % sur S_E et le taux |
 | Même ligne, poids propre (tube plein d'eau) + pression, éq. (6) | PIPESTRESS | Σ réactions < 0,1 % ; réactions et déplacements ≈ 1 % ; taux < 0,5 % (max 0,594 contre 0,592) |
 | Même ligne, analyse modale | PIPESTRESS | masse totale identique (239,3 kg) ; 6 premières fréquences < 0,8 % ; masses modales effectives ≈ 1 % |
 | Même ligne, séisme spectral (CQC, SRSS directions) + éq. (10C) | PIPESTRESS | contraintes de l'éq. (10C) < 0,5 % aux points critiques (taux 1,369 contre 1,368 en 50, 1,080 contre 1,079 au coude 40) ; déplacements W + S ≈ 1 % |
@@ -570,7 +592,7 @@ interpréter avec prudence (`src/diagnostics.js`), sans modifier les résultats 
 - Réductions et brides à ajouter comme composants (avec
   leurs SIF et indices B).
 - CODETI : édition 2006 (section C3), sans fluage ni épaisseur minimale ; EN 13480-3 :
-  édition 2017 à facteur i unique (pas d'A4:2021 / 2024) ; ASME B31.3 : édition
+  édition 2017 version 1 (pas d'A4:2021 / 2024) ; ASME B31.3 : édition
   2018 (pas de facteurs B31J). Admissibles de ces codes à saisir par
   l'utilisateur (une seule colonne S par matériau).
 - Codes à ajouter : RCC-M classe 1 (B 3600, indices C, K, analyse en fatigue),
@@ -588,7 +610,7 @@ interpréter avec prudence (`src/diagnostics.js`), sans modifier les résultats 
 8. ASCE/SEI 4-16, *Seismic Analysis of Safety-Related Nuclear Structures*, 2017.
 9. AFCEN, *RCC-M – Règles de conception et de construction des matériels mécaniques des îlots nucléaires REP*, Section I, sous-sections B, C, Annexe Z I.
 10. ASME Boiler & Pressure Vessel Code, Section III, Division 1, Subsections NB, NC (NB-3600, NC-3600) et Appendix N.
-12. EN 13480-3:2017, *Tuyauteries industrielles métalliques – Partie 3 : conception et calcul*, chapitre 12 et annexe H.
+12. EN 13480-3:2017 (F), version 1 (décembre 2017), *Tuyauteries industrielles métalliques – Partie 3 : conception et calcul*, article 12 et annexe H.
 13. ASME B31.3-2018, *Process Piping*, §302.3, §304, §319, §320 et Appendix D.
 14. SNCT, *CODETI 2006 – Code de construction des tuyauteries industrielles*, Division 1, partie C, section C3 « Analyse et critères d'acceptation ».
 11. WRC Bulletin 300, *Technical position on damping values for piping*, 1984 ; NUREG-1061, 1985.

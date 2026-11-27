@@ -6,7 +6,7 @@ import { vec } from '../core/linalg.js';
 import { toLocalVector } from '../fem/beam3d.js';
 import { SUPPORT_KINDS } from '../components/support.js';
 
-const SUPPORT_COLORS = { anchor: '#c0392b', rest: '#2471a3', guide: '#7d3c98', restguide: '#1f618d', clamp: '#2e4053', axial: '#b9770e', variable: '#148f77', constant: '#d35400', snubber: '#c2185b', custom: '#566573' };
+const SUPPORT_COLORS = { anchor: '#c0392b', rest: '#2471a3', guide: '#7d3c98', restguide: '#1f618d', clamp: '#2e4053', clampguide: '#34495e', axial: '#b9770e', variable: '#148f77', constant: '#d35400', snubber: '#c2185b', custom: '#566573' };
 
 export class Viewer {
   constructor(canvas, { onPick } = {}) {

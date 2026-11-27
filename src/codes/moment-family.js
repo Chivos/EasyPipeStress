@@ -21,7 +21,38 @@
 
 import { materialAt, refTemperature } from '../core/materials.js';
 import { summarize } from './common.js';
+import { pipeSection } from '../core/sections.js';
+import { reducerSif } from '../components/reducer.js';
 import { resultant, torsion, planeBending, momentRow, planeMomentRow, ecOverEh, checkPoint, loadSets, activeLoads } from './shared.js';
+
+/** Section des contraintes : épaisseur nominale, corrosion déduite si l'option du projet est cochée. */
+export function corrodedSection(sec, e, model) {
+  const c = model.settings?.allowances === true ? +(e.secDef?.corrosion || 0) : 0;
+  if (!(c > 0) || sec.t - c <= 0) return sec;
+  return { ...pipeSection({ od: sec.od, t: sec.t - c }), c };
+}
+
+/**
+ * Coefficients d'intensification recalculés avec l'épaisseur corrodée (le
+ * coefficient de flexibilité k reste celui du calcul, en épaisseur nominale).
+ * @param componentFactors fonction des coefficients du code
+ */
+export const corrodedFactors = (componentFactors) => (pt, e, sec, params) => {
+  if (!(sec.c > 0) || pt.fac.weld) return pt.fac;
+  const thin = (s0, c) => (c > 0 && s0.t - c > 0 ? pipeSection({ od: s0.od, t: s0.t - c }) : s0);
+  if (pt.atTee) {
+    const d = pt.local.desc;
+    if (!d) return pt.fac;
+    return { ...pt.fac, ...componentFactors({ ...d, sec: thin(pt.local.runSec, pt.local.runCorrosion), params }) };
+  }
+  if (e.kind === 'bend') return { ...pt.fac, ...componentFactors({ kind: 'bend', sec: thin(e.sec, sec.c), bend: e.bend, P: e.P1, Ec: e.E, params }), k: pt.fac.k };
+  if (e.kind === 'reducer') {
+    const r = e.reducer;
+    const { i } = reducerSif({ alpha: r.alpha, D1: r.D1, t1: r.t1 - sec.c, D2: r.D2, t2: r.t2 - sec.c });
+    return { ...pt.fac, i, ii: i, io: i };
+  }
+  return pt.fac;
+};
 
 const PLANE_COLS = ['M_t (torsion)', 'M_i (dans le plan)', 'M_o (hors plan)', 'Résultant'];
 const PLANE_TITLE = 'Moments à l’extrémité de l’élément (plan du coude ou du té, N·m)';
