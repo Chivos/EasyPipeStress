@@ -37,7 +37,10 @@ séisme restent ouverts.
   dilatation. À 300 °C elles sont environ 5 % plus basses au module à chaud
   (½·(1 − E_h/E_c)), ce qui déplace les modes sur le spectre.
 - **À faire avant de décider** : vérifier le réglage du modèle de comparaison
-  PIPESTRESS pour le modal (présumé au module à chaud, à confirmer).
+  PIPESTRESS pour le modal. D'après son aide en ligne (carte FREQ, champ RF), le
+  modal est au module à chaud si la carte FREQ désigne un cas de référence, et au
+  module à froid si ce champ est omis : il suffit de lire la carte FREQ du
+  fichier d'entrée.
 - **Indice** : sur le cas test collecteur DN200 (300 °C, E_h/E_c = 0,906), les
   modes 1 à 9 concordent à moins de 1 % avec le calcul de comparaison alors que
   l'application calcule le modal à froid. Un modal de référence au module à
@@ -64,9 +67,16 @@ dans le découpage du solveur non linéaire (point 12).
 
 - **Aujourd'hui** : moments au module à chaud, comparés à f_a qui porte
   E_chaud/E_froid, comme l'EN 13480-3 (qui le précise au §12.3.4).
-- **Question** : la section C3 du CODETI 2006 ne précise pas le module. Si la
-  pratique est de calculer M_C à froid et de le comparer à f_a réduit, le critère
-  est plus sévère d'un facteur E_froid/E_chaud (environ 10 % à 300 °C).
+- **Question** : la section C3 du CODETI 2006 ne précise pas le module.
+- **Élément nouveau** : l'aide en ligne de PIPESTRESS (carte LCAS) indique
+  qu'avec l'option module à chaud, les efforts des cas de dilatation sont
+  multipliés par E_froid/E_chaud pour tous les codes **sauf** l'EN 13480-3 et le
+  CODETI à partir de l'édition 2013 (entre autres). Pour le CODETI 2006,
+  PIPESTRESS ramène donc les moments au module à froid, alors que f_a porte déjà
+  E_chaud/E_froid : le critère y est plus sévère que dans l'application d'un
+  facteur E_froid/E_chaud (environ 10 % à 300 °C).
+- **À décider** : aligner le CODETI 2006 sur ce traitement, ou garder celui de
+  l'EN 13480-3.
 
 ### 5. CODETI : torsion de la méthode alternative — décidé
 
@@ -121,22 +131,24 @@ sont utilisées telles quelles. Pistes : une colonne par code, ou un calcul de f
 ### 12. Supports non linéaires — évolution
 
 Second solveur, expérimental et au choix dans le projet ; le solveur linéaire
-reste le défaut. Principes consignés au § 7 de [THEORIE.md](THEORIE.md).
+reste le défaut. Principes consignés au § 7 de [THEORIE.md](THEORIE.md), alignés
+sur le calcul statique non linéaire de PIPESTRESS (aide en ligne).
 
-- **Décidé** : séisme calculé en linéaire sur une configuration figée ; appuis
-  unilatéraux figés dans l'état de service.
-- **À décider** (avant le lot C) : traitement des jeux en analyse spectrale —
-  jeu fermé (hypothèse actuelle, celle de PIPESTRESS hors analyse temporelle),
-  état figé, ou enveloppe des deux calculs (proposition).
-- **Proposé, à valider** : étendue de dilatation par différence entre l'état
-  chaud et l'état froid ; part du poids par calcul à contacts figés pour chaque
-  état (ASME B31.3, annexe S, exemple 2), et non par soustraction « service
-  moins dilatation seule ».
-- **À vérifier** : la méthode de votre modèle de comparaison PIPESTRESS pour la
-  part du poids avec des supports non linéaires.
-- **Découpage** : A — calcul par états, appuis unilatéraux, jeux, butées ;
-  B — équations des codes alimentées par les états ; C — séisme linéarisé ;
-  D — frottement.
+- **Étendue de dilatation** : différence entre états, le poids étant inclus dans
+  tous les cas de dilatation. C'est la méthode donnée en exemple par PIPESTRESS
+  et la définition des codes.
+- **Part du poids** : pas de soustraction « service moins dilatation seule ».
+  Deux valeurs : M_A à froid (poids seul en non linéaire, comme PIPESTRESS) et
+  M_A dans la configuration de service à contacts figés (ASME B31.3, annexe S,
+  exemple 2). **À valider** : vérifier les deux, ou seulement la première.
+- **Modèle et algorithme** : raideur par zones (d₁, d₂, k₁ à k₄), frottement par
+  raideur transversale ajustée, mêmes critères de convergence que PIPESTRESS.
+- **Séisme** : supports non linéaires calculés comme des supports linéaires
+  actifs, ce que font déjà PIPESTRESS et le solveur linéaire. Raffinement
+  possible : enveloppe de deux calculs (supports libres / actifs).
+- **Découpage** : A — calcul par états, raideur par zones (appuis unilatéraux,
+  jeux, butées) ; B — équations des codes alimentées par les états ;
+  C — frottement. Le séisme ne demande pas de lot propre.
 
 ## Validation
 
