@@ -1,0 +1,115 @@
+# Questions ouvertes
+
+Points en attente d'une décision, d'un texte de code ou d'une vérification. Les
+limites techniques de l'application sont décrites au § 6 de
+[THEORIE.md](THEORIE.md) ; ce fichier suit ce qui reste à trancher.
+
+Chaque point indique son état : **à décider** (choix de l'utilisateur),
+**texte manquant** (à contrôler sur le code), **à vérifier** (comparaison à
+faire), **évolution** (travail non commencé).
+
+## Calcul sismique
+
+### 1. Fréquence f_ZPA de la réponse rigide (Gupta) — à décider
+
+- **Aujourd'hui** : f_ZPA de la formule f₂ = (f₁ + 2·f_ZPA)/3 est prise égale à
+  la fréquence de coupure saisie.
+- **Question** : la lire sur le spectre (fréquence où il rejoint l'accélération
+  à période nulle), ou la faire saisir séparément de la coupure ?
+- **Enjeu** : écart mesuré d'au plus 1,3 % sur l'exemple DN100. Un
+  avertissement signale déjà une coupure placée dans la zone amplifiée du
+  spectre.
+
+### 2. Module d'élasticité pour le poids, le modal et le séisme — à vérifier
+
+- **Aujourd'hui** : module à froid, sans option. Seule la dilatation dispose de
+  l'option du projet « module à chaud » (activée par défaut).
+- **Question** : ajouter une option « module à chaud pour le modal et le
+  séisme » ?
+- **Enjeu** : à 300 °C, les fréquences réelles sont environ 5 % plus basses
+  (½·(1 − E_h/E_c)), ce qui déplace les modes sur le spectre.
+- **À faire avant de décider** : vérifier le réglage du modèle de comparaison
+  PIPESTRESS (présumé au module à chaud, à confirmer).
+- **Indice** : sur le cas test collecteur DN200 (300 °C, E_h/E_c = 0,906), les
+  modes 1 à 9 concordent à moins de 1 % avec le calcul de comparaison alors que
+  l'application calcule à froid. Un modal de référence au module à chaud
+  donnerait des fréquences environ 5 % plus basses : soit ce modal était à
+  froid, soit un autre écart compense.
+- **Proposition** : option du projet décochée par défaut, pour ne pas modifier
+  les cas validés.
+
+### 3. Mouvements sismiques différentiels d'ancrages — évolution
+
+Non traités (pas de déplacements imposés sismiques, pas de spectres multiples).
+
+## Codes de vérification
+
+### 4. CODETI : module d'élasticité de l'étendue M_C — à décider
+
+- **Aujourd'hui** : moments au module à chaud, comparés à f_a qui porte
+  E_chaud/E_froid, comme l'EN 13480-3 (qui le précise au §12.3.4).
+- **Question** : la section C3 du CODETI 2006 ne précise pas le module. Si la
+  pratique est de calculer M_C à froid et de le comparer à f_a réduit, le critère
+  est plus sévère d'un facteur E_froid/E_chaud (environ 10 % à 300 °C).
+
+### 5. CODETI : torsion de la méthode alternative — décidé
+
+Le texte imprime σ_T = M_T/Z dans σ = √(σ_b² + 4σ_T²). La valeur M_T/(2Z) est
+retenue : c'est la seule qui redonne la méthode directe sur un tube droit
+(décision de l'utilisateur). Reste à faire : tracer cette hypothèse dans la note
+de calcul quand la méthode alternative est choisie.
+
+### 6. RCC-M : renfort des tés de fabrication — texte manquant
+
+Le renfort est plafonné à 1,5·e dans la formule de h, soit h = 4,05·e/r à
+l'extrême. L'ASME B31.3 (tableau D300, note 10) donne h = 4·e/r au-delà de
+1,5·e, soit moins de 1 % d'écart sur i. À contrôler sur la note correspondante
+du tableau des facteurs du RCC-M.
+
+### 7. RCC-M : réductions — texte manquant
+
+Les notes (2) et (7) de la ligne « Réductions concentriques » du tableau C 3673
+n'ont pas été vues. Hypothèses retenues : α ≤ 60° et D/t ≤ 100, sinon i = 2,0.
+
+### 8. RCC-M : type « piquage » — évolution
+
+Les tés sont forgés, renforcés ou non renforcés. Un type « piquage » distinct
+(avec distinction collecteur / dérivation) n'existe pas.
+
+### 9. ASME B31.3 : facteur f et contrainte occasionnelle — à décider
+
+- f est plafonné à 1,0. Le code admet f_m = 1,2 pour les aciers à
+  R_m ≤ 517 MPa jusqu'à 371 °C, ce qui relève l'admissible sous 7 000 cycles.
+- Le §302.3.6 ne donne pas la formule de la contrainte occasionnelle : elle est
+  calculée comme S_L avec les efforts du séisme, puis ajoutée à S_L.
+
+### 10. Admissibles par code — à décider
+
+Une seule colonne S par matériau : en changeant de code, les valeurs de la
+bibliothèque (établies pour le RCC-M) doivent être ressaisies, sans quoi elles
+sont utilisées telles quelles. Pistes : une colonne par code, ou un calcul de f
+à partir de Rp0,2 et R_m.
+
+### 11. Vérifications non reprises — évolution
+
+- Fluage (σ₅) et mouvement d'ancrage unique non répété (σ₆) : EN 13480-3 et
+  CODETI.
+- Brides aux extrémités des coudes, coudes à onglets ou à sections, tés
+  extrudés, piquages forgés : les trois codes.
+- Épaisseur minimale du CODETI (section C2, texte non disponible).
+- EN 13480-3 : amendements postérieurs à la version 1 (A4:2021, édition 2024) ;
+  ASME B31.3 : éditions 2020 et suivantes (facteurs B31J).
+
+## Supports
+
+### 12. Supports non linéaires — évolution
+
+Le calcul est linéaire : décollement, jeux et courses sont contrôlés après
+calcul et signalés. Reste à faire (lot 2) : recherche de l'état des contacts
+(état froid, état chaud), frottement.
+
+## Validation
+
+### 13. Cas de la littérature à ajouter — évolution
+
+NUREG/CR-1677 problèmes 3, 5 et 7 ; cas Code_Aster SSLL106.

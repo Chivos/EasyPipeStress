@@ -107,6 +107,7 @@ src/
   ui/                       vue 3D canvas, panneaux, résultats, note de calcul
 tests/                      validation analytique et non-régression
 docs/THEORIE.md             formulation et références bibliographiques
+docs/QUESTIONS.md           questions ouvertes (décisions, textes manquants, évolutions)
 ```
 
 Le cœur de calcul (`core`, `fem`, `loads`, `codes`, `analysis.js`) ne dépend pas
