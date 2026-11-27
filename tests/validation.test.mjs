@@ -857,3 +857,71 @@ test('Ancrage rigide devant le tube retenu : console de gros diamètre (flèche 
   const r = runAnalysis(m);
   near(nodeDisp(r, 'F1', '2')[2], (-10000 * 1500 ** 3) / (3 * 200000 * r.mesh.elements[0].sec.I), 1e-3, 'flèche');
 });
+
+test('Dispositif auto-bloquant : libre en poids et en dilatation, bloqué en modal et en séisme', () => {
+  const m = setup({ density: 7850, maxLen: 250 });
+  const spectrum = { factor: 1, points: [[1, 0.5], [100, 0.5]] };
+  const seismic = { id: 'S1', type: 'seismic', enabled: true, method: 'spectral', cutoff: 60, modal: 'CQC', directional: 'SRSS', rigid: 'none', missingMass: true, levels: [{ level: 'C', enabled: true, factor: 1 }], spectra: { X: spectrum, Y: spectrum, Z: spectrum } };
+  const build = (extra) => {
+    m.components = ensureIds({ components: [pipe('1', '2', 4000, 0, 0, { T1: 150 }), sup('1', 'anchor'), ...extra] }).components;
+    m.loadCases = [{ id: 'W', type: 'weight', enabled: true }, { id: 'T1', type: 'thermal', enabled: true }, seismic];
+    return runAnalysis(m);
+  };
+  const free = build([]);
+  const snub = build([sup('2', 'snubber', { dir: 'vertical', label: 'DAB' })]);
+  const rest = build([sup('2', 'clamp')]);
+  const k = snub.mesh.supports.findIndex((s) => s.label === 'DAB');
+  // statique : comme sans support (flèche de la console, aucun effort)
+  near(nodeDisp(snub, 'W', '2')[2], nodeDisp(free, 'W', '2')[2], 1e-12, 'flèche de poids');
+  near(nodeDisp(snub, 'T1', '2')[0], nodeDisp(free, 'T1', '2')[0], 1e-12, 'dilatation libre');
+  assert.equal(snub.cases.find((c) => c.id === 'W').supportLoads[k * 6 + 2], 0);
+  // dynamique : comme un appui bilatéral (première fréquence, effort sismique)
+  near(snub.modal.modes[0].freq, rest.modal.modes[0].freq, 1e-9, 'fréquence');
+  // la flexion horizontale reste libre (mode 1 inchangé) ; la flexion verticale est celle d'une poutre
+  // encastrée-appuyée (15,42/3,516 = 4,39 fois la fréquence de la console)
+  near(snub.modal.modes[0].freq, free.modal.modes[0].freq, 1e-6, 'mode horizontal inchangé');
+  near(snub.modal.modes[1].freq / free.modal.modes[0].freq, 15.418 / 3.516, 0.01, 'mode vertical encastré-appuyé');
+  const sS = snub.cases.find((c) => c.type === 'seismic');
+  const rS = rest.cases.find((c) => c.type === 'seismic');
+  assert.ok(sS.supportLoads[k * 6 + 2] > 0);
+  near(sS.supportLoads[k * 6 + 2], rS.supportLoads[rest.mesh.supports.findIndex((s) => s.kind === 'clamp') * 6 + 2], 1e-9, 'effort sismique');
+  assert.equal(snub.dynSys.dynamic, true);
+  assert.equal(free.dynSys, free.sys, 'pas de second système sans support dynamique');
+});
+
+test('Jeux et courses : contrôle après calcul linéaire (jeu rattrapé, butée de support à ressort, appui décollant sous séisme)', () => {
+  const m = setup({ density: 7850, maxLen: 250 });
+  m.settings.vertical = 'Z';
+  const spectrum = { factor: 1, points: [[1, 3], [100, 3]] };
+  const seismic = { id: 'S1', type: 'seismic', enabled: true, method: 'spectral', cutoff: 60, modal: 'CQC', directional: 'SRSS', rigid: 'none', missingMass: true, levels: [{ level: 'C', enabled: true, factor: 1 }], spectra: { X: spectrum, Y: spectrum, Z: spectrum } };
+  const run = (supports, cases = [{ id: 'W', type: 'weight', enabled: true }, { id: 'T1', type: 'thermal', enabled: true }]) => {
+    m.components = ensureIds({ components: [pipe('1', '2', 3000, 0, 0, { T1: 220 }), pipe('2', '3', 0, 3000, 0, { T1: 220 }), sup('1', 'anchor'), ...supports] }).components;
+    m.loadCases = cases;
+    return runAnalysis(m);
+  };
+  // guide à jeu au coude : la dilatation du premier tube (≈ 7,9 mm suivant X) rattrape un jeu de 2 mm, pas un jeu de 20 mm
+  const tight = run([sup('3', 'guide', { gap: '2', label: 'G' })]);
+  const g = tight.contacts.find((c) => c.type === 'gap');
+  assert.ok(g && g.limit === 2 && g.value > 7 && g.value < 9, JSON.stringify(g));
+  assert.match(tight.warnings.join('\n'), /Jeu\(x\) rattrapé\(s\) — G \(nœud 3\)/);
+  // direction à jeu : libre en statique (aucun effort), bloquée en dynamique
+  assert.equal(tight.mesh.springs.find((s) => s.gap > 0).dynamicOnly, true);
+  assert.ok(Array.from(tight.cases[1].supportLoads.slice(6, 12)).every((v) => v === 0));
+  const loose = run([sup('3', 'guide', { gap: '20', label: 'G' })]);
+  assert.deepEqual(loose.contacts, []);
+  assert.deepEqual(loose.warnings, []);
+  // support variable : course vers le haut dépassée en dilatation ? non (tube horizontal) ; course vers le bas sous poids, oui
+  const hanger = run([sup('3', 'variable', { stiffness: 20, preload: 100, travelDown: 5, travelUp: 5, label: 'V' })]);
+  const t = hanger.contacts.find((c) => c.type === 'travel');
+  assert.ok(t && t.side === 'basse' && t.value > 5, JSON.stringify(t));
+  assert.match(hanger.warnings.join('\n'), /Course de support à ressort dépassée — V \(nœud 3\) : butée basse/);
+  const wide = run([sup('3', 'variable', { stiffness: 20, preload: 100, travelDown: 5000, travelUp: 5000, label: 'V' })]);
+  assert.deepEqual(wide.contacts, []);
+  // appui simple porteur, mais effort sismique vertical supérieur à la charge portée
+  const posed = run([sup('3', 'rest', { label: 'R' })], [{ id: 'W', type: 'weight', enabled: true }, seismic]);
+  const s = posed.contacts.find((c) => c.type === 'seismicLiftoff');
+  assert.ok(s && s.value > s.limit && s.limit > 0, JSON.stringify(s));
+  assert.match(posed.warnings.join('\n'), /décollerai\(en\)t sous séisme — R \(nœud 3\)/);
+  // étrier (bilatéral) : aucun contrôle de soulèvement
+  assert.deepEqual(run([sup('3', 'clamp')], [{ id: 'W', type: 'weight', enabled: true }, seismic]).contacts, []);
+});

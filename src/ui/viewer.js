@@ -6,7 +6,7 @@ import { vec } from '../core/linalg.js';
 import { toLocalVector } from '../fem/beam3d.js';
 import { SUPPORT_KINDS } from '../components/support.js';
 
-const SUPPORT_COLORS = { anchor: '#c0392b', rest: '#2471a3', guide: '#7d3c98', restguide: '#1f618d', axial: '#b9770e', variable: '#148f77', constant: '#d35400', custom: '#566573' };
+const SUPPORT_COLORS = { anchor: '#c0392b', rest: '#2471a3', guide: '#7d3c98', restguide: '#1f618d', clamp: '#2e4053', axial: '#b9770e', variable: '#148f77', constant: '#d35400', snubber: '#c2185b', custom: '#566573' };
 
 export class Viewer {
   constructor(canvas, { onPick } = {}) {
@@ -394,7 +394,8 @@ export class Viewer {
           }
           continue;
         }
-        for (const sg of [-1, 1]) {
+        // appui simple (tuyauterie posée) : une seule flèche, sous le tube
+        for (const sg of sp.bearing ? [-1] : [-1, 1]) {
           const tip = vec.add(p, vec.scale(d, sg * R));
           const tail = vec.add(tip, vec.scale(d, sg * L));
           arrow(tail, tip, color, od);

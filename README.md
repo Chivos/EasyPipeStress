@@ -28,8 +28,12 @@ exportables/importables en JSON.
    « Données »), sans calcul préalable. Le bouton « diviser un tube » découpe un
    tube en parties égales ou de longueurs saisies (nouveaux nœuds pour y placer
    un robinet, un support…).
-2. **Supports & masses** : ancrages, appuis, guides, butées, ressorts, blocages
-   personnalisés, déplacements imposés de piquage ; masses ponctuelles.
+2. **Supports & masses** : quatre familles de supports — points fixes et
+   blocages (ancrage, guide, butée, étrier, blocage personnalisé, déplacement
+   imposé de piquage), appuis simples (tuyauterie posée), supports à ressort
+   (variables, constants) et dispositifs auto-bloquants — avec réglages avancés
+   à la demande (raideur, jeux, courses) ; masses ponctuelles. Le calcul reste
+   linéaire : appui soulevé, jeu rattrapé et butée atteinte sont signalés.
 3. **Chargements** : poids (fluide, calorifuge), pression, dilatation, séisme
    (niveaux B, C, D vérifiés avec un coefficient chacun sur le même séisme,
    spectre horizontal commun aux deux directions horizontales et

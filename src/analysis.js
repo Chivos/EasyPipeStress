@@ -8,7 +8,7 @@ import { codes } from './codes/index.js';
 import { summarize, thicknessRows } from './codes/common.js';
 import { seismicLevels } from './loads/seismic.js';
 import { localResponses } from './core/frames.js';
-import { seismicDiagnostics, resultDiagnostics } from './diagnostics.js';
+import { seismicDiagnostics, resultDiagnostics, contactFindings } from './diagnostics.js';
 
 export function runAnalysis(model) {
   const t0 = Date.now();
@@ -63,7 +63,9 @@ export function runAnalysis(model) {
     }
     if (lc.type === 'seismic') warnings.push(...seismicDiagnostics(lc, r, mesh));
   }
-  warnings.push(...resultDiagnostics({ mesh, cases }));
+  // état des contacts (appuis simples, jeux, courses) d'après le calcul linéaire
+  const contacts = contactFindings({ mesh, cases });
+  warnings.push(...resultDiagnostics({ mesh, cases, contacts }));
   const modal = cases.find((c) => c.modal)?.modal ?? null;
   let check = code ? code.check({ model, mesh, cases }) : null;
   // épaisseur minimale (pression seule) : option du projet, formule fournie par le code
@@ -75,7 +77,7 @@ export function runAnalysis(model) {
       warnings.push(`Le code « ${code.label} » ne fournit pas de formule d’épaisseur minimale : vérification non faite.`);
     }
   }
-  return { mesh, sys, cases, modal, check, code, warnings, elapsed: Date.now() - t0 };
+  return { mesh, sys, dynSys: ctx.dynSys ?? sys, contacts, cases, modal, check, code, warnings, elapsed: Date.now() - t0 };
 }
 
 /** Combinaison algébrique de cas signés (ex. état de service W + T1). */

@@ -9,8 +9,16 @@ const LANCZOS_THRESHOLD = 120; // DDL massiques au-delà desquels Lanczos rempla
 const DENSE_FALLBACK_MAX = 1500; // DDL massiques jusqu'auxquels la résolution complète sert de repli
 
 export class FeSystem {
-  constructor(mesh, { shear = true } = {}) {
+  /**
+   * @param opts.dynamic système des cas dynamiques (modal, séisme) : il inclut
+   *   les ressorts actifs seulement en dynamique (dispositifs auto-bloquants,
+   *   directions à jeu supposées fermées) ; le système statique les ignore.
+   */
+  constructor(mesh, { shear = true, dynamic = false } = {}) {
     this.mesh = mesh;
+    this.shear = shear;
+    this.dynamic = dynamic;
+    this.springs = mesh.springs.filter((s) => dynamic || !s.dynamicOnly);
     const n = mesh.nodes.length * 6;
     this.n = n;
     this.kLocal = mesh.elements.map((e) => {
@@ -43,7 +51,7 @@ export class FeSystem {
         for (let b = 0; b < 12; b++) K[ra + dofs[b]] += kg[a * 12 + b];
       }
     });
-    for (const s of mesh.springs) {
+    for (const s of this.springs) {
       const base = s.node * 6 + (s.rot ? 3 : 0);
       for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) K[(base + a) * n + base + b] += s.k * s.dir[a] * s.dir[b];
     }
@@ -84,7 +92,7 @@ export class FeSystem {
       });
     }
     if (imposed) {
-      for (const s of mesh.springs) {
+      for (const s of this.springs) {
         const d = imposed.get(s.support);
         if (!d || s.rot) continue;
         const proj = s.k * (s.dir[0] * d[0] + s.dir[1] * d[1] + s.dir[2] * d[2]);
@@ -114,7 +122,7 @@ export class FeSystem {
       }
     });
     const supportLoads = new Float64Array(mesh.supports.length * 6);
-    for (const s of mesh.springs) {
+    for (const s of this.springs) {
       const base = s.node * 6 + (s.rot ? 3 : 0);
       let rel = s.dir[0] * u[base] + s.dir[1] * u[base + 1] + s.dir[2] * u[base + 2];
       const d = !s.rot && imposed?.get(s.support);
@@ -202,7 +210,7 @@ export class FeSystem {
     // masse portée directement par les supports rigides (ne participe à aucun mode)
     const supportedMass = [0, 1, 2].map((d) => {
       const fixed = new Set();
-      for (const s of this.mesh.springs) if (!s.rot && s.k >= 1e9 && Math.abs(s.dir[d]) > 0.999) fixed.add(s.node);
+      for (const s of this.springs) if (!s.rot && s.k >= 1e9 && Math.abs(s.dir[d]) > 0.999) fixed.add(s.node);
       let sum = 0;
       for (const node of fixed) sum += m[node * 6 + d];
       return sum;

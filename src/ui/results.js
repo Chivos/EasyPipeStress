@@ -666,11 +666,34 @@ export function hangerInfo(r, k) {
 function hangerText(r, k) {
   const h = hangerInfo(r, k);
   if (!h) return '';
+  const sup = r.mesh.supports[k];
   const parts = [` Précharge P = ${fmt(h.preload, 0)} N`];
-  if (r.mesh.supports[k].kind === 'variable') parts.push(`raideur k = ${fmt(h.k, 1)} N/mm`);
+  if (sup.kind === 'variable') parts.push(`raideur k = ${fmt(h.k, 1)} N/mm`);
   if (h.cold != null) parts.push(`effort vertical sous poids propre ${fmt(h.cold, 0)} N`);
   for (const t of h.thermal) parts.push(`${t.id} : ΔF = ${fmt(t.dF, 0)} N${t.v != null ? `, variabilité ${fmt(100 * t.v, 1)} %` : ''}`);
+  if (sup.travelUp != null || sup.travelDown != null) parts.push(`course disponible ${sup.travelUp != null ? `${fmt(sup.travelUp, 1)} mm vers le haut` : ''}${sup.travelUp != null && sup.travelDown != null ? ', ' : ''}${sup.travelDown != null ? `${fmt(sup.travelDown, 1)} mm vers le bas` : ''}`);
   return ` ${parts.join(' ; ')}.`;
+}
+
+/**
+ * Supports à contact (dispositif auto-bloquant, jeu) : déplacement statique
+ * suivant chaque direction libre en poids et en dilatation, bloquée en séisme
+ * (course d'un auto-bloquant, jeu restant).
+ */
+function contactText(r, k) {
+  const sup = r.mesh.supports[k];
+  const springs = r.mesh.springs.filter((s) => s.support === k && s.dynamicOnly);
+  if (!springs.length) return '';
+  const W = r.cases.filter((c) => c.type === 'weight' && c.fe !== false);
+  const T = r.cases.filter((c) => c.type === 'thermal');
+  const along = (list, d) => list.reduce((a, c) => a + c.u[sup.node * 6] * d[0] + c.u[sup.node * 6 + 1] * d[1] + c.u[sup.node * 6 + 2] * d[2], 0);
+  const dirName = (d) => `(${d.map((x) => fmt(Math.abs(x) < 5e-4 ? 0 : x, 2)).join(' ; ')})`;
+  const parts = springs.map((s) => {
+    const moves = [['poids', along(W, s.dir)], ...T.map((t) => [`poids + ${t.id}`, along([...W, t], s.dir)])];
+    const text = moves.map(([n, d]) => `${fmt(d, 2)} mm sous ${n}`).join(', ');
+    return s.gap > 0 ? `direction ${dirName(s.dir)}, jeu ${fmt(s.gap, 2)} mm : déplacement libre ${text}` : `direction ${dirName(s.dir)} : déplacement libre (course) ${text}`;
+  });
+  return ` Libre en poids et en dilatation, bloqué en séisme — ${parts.join(' ; ')}.`;
 }
 
 export const LOCAL_FRAME_HELP =
@@ -696,7 +719,7 @@ export function supportPoint(r, k, local = false) {
   const disp = (c) => (local ? c.uLocal : c.u);
   return {
     title: `Support ${sup.label || ''} — nœud ${r.mesh.nodes[sup.node].label}`.replace('  ', ' '),
-    subtitle: `${kind} — efforts exercés par la tuyauterie sur le support et déplacements du nœud, ${local ? frameText(r, sup.node).replace(/^R/, 'r') : 'repère global.'}${hangerText(r, k)}`,
+    subtitle: `${kind} — efforts exercés par la tuyauterie sur le support et déplacements du nœud, ${local ? frameText(r, sup.node).replace(/^R/, 'r') : 'repère global.'}${hangerText(r, k)}${contactText(r, k)}`,
     columns: [...ax.map((a) => `F${a} (N)`), ...ax.map((a) => `M${a} (N·m)`), ...ax.map((a) => `D${a} (mm)`)],
     values: (c) => [
       ...Array.from({ length: 6 }, (_, d) => loads(c)[k * 6 + d] / (d < 3 ? 1 : 1000)),
