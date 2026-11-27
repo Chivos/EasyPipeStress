@@ -583,6 +583,9 @@ interpréter avec prudence (`src/diagnostics.js`), sans modifier les résultats 
 
 ## 6. Limites actuelles et évolutions
 
+Les points en attente d'une décision ou d'un texte de code sont suivis dans
+[QUESTIONS.md](QUESTIONS.md).
+
 - Supports linéaires : décollement, jeux et butées sont contrôlés après calcul
   et signalés (§ 1.6), sans recherche de l'état des contacts ; pas de frottement.
 - Poids, analyse modale et séisme au module à froid Ec (seule la dilatation a
