@@ -611,6 +611,90 @@ Les points en attente d'une décision ou d'un texte de code sont suivis dans
 - Codes à ajouter : RCC-M classe 1 (B 3600, indices C, K, analyse en fatigue),
   classe 3 (D 3600), ASME B31.1.
 
+## 7. Calcul non linéaire des supports : principes retenus
+
+> **En projet.** Cette section fixe les principes du second solveur
+> (expérimental, au choix dans le projet) destiné aux supports non linéaires :
+> appuis unilatéraux, jeux, butées, frottement. Il n'est pas encore écrit ; le
+> solveur linéaire décrit plus haut reste le solveur par défaut et n'est pas
+> modifié.
+
+### 7.1 Ce qui change : la superposition
+
+Le calcul linéaire traite chaque chargement séparément (poids, dilatation,
+séisme) puis les codes combinent les résultats. Avec des contacts, ce n'est plus
+permis : un appui peut porter sous le poids seul et décoller à chaud, un jeu peut
+se fermer en cours de dilatation. Le calcul non linéaire porte donc sur des
+**états** réels de la tuyauterie, chacun avec son propre état des contacts :
+
+- état froid (montage) : poids ;
+- état chaud (service) : poids + dilatation, pour chaque cas thermique.
+
+Les équations des codes demandent pourtant des moments par nature de chargement
+(M_A pour le poids, M_C pour la dilatation, M_B pour le séisme). Les trois
+paragraphes suivants disent comment les obtenir à partir des états.
+
+### 7.2 Étendue de dilatation : différence entre deux états
+
+M_C est la différence entre les moments de l'état chaud et ceux de l'état froid.
+Cette soustraction est la définition même de l'étendue dans les codes :
+
+- EN 13480-3:2017, §12.3.4 : M_C est déterminé « à partir de la plus grande
+  différence entre les moments », l'état nul devant être pris en compte ; §12.3.7,
+  éq. (12.3.7-3) : les moments variables sont la différence M_Te − M_Ta entre
+  deux instants ;
+- CODETI 2006, C3.3.4 : étendue « déterminée pour la plus grande différence entre
+  les moments » ;
+- ASME B31.3-2012, §319.3.1 (a) et annexe S, exemple 3 : l'étendue se calcule
+  par différence algébrique entre les conditions, y compris entre deux
+  conditions de service.
+
+Un calcul de « dilatation seule », sans le poids, n'a pas de sens avec des
+contacts : sans le poids, les appuis n'ont pas le bon état.
+
+### 7.3 Part du poids : calcul à contacts figés, pas de soustraction
+
+Il existe une pratique qui obtient la part du poids à chaud par soustraction :
+état de service moins un calcul de dilatation seule. Elle n'est pas retenue,
+parce que les deux calculs soustraits n'ont pas le même état des contacts : leur
+différence ne correspond à aucune structure réelle.
+
+Le principe retenu est celui de l'ASME B31.3-2012, annexe S, exemple 2
+(« Anticipated sustained conditions considering pipe lift-off ») et du §320.1,
+qui demande la plus grande contrainte S_L pour chaque condition de service : les
+charges permanentes (poids, pression) sont appliquées à la tuyauterie **dans la
+configuration d'appui de la condition considérée**, effets thermiques exclus. Un
+appui décollé à chaud est retiré, un jeu fermé à chaud est actif.
+
+En pratique, pour chaque état calculé (froid, chaud) :
+
+1. l'état des contacts est relevé (appui actif ou décollé, jeu ouvert ou fermé) ;
+2. il est figé, ce qui rend la structure linéaire ;
+3. le poids est appliqué à cette structure figée et donne M_A.
+
+M_A est vérifié pour chaque configuration, la plus défavorable gouvernant. Dans
+l'exemple de l'annexe S, la condition « appui retiré » est celle qui gouverne et
+elle n'est pas satisfaite, alors que le calcul appui en place l'était.
+
+### 7.4 Séisme : linéarisé autour de l'état de service
+
+L'analyse modale et spectrale est linéaire par nature. Elle est faite sur la
+structure à contacts figés dans l'état de service retenu (même principe qu'au
+§ 7.3) : un appui en contact reste bilatéral, un appui décollé ou un jeu ouvert
+reste libre. Les constats après calcul sont conservés : un appui dont l'effort
+sismique dépasse la charge portée est signalé.
+
+### 7.5 Fiabilité
+
+- Sans support non linéaire actif, le solveur non linéaire doit redonner
+  exactement les résultats du solveur linéaire : tous les cas de validation
+  existants le contrôlent.
+- À chaque calcul : équilibre global, conditions de contact (pas de traction sur
+  un appui posé, pas de pénétration au-delà d'un jeu), compte rendu de
+  convergence ; un calcul non convergé échoue explicitement.
+- Le frottement dépend de l'ordre d'application des charges (poids, puis
+  dilatation) et sa convergence n'est pas garantie : il est traité en dernier.
+
 ## Références
 
 1. J. S. Przemieniecki, *Theory of Matrix Structural Analysis*, McGraw-Hill, 1968.

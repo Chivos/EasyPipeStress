@@ -112,9 +112,19 @@ sont utilisées telles quelles. Pistes : une colonne par code, ou un calcul de f
 
 ### 12. Supports non linéaires — évolution
 
-Le calcul est linéaire : décollement, jeux et courses sont contrôlés après
-calcul et signalés. Reste à faire (lot 2) : recherche de l'état des contacts
-(état froid, état chaud), frottement.
+Second solveur, expérimental et au choix dans le projet ; le solveur linéaire
+reste le défaut. Principes consignés au § 7 de [THEORIE.md](THEORIE.md).
+
+- **Décidé** : séisme linéarisé autour de l'état de service, contacts figés.
+- **Proposé, à valider** : étendue de dilatation par différence entre l'état
+  chaud et l'état froid ; part du poids par calcul à contacts figés pour chaque
+  état (ASME B31.3, annexe S, exemple 2), et non par soustraction « service
+  moins dilatation seule ».
+- **À vérifier** : la méthode de votre modèle de comparaison PIPESTRESS pour la
+  part du poids avec des supports non linéaires.
+- **Découpage** : A — calcul par états, appuis unilatéraux, jeux, butées ;
+  B — équations des codes alimentées par les états ; C — séisme linéarisé ;
+  D — frottement.
 
 ## Validation
 
