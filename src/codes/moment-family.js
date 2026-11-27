@@ -16,8 +16,7 @@
 //    valeurs nominales (épaisseur de référence diminuée de la corrosion).
 // Le RCC-M classe 2 a la même forme mais garde son module propre (rccm-c.js).
 //
-// M_C est l'étendue de moment calculée au module à chaud E_h ; le rapport E_h/E_c
-// (équivalence en déformation) porte sur l'admissible f_a.
+// Module de l'étendue M_C : voir `spec.rangeModulus` dans momentCheck.
 
 import { materialAt, refTemperature } from '../core/materials.js';
 import { summarize } from './common.js';
@@ -91,11 +90,12 @@ export function momentCheck(spec, { model, mesh, cases }) {
       const pTerm = (P) => (P * sec.od) / (4 * sec.t);
       const { Z, zItems } = spec.modulus({ ...pt, fac }, sec);
       // terme de moment : i·M/Z (moment résultant) ou forme séparée plan / hors plan
-      const bend = (c, primary) => {
-        if (!alt) return ((primary ? i75 : fac.i) * resultant(c.elemForces, ie, end)) / Z;
+      // k : facteur appliqué aux moments du cas (étendue ramenée au module à froid)
+      const bend = (c, primary, k = 1) => {
+        if (!alt) return (k * (primary ? i75 : fac.i) * resultant(c.elemForces, ie, end)) / Z;
         const [Mi, Mo] = planeBending(c, ie, end);
         const [a, b] = primary ? [Math.max(1, 0.75 * ii), Math.max(1, 0.75 * io)] : [ii, io];
-        return Math.hypot(a * Mi, b * Mo, torsion(c.elemForces, ie, end)) / Z;
+        return (k * Math.hypot(a * Mi, b * Mo, torsion(c.elemForces, ie, end))) / Z;
       };
       const mRow = (name, c, k = 1) => (alt ? planeMomentRow(name, c, ie, end, k) : momentRow(name, c, ie, end, k));
       const momExtra = alt ? { momentCols: PLANE_COLS, momentTitle: PLANE_TITLE } : {};
@@ -133,16 +133,27 @@ export function momentCheck(spec, { model, mesh, cases }) {
       });
       // étendue de dilatation, puis permanentes + dilatation où elle est dépassée
       for (const tc of thermal) {
-        // Le code compare l'étendue calculée au module à chaud à un admissible réduit
-        // de E_h/E_c : avec un calcul à chaud (option du projet par défaut) les moments
-        // sont pris tels quels ; avec un calcul à froid, l'admissible n'est pas réduit
-        // (les deux écritures donnent le même taux).
-        const hot = ecOverEh(tc, e) !== 1;
-        const MC = resultant(tc.elemForces, ie, end);
-        const s3 = bend(tc, false);
-        const { fa, items: faItems } = spec.rangeAllowable({ U, fc: atC.S, fh: atH.S, ratio: hot ? e.Eh / e.E : 1, hot, params });
-        const momC = mRow(`M_C — ${tc.id}`, tc);
-        const cItems = [[`Moment résultant M_C (module ${hot ? 'à chaud' : 'à froid'})`, MC / 1000, 'N·m'], [`Contrainte ${rangeLabel}`, s3, 'MPa']];
+        // Module de l'étendue, selon le code (`spec.rangeModulus`) :
+        //  - 'hot' (EN 13480-3) : l'étendue calculée au module à chaud est comparée à un
+        //    admissible réduit de E_h/E_c ; avec un calcul à froid, l'admissible n'est
+        //    pas réduit (les deux écritures donnent le même taux) ;
+        //  - 'cold' (CODETI 2006, traitement du logiciel de comparaison) : l'étendue est
+        //    ramenée au module à froid (× E_c/E_h si calcul à chaud) et l'admissible
+        //    porte toujours E_h/E_c.
+        const kE = ecOverEh(tc, e);
+        const hot = kE !== 1;
+        const coldRange = spec.rangeModulus === 'cold';
+        const kM = coldRange ? kE : 1;
+        const MC = kM * resultant(tc.elemForces, ie, end);
+        const s3 = bend(tc, false, kM);
+        const ratio = (coldRange || hot) && e.E > 0 && e.Eh > 0 ? e.Eh / e.E : 1;
+        const { fa, items: faItems } = spec.rangeAllowable({ U, fc: atC.S, fh: atH.S, ratio, hot: coldRange || hot, params });
+        const momC = mRow(`M_C — ${tc.id}${kM !== 1 ? ' (× E_c/E_h)' : ''}`, tc, kM);
+        const cItems = [
+          ...(kM !== 1 ? [['Rapport E_c/E_h (moments calculés à chaud, ramenés au module à froid)', kM, '']] : []),
+          [`Moment résultant M_C (module ${coldRange || !hot ? 'à froid' : 'à chaud'})`, MC / 1000, 'N·m'],
+          [`Contrainte ${rangeLabel}`, s3, 'MPa'],
+        ];
         rows.push({
           ...base, eq: q.exp.id, order: 3, eqLabel: q.exp.label, case: tc.id, stress: s3, allow: fa, ratio: s3 / fa,
           detail: { ...detail, i75: undefined, MC, Z, SA: fa, f: U, Sc: atC.S, Sh: atH.S },

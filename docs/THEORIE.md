@@ -473,10 +473,14 @@ valeur M_T/(2Z) est retenue, seule à redonner la méthode directe pour un tube
 droit (i = 1) et conforme à l'usage (ASME B31.3, EN 13480-3). Ce point est une
 interprétation à valider par l'utilisateur.
 
-*Module d'élasticité* : comme pour l'EN 13480-3 (qui le précise au §12.3.4),
-l'étendue M_C est prise au module à chaud et f_a porte le rapport E_chaud/E_froid ;
-le CODETI ne précise pas le module du calcul de M_C. Avec un calcul à froid le
-rapport n'est pas appliqué, ce qui donne le même taux.
+*Module d'élasticité* : la section C3 ne précise pas le module du calcul de M_C.
+**Choix retenu** : celui du logiciel de comparaison (PIPESTRESS) pour le CODETI
+antérieur à 2013 — l'étendue M_C est ramenée au module à froid (moments calculés
+à chaud multipliés par E_froid/E_chaud) et f_a porte toujours E_chaud/E_froid. Le
+résultat est le même que la dilatation soit calculée à chaud ou à froid.
+*Alternative non retenue* : le traitement de l'EN 13480-3 (§12.3.4), où M_C reste
+au module à chaud ; le critère serait moins sévère d'un facteur E_froid/E_chaud,
+soit environ 10 % à 300 °C.
 
 Non repris : brides aux extrémités des coudes (note 3), coudes à sections,
 piquages forgés, extrudés et à selle insérée (lignes 8 à 10, 12, 13 et tableau
@@ -663,25 +667,27 @@ et la définition même de l'étendue dans les codes :
 Un calcul de « dilatation seule », sans le poids, n'a pas de sens avec des
 contacts : sans le poids, les appuis n'ont pas le bon état.
 
-### 7.3 Part du poids : pas de soustraction
+### 7.3 Part du poids : le poids seul, à froid
 
 Une pratique obtient la part du poids à chaud par soustraction : état de service
 moins un calcul de dilatation seule. Elle n'est pas retenue, parce que les deux
 calculs soustraits n'ont pas le même état des contacts : leur différence ne
 correspond à aucune structure réelle.
 
-Deux valeurs de M_A sont calculées, la plus défavorable gouvernant :
+**Choix retenu** : M_A est le moment du cas « poids seul », calculé en non
+linéaire (état froid). C'est le M_A de l'exemple de la documentation du logiciel
+de comparaison (PIPESTRESS), donc directement comparable.
 
-- **M_A à froid** : le poids seul, calculé en non linéaire (état froid). C'est le
-  M_A de l'exemple de la documentation du logiciel de comparaison, donc la valeur
-  à comparer avec lui ;
-- **M_A dans la configuration de service** : le poids appliqué à la tuyauterie
-  dont les contacts sont figés dans l'état chaud (appui décollé retiré, jeu fermé
-  actif), effets thermiques exclus. C'est le principe de l'ASME B31.3-2012,
-  annexe S, exemple 2 (« Anticipated sustained conditions considering pipe
-  lift-off ») et du §320.1, qui demande la plus grande contrainte S_L pour chaque
-  condition de service. Dans cet exemple, la configuration « appui retiré »
-  gouverne et n'est pas satisfaite, alors que le calcul appui en place l'était.
+*Alternative non retenue, possible en complément* : vérifier aussi M_A dans la
+configuration de service, c'est-à-dire le poids appliqué à la tuyauterie dont
+les contacts sont figés dans l'état chaud (appui décollé retiré, jeu fermé
+actif), effets thermiques exclus, le plus défavorable gouvernant. C'est le
+principe de l'ASME B31.3-2012, annexe S, exemple 2 (« Anticipated sustained
+conditions considering pipe lift-off ») et du §320.1, qui demande la plus grande
+contrainte S_L pour chaque condition de service. Dans cet exemple, la
+configuration « appui retiré » gouverne et n'est pas satisfaite, alors que le
+calcul appui en place l'était : le choix retenu peut donc être moins sévère quand
+un appui décolle à chaud. Les constats de décollement restent signalés.
 
 ### 7.4 Modèle de support et algorithme
 
@@ -732,17 +738,20 @@ par morceaux (méthode « adaptive modal summation », ADAMOS, du logiciel de
 comparaison : modes et amplitudes modales réévalués à chaque choc ou
 relâchement), que l'application ne fait pas.
 
-Trois conventions sont possibles en analyse spectrale :
+**Choix retenu** : supports actifs, comme le logiciel de comparaison. Un support
+décollé ou à jeu ouvert en service est compté actif, avec sa raideur ; les
+constats après calcul (§ 1.6) le signalent.
+
+*Alternatives non retenues* :
 
 | Convention | Support décollé ou jeu ouvert en service | Remarque |
 |---|---|---|
-| Supports actifs | actif, avec sa raideur | hypothèse actuelle, celle du logiciel de comparaison ; compte un support qui peut ne jamais s'engager |
+| Supports actifs (retenu) | actif, avec sa raideur | compte un support qui peut ne jamais s'engager |
 | État figé | libre | ignore un support que le séisme engagerait |
-| Enveloppe | deux calculs, libre puis actif, résultats enveloppés | le calcul « libre » dit si le déplacement sismique atteint le jeu restant |
+| Enveloppe | deux calculs, libre puis actif, résultats enveloppés | le calcul « libre » dit si le déplacement sismique atteint le jeu restant ; coût doublé |
 
-La première est retenue par défaut, pour rester comparable ; les constats après
-calcul (§ 1.6) signalent les supports comptés actifs alors qu'ils sont décollés ou
-à jeu ouvert en service. L'enveloppe est un raffinement possible.
+L'enveloppe serait le raffinement à privilégier si le choix retenu se révélait
+insuffisant. Aucune des trois n'est rigoureuse.
 
 ### 7.6 Fiabilité
 

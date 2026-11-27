@@ -387,15 +387,27 @@ test('CODETI 2006 : équations de la méthode directe et coefficients k', () => 
   b.code = { id: 'codeti', params: {} };
   const ra = run(a);
   const rb = run(b);
-  // mêmes équations que l'EN 13480-3 pour σ₁, σ₃, σ₄ (coudes à 90°, té forgé, épaisseur nominale)
-  for (const [ea, eb] of [['s1', 'c1'], ['s3', 'c3'], ['s4', 'c4']]) {
-    const xa = ra.check.rows.filter((x) => x.eq === ea);
-    const xb = rb.check.rows.filter((x) => x.eq === eb);
-    assert.ok(xa.length > 0 && xa.length === xb.length, `${eb} : lignes`);
-    xa.forEach((x, k) => {
-      near(xb[k].stress, x.stress, 1e-12, `${eb} contrainte`);
-      near(xb[k].allow, x.allow, 1e-12, `${eb} admissible`);
-    });
+  // même équation que l'EN 13480-3 pour σ₁ (coudes à 90°, té forgé, épaisseur nominale)
+  const of = (r, eq) => r.check.rows.filter((x) => x.eq === eq);
+  assert.ok(of(ra, 's1').length > 0 && of(ra, 's1').length === of(rb, 'c1').length);
+  of(ra, 's1').forEach((x, k) => {
+    near(of(rb, 'c1')[k].stress, x.stress, 1e-12, 'σ₁ contrainte');
+    near(of(rb, 'c1')[k].allow, x.allow, 1e-12, 'σ₁ admissible');
+  });
+  // σ₃ : l'étendue est ramenée au module à froid (× E_froid/E_chaud), f_a porte E_chaud/E_froid
+  // comme pour l'EN : critère plus sévère que l'EN de E_froid/E_chaud
+  assert.equal(of(ra, 's3').length, of(rb, 'c3').length);
+  of(ra, 's3').forEach((x, k) => {
+    const e = rb.mesh.elements[x.ie];
+    near(of(rb, 'c3')[k].stress, (x.stress * e.E) / e.Eh, 1e-12, 'σ₃ = σ₃(EN) × E_froid/E_chaud');
+    near(of(rb, 'c3')[k].allow, x.allow, 1e-12, 'f_a');
+    assert.ok(of(rb, 'c3')[k].ratio > x.ratio);
+  });
+  // σ₄ = σ₁ + σ₃ aux points où σ₃ dépasse f_a
+  for (const x of of(rb, 'c3').filter((y) => y.ratio > 1)) {
+    const s4 = of(rb, 'c4').find((y) => y.ie === x.ie && y.end === x.end);
+    const s1 = of(rb, 'c1').find((y) => y.ie === x.ie && y.end === x.end);
+    near(s4.stress, s1.stress + x.stress, 1e-9, 'σ₄ = σ₁ + σ₃');
   }
   // séisme du cas test : 2ᵉ niveau, k = 1,5 (SMHV) par défaut au CODETI
   const occ = rb.check.rows.filter((x) => x.eq === 'c2C');
@@ -408,6 +420,31 @@ test('CODETI 2006 : équations de la méthode directe et coefficients k', () => 
   assert.ok(!rb.warnings.some((w) => w.includes('non consulté')));
   assert.equal(codeti.thickness, undefined);
   assert.equal(eqName(codeti, 'c2C'), 'σ₂ niveau 2');
+});
+
+test('CODETI 2006 : M_C ramené au module à froid, f_a avec E_chaud/E_froid dans les deux modes de calcul', () => {
+  const build = (modulus) => {
+    const m = setup('codeti');
+    m.materials[0].table = [{ T: 20, E: 200000, alpha: 12, S: 120, Sy: 200 }, { T: 300, E: 170000, alpha: 13, S: 90, Sy: 150 }];
+    m.settings.thermalModulus = modulus;
+    m.loadCases = [{ id: 'W', type: 'weight', label: 'Poids', enabled: true }, { id: 'T1', type: 'thermal', label: 'Dilatation', enabled: true, imposed: true }];
+    m.components.push(pipe('10', '20', 3000, 0, 0, { T1: 300 }), pipe('20', '30', 0, 3000, 0, { T1: 300 }), { type: 'bend', node: '20', radiusType: 'LR', radius: '', t: '', divisions: '' }, sup('10', 'anchor'), sup('30', 'anchor'));
+    return run(m).check.summary.governing.find((g) => g.eq === 'c3');
+  };
+  const hot = build('hot');
+  const cold = build('cold');
+  // admissible : toujours U(1,25 f_froid + 0,25 f_chaud)·E_chaud/E_froid
+  for (const g of [hot, cold]) near(g.allow, (1.25 * 120 + 0.25 * 90) * (170000 / 200000), 1e-9, 'f_a');
+  // contrainte : celle du module à froid, que la dilatation soit calculée à chaud ou à froid
+  near(hot.stress, cold.stress, 1e-5, 'σ₃ au module à froid');
+  near(hot.ratio, cold.ratio, 1e-5, 'taux');
+  // même modèle à l'EN 13480-3 : taux plus faible de E_chaud/E_froid
+  const m = setup('en13480-3');
+  m.materials[0].table = [{ T: 20, E: 200000, alpha: 12, S: 120, Sy: 200 }, { T: 300, E: 170000, alpha: 13, S: 90, Sy: 150 }];
+  m.loadCases = [{ id: 'W', type: 'weight', label: 'Poids', enabled: true }, { id: 'T1', type: 'thermal', label: 'Dilatation', enabled: true, imposed: true }];
+  m.components.push(pipe('10', '20', 3000, 0, 0, { T1: 300 }), pipe('20', '30', 0, 3000, 0, { T1: 300 }), { type: 'bend', node: '20', radiusType: 'LR', radius: '', t: '', divisions: '' }, sup('10', 'anchor'), sup('30', 'anchor'));
+  const en = run(m).check.summary.governing.find((g) => g.eq === 's3');
+  near(hot.ratio / en.ratio, 200000 / 170000, 1e-9, 'CODETI 2006 / EN 13480-3');
 });
 
 test('CODETI 2006 : épaisseur de référence e_f et domaine D_m/e_f < 100', () => {
