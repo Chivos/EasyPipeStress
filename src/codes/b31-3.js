@@ -1,7 +1,8 @@
-// ASME B31.3 « Process Piping » — analyse de flexibilité, édition 2018 (formulation
-// en vigueur de 2010 à 2018 : indices de contraintes permanentes du §320, facteurs
-// de l'Appendix D, tableau D300). Les éditions 2020 et suivantes renvoient à
-// l'ASME B31J pour les facteurs : non repris.
+// ASME B31.3-2012 « Process Piping » (révision de l'ASME B31.3-2010) — analyse de
+// flexibilité. Module contrôlé sur le texte de cette édition : §302.3.5 (d),
+// §302.3.6, §304.1.2, §304.2.1, §319.2.2 (b)(4), §319.4.4, §320 et Appendix D
+// (tableau D300). Les éditions 2020 et suivantes, qui renvoient à l'ASME B31J
+// pour les facteurs, ne sont pas reprises.
 //
 //  Charges permanentes (§320.2, éq. 23a à 23d), épaisseur nominale diminuée des
 //  surépaisseurs c (corrosion) si l'option du projet est cochée :
@@ -18,14 +19,25 @@
 //      i_a = 1 pour les coudes, i_o pour les autres composants ; i_t = 1 ;
 //      S_A = f(1,25·S_c + 0,25·S_h)                       (1a)
 //      S_A = f[1,25·(S_c + S_h) − S_L] si (1a) non satisfaite et S_h > S_L  (1b)
-//      f = 6·N^−0,2, 0,15 ≤ f ≤ 1                         (1c)
-//  Module Z : π(D⁴ − d⁴)/(32D) ; tronçon réduit d'un té ou piquage réduit :
-//      Z_e = π·r₂²·T_s, T_s = min(T_h ; i_i·T_b)          (21)
+//      S_c et S_h plafonnés à 138 MPa dans S_A (§302.3.5 d) ;
+//      f = 6·N^−0,2, 0,15 ≤ f ≤ f_m                       (1c)
+//      (f_m = 1,0 retenu ; le code admet 1,2 pour les aciers à R_m ≤ 517 MPa
+//      jusqu'à 371 °C).
+//  Module Z : π(D⁴ − d⁴)/(32D) ; flexion du tronçon réduit d'un té ou piquage
+//      réduit (éq. 20) : Z_e = π·r₂²·T_s, T_s = min(T_h ; i_i·T_b) ; la torsion
+//      reste rapportée au module Z du tube.
+//  Module de référence (§319.2.2 b 4) : efforts calculés au module à chaud
+//      multipliés par E_a/E, élément par élément.
 //  Facteurs (Appendix D, tableau D300) : h = T·R₁/r₂² pour les coudes,
 //      k = 1,65/h, i_i = 0,9/h^(2/3), i_o = 0,75/h^(2/3) ;
 //      tés : i_o = 0,9/h^(2/3), i_i = 0,75·i_o + 0,25, k = 1, avec
-//      h = 3,1·T/r₂ (té forgé B16.9), (T + T_r/2)^2,5/(T^1,5·r₂) (renforcé,
-//      T_r ≤ 1,5·T), T/r₂ (non renforcé) ; soudure bout à bout, réduction : i = 1.
+//      h = 3,1·T/r₂ (té forgé B16.9), (T + T_r/2)^2,5/(T^1,5·r₂) (renforcé ;
+//      4·T/r₂ si T_r > 1,5·T, note 10), T/r₂ (non renforcé) ; soudure bout à
+//      bout, réduction : i = 1. Validité : D/T ≤ 100 (note 1).
+//  Non repris : brides aux extrémités des coudes (note 5), coudes à onglets,
+//      h = 4,4·T/r₂ des tés forgés à gorge épaisse (note 8), tés extrudés et
+//      piquages forgés, limite alternative des charges occasionnelles à haute
+//      température.
 //  Épaisseur minimale (§304.1.2, éq. 3a ; coudes §304.2.1, éq. 3c à 3e) :
 //      t = P·D/[2(S·E·W/I + P·Y)], Y = 0,4, E = W = 1.
 
@@ -40,6 +52,8 @@ export const DEFAULT_PARAMS = {
 };
 
 export const K_OCC = 1.33;
+/** Plafond de S_c et S_h dans l'admissible de l'étendue de déplacement (MPa). */
+export const S_CAP = 138;
 
 /** Facteur d'étendue de contrainte f = 6·N^−0,2, borné à [0,15 ; 1] (éq. 1c, f_m = 1,0). */
 export function rangeFactor(N) {
@@ -57,7 +71,8 @@ export function componentFactors({ kind, sec, bend, reducer, P = 0, Ec, params =
     const T = sec.t;
     const r = sec.rm;
     let h;
-    if (teeType === 'reinforced') h = (T + Math.min(pad, 1.5 * T) / 2) ** 2.5 / (T ** 1.5 * r);
+    // note 10 : renfort plus épais que 1,5·T → h = 4·T/r₂
+    if (teeType === 'reinforced') h = pad > 1.5 * T ? (4 * T) / r : (T + pad / 2) ** 2.5 / (T ** 1.5 * r);
     else if (teeType === 'unreinforced') h = T / r;
     else h = (3.1 * T) / r;
     const io = Math.max(1, 0.9 / h ** (2 / 3));
@@ -92,25 +107,29 @@ function sectionFor(sec, c) {
 function modulus(pt, sec) {
   const run = reducedBranch(pt);
   if (run) {
-    const Ts = Math.min(run.t, pt.fac.ii * sec.t);
+    // collecteur : même déduction de surépaisseur que le tronçon vérifié
+    const Th = run.t - (sec.c > 0 ? Math.min(pt.local.runCorrosion ?? 0, run.t / 2) : 0);
+    const Ts = Math.min(Th, pt.fac.ii * sec.t);
     const Z = Math.PI * sec.rm * sec.rm * Ts;
     return {
       Z,
+      Zt: sec.Z, // torsion : module du tube
       zItems: [
+        ['Module du tube Z = π(D⁴ − d⁴)/(32D) (torsion)', sec.Z, 'mm³'],
         ['Rayon moyen du piquage r₂', sec.rm, 'mm'],
         ['Épaisseur effective T_s = min(T_h ; i_i·T_b)', Ts, 'mm'],
         ['Module Z_e = π·r₂²·T_s (piquage réduit, éq. 21)', Z, 'mm³'],
       ],
     };
   }
-  return { Z: sec.Z, zItems: [['Module Z = π(D⁴ − d⁴)/(32D)', sec.Z, 'mm³']] };
+  return { Z: sec.Z, Zt: sec.Z, zItems: [['Module Z = π(D⁴ − d⁴)/(32D)', sec.Z, 'mm³']] };
 }
 
-/** Contrainte combinée √[(|Sa| + Sb)² + (2St)²] et ses termes. */
-function combined({ Fa, Mi, Mo, Mt, Ap, Z, ia, ii, io, it = 1 }) {
+/** Contrainte combinée √[(|Sa| + Sb)² + (2St)²] et ses termes (Z : flexion, Zt : torsion). */
+function combined({ Fa, Mi, Mo, Mt, Ap, Z, Zt = Z, ia, ii, io, it = 1 }) {
   const Sa = (ia * Math.abs(Fa)) / Ap;
   const Sb = Math.hypot(ii * Mi, io * Mo) / Z;
-  const St = (it * Math.abs(Mt)) / (2 * Z);
+  const St = (it * Math.abs(Mt)) / (2 * Zt);
   return { Sa, Sb, St, S: Math.hypot(Sa + Sb, 2 * St) };
 }
 
@@ -119,11 +138,11 @@ const MOMENT_TITLE = 'Moments à l’extrémité de l’élément (plan du coude
 
 export const b313 = {
   id: 'b31-3',
-  label: 'ASME B31.3 (2018) — Process Piping',
-  short: 'ASME B31.3',
-  reference: 'ASME B31.3-2018 — §302.3.5, §302.3.6, §319.4.4, §320.2 ; facteurs de l’Appendix D (tableau D300). Éditions 2020 et suivantes (facteurs ASME B31J) non reprises.',
+  label: 'ASME B31.3-2012 — Process Piping',
+  short: 'ASME B31.3-2012',
+  reference: 'ASME B31.3-2012 (révision de l’édition 2010) — §302.3.5, §302.3.6, §319.4.4, §320 ; facteurs de l’Appendix D (tableau D300). Éditions 2020 et suivantes (facteurs ASME B31J) non reprises.',
   defaults: DEFAULT_PARAMS,
-  materialHelp: 'Colonne S : contrainte admissible de base du B31.3 (tableau A-1 / A-1M de l’édition applicable) ; les valeurs par défaut de la bibliothèque sont indicatives et établies pour le RCC-M.',
+  materialHelp: 'Colonne S : contrainte admissible de base du B31.3 (tableau A-1 de l’édition 2012) ; les valeurs par défaut de la bibliothèque sont indicatives et établies pour le RCC-M.',
   params: [
     { key: 'cycles', label: 'Nombre de cycles équivalents N', type: 'number', title: 'f = 6·N^−0,2, borné entre 0,15 et 1,0 (éq. 1c)' },
     { key: 'pressureCorrection', label: 'Correction de pression sur k et i des coudes', type: 'checkbox', title: 'Appendix D, note 7 : coudes de grand diamètre et faible épaisseur' },
@@ -141,9 +160,10 @@ export const b313 = {
     { ref: '§302.3.6', name: 'Charges occasionnelles : séisme', formula: 'S_L + S_occ ≤ 1,33·S_h ; S_occ calculée comme S_L avec les efforts du séisme' },
   ],
   help: [
-    'Module Z = π(D⁴ − d⁴)/(32D) ; tronçon réduit d’un té ou piquage réduit : Z_e = π·r₂²·T_s, T_s = min(T_h ; i_i·T_b). M_i, M_o : flexions dans le plan et hors plan du coude ou du té ; F_a : effort normal (charges permanentes : effet de fond P·A_f compris).',
-    'Coudes : h = T·R₁/r₂², k = 1,65/h, i_i = 0,9/h^⅔, i_o = 0,75/h^⅔ (≥ 1). Tés : i_o = 0,9/h^⅔, i_i = 0,75·i_o + 0,25, avec h = 3,1T/r₂ (forgé B16.9), (T + T_r/2)^2,5/(T^1,5·r₂) (renforcé), T/r₂ (non renforcé). Réductions et soudures bout à bout : i = 1,0.',
-    'S_L est calculée avec l’épaisseur diminuée de la surépaisseur de corrosion si l’option « tolérance et corrosion » du projet est cochée ; S_E avec les dimensions nominales et le module à froid.',
+    'Module Z = π(D⁴ − d⁴)/(32D) ; flexion du tronçon réduit d’un té ou piquage réduit : Z_e = π·r₂²·T_s, T_s = min(T_h ; i_i·T_b) (torsion rapportée au module du tube). M_i, M_o : flexions dans le plan et hors plan du coude ou du té ; F_a : effort normal (charges permanentes : effet de fond P·A_f compris).',
+    'Coudes : h = T·R₁/r₂², k = 1,65/h, i_i = 0,9/h^⅔, i_o = 0,75/h^⅔ (≥ 1). Tés : i_o = 0,9/h^⅔, i_i = 0,75·i_o + 0,25, avec h = 3,1T/r₂ (forgé B16.9), (T + T_r/2)^2,5/(T^1,5·r₂) (renforcé ; 4T/r₂ si T_r > 1,5T), T/r₂ (non renforcé). Réductions et soudures bout à bout : i = 1,0. Facteurs valables pour D/T ≤ 100.',
+    'S_L est calculée avec l’épaisseur diminuée de la surépaisseur de corrosion si l’option « tolérance et corrosion » du projet est cochée ; S_E avec les dimensions nominales et le module de référence à 21 °C (efforts calculés à chaud multipliés par E_a/E). Dans S_A, S_c et S_h sont plafonnés à 138 MPa ; f = 6·N^−0,2 borné entre 0,15 et 1,0 (le plafond 1,2 admis pour certains aciers n’est pas utilisé).',
+    'Non repris : brides aux extrémités des coudes, coudes à onglets, tés extrudés et piquages forgés, limite alternative des charges occasionnelles à haute température.',
   ],
 
   thickness: {
@@ -199,6 +219,7 @@ export const b313 = {
     const notes = [`Facteur d’étendue de contrainte f = ${f.toFixed(3)} (N = ${+params.cycles || 7000} cycles).`];
     if (!weight.length) notes.push('Aucun cas de poids propre actif : efforts permanents réduits à la pression.');
 
+    let thin = 0; // points hors du domaine D/T ≤ 100 du tableau D300 (note 1)
     mesh.elements.forEach((e, ie) => {
       if (e.kind === 'valve') return;
       const atD = materialAt(e.mat, e.Td);
@@ -217,6 +238,7 @@ export const b313 = {
         // i_a : 1 pour les coudes, i_o pour les autres composants
         const ia = e.kind === 'bend' && !pt.atTee ? 1 : io;
         const nomSec = pt.sec;
+        if (nomSec.od / nomSec.t > 100) thin++;
         const susSec = sectionFor(nomSec, useC ? +(e.secDef.corrosion || 0) : 0);
         const nom = modulus(pt, nomSec);
         const sus = modulus(pt, susSec);
@@ -237,7 +259,7 @@ export const b313 = {
           const Fa = Fw * (end === 0 ? -1 : 1) + P * susSec.Ai; // traction positive
           return {
             Fa,
-            ...combined({ Fa, Mi: sum((c) => planeBending(c, ie, end)[0]), Mo: sum((c) => planeBending(c, ie, end)[1]), Mt: sum((c) => torsion(c.elemForces, ie, end)), Ap: susSec.A, Z: sus.Z, ia: 1, ii: Ii, io: Io }),
+            ...combined({ Fa, Mi: sum((c) => planeBending(c, ie, end)[0]), Mo: sum((c) => planeBending(c, ie, end)[1]), Mt: sum((c) => torsion(c.elemForces, ie, end)), Ap: susSec.A, Z: sus.Z, Zt: sus.Zt, ia: 1, ii: Ii, io: Io }),
           };
         };
         const susItems = (s, P) => [
@@ -265,11 +287,14 @@ export const b313 = {
           },
         });
         // étendue de dilatation
-        const SA = f * (1.25 * atC.S + 0.25 * atH.S);
+        // S_c et S_h plafonnés à 138 MPa (20 ksi) dans l'admissible de l'étendue (§302.3.5 d)
+        const Sc = Math.min(atC.S, S_CAP);
+        const ShA = Math.min(atH.S, S_CAP);
+        const SA = f * (1.25 * Sc + 0.25 * ShA);
         for (const tc of thermal) {
           const kE = ecOverEh(tc, e);
           const [Mi, Mo] = planeBending(tc, ie, end);
-          const se = combined({ Fa: kE * axialForce(tc.elemForces, ie, end), Mi: kE * Mi, Mo: kE * Mo, Mt: kE * torsion(tc.elemForces, ie, end), Ap: nomSec.A, Z: nom.Z, ia, ii, io });
+          const se = combined({ Fa: kE * axialForce(tc.elemForces, ie, end), Mi: kE * Mi, Mo: kE * Mo, Mt: kE * torsion(tc.elemForces, ie, end), Ap: nomSec.A, Z: nom.Z, Zt: nom.Zt, ia, ii, io });
           const items = [
             ...secItems({ ...nomSec, c: 0 }),
             ...nom.zItems,
@@ -281,16 +306,17 @@ export const b313 = {
             ['S_t = M_t/(2Z)', se.St, 'MPa'],
           ];
           const moments = [planeMomentRow(`Dilatation — ${tc.id}${kE !== 1 ? ' (× Ec/Eh)' : ''}`, tc, ie, end, kE)];
-          const saItems = [['Facteur f', f, ''], ['S_c (à T_réf)', atC.S, 'MPa'], ['S_h (à T)', atH.S, 'MPa']];
+          const cap = (v) => (v > S_CAP ? ' — plafonné à 138 MPa' : '');
+          const saItems = [['Facteur f', f, ''], [`S_c (à T_réf)${cap(atC.S)}`, Sc, 'MPa'], [`S_h (à T)${cap(atH.S)}`, ShA, 'MPa']];
           rows.push({
             ...base, eq: 'SE', order: 2, eqLabel: 'S_E étendue de dilatation (17)', case: tc.id, stress: se.S, allow: SA, ratio: se.S / SA,
-            detail: { i: fac.i, ii, io, Z: nom.Z, SA, f, Sc: atC.S, Sh: atH.S, kE },
+            detail: { i: fac.i, ii, io, Z: nom.Z, SA, f, Sc, Sh: ShA, kE },
             calc: { formula: 'S_E = √[(|S_a| + S_b)² + (2S_t)²] ≤ S_A = f(1,25 S_c + 0,25 S_h)', items, moments, momentCols: MOMENT_COLS, momentTitle: MOMENT_TITLE, allow: [...saItems, ['S_A (1a)', SA, 'MPa']] },
           });
           // admissible étendu (1b) : seulement où (1a) n'est pas satisfaite et S_h > S_L
           const slT = sustained(e.P1);
           if (se.S > SA && atH.S > slT.S) {
-            const SAb = f * (1.25 * (atC.S + atH.S) - slT.S);
+            const SAb = f * (1.25 * (Sc + ShA) - slT.S);
             rows.push({
               ...base, eq: 'SE1b', order: 3, eqLabel: 'S_E avec admissible étendu (1b)', case: `${wId ? `${wId}+P+` : 'P+'}${tc.id}`, thermalCase: tc.id, stress: se.S, allow: SAb, ratio: se.S / SAb,
               detail: { i: fac.i, ii, io, Z: nom.Z, SA: SAb, f, kE },
@@ -306,7 +332,7 @@ export const b313 = {
         for (const sc of seismic) {
           const [Mi, Mo] = planeBending(sc, ie, end);
           const slO = sustained(e.P1);
-          const occ = combined({ Fa: axialForce(sc.elemForces, ie, end), Mi, Mo, Mt: torsion(sc.elemForces, ie, end), Ap: susSec.A, Z: sus.Z, ia: 1, ii: Ii, io: Io });
+          const occ = combined({ Fa: axialForce(sc.elemForces, ie, end), Mi, Mo, Mt: torsion(sc.elemForces, ie, end), Ap: susSec.A, Z: sus.Z, Zt: sus.Zt, ia: 1, ii: Ii, io: Io });
           const s = slO.S + occ.S;
           const allow = K_OCC * Sh;
           rows.push({
@@ -342,7 +368,9 @@ export const b313 = {
     notes.push('Flexions séparées dans le plan et hors plan des coudes et des tés ; séisme : projection faite mode par mode avant les combinaisons.');
     notes.push('Admissible étendu (1b) évalué seulement aux points où (1a) n’est pas satisfaite.');
     notes.push('Colonne S des matériaux : contrainte admissible de base du B31.3 (tableau A-1), à saisir pour l’édition applicable.');
-    return { rows, summary: summarize(rows), notes, f };
+    const warnings = thin ? [`ASME B31.3 : ${thin} point(s) avec D/T > 100, hors du domaine de validité des facteurs du tableau D300 (note 1).`] : [];
+    if (thin) notes.push(warnings[0]);
+    return { rows, summary: summarize(rows), notes, warnings, f };
   },
 
   combinations({ model }) {

@@ -58,8 +58,9 @@ test('B31.3 : facteurs du tableau D300 (coude, tés)', () => {
   near(t.io, 0.9 / ht ** (2 / 3), 1e-12, 'té forgé i_o');
   near(t.ii, 0.75 * t.io + 0.25, 1e-12, 'té forgé i_i');
   near(b313Factors({ kind: 'tee', sec, teeType: 'unreinforced' }).io, 0.9 / (sec.t / sec.rm) ** (2 / 3), 1e-12, 'té non renforcé');
-  // plaque de renfort comptée jusqu'à 1,5 T
-  assert.equal(b313Factors({ kind: 'tee', sec, teeType: 'reinforced', pad: 30 }).io, b313Factors({ kind: 'tee', sec, teeType: 'reinforced', pad: 1.5 * sec.t }).io);
+  // té renforcé : h = (T + T_r/2)^2,5/(T^1,5·r₂) ; note 10 : h = 4T/r₂ si T_r > 1,5T
+  near(b313Factors({ kind: 'tee', sec, teeType: 'reinforced', pad: 8 }).h, (sec.t + 4) ** 2.5 / (sec.t ** 1.5 * sec.rm), 1e-12, 'té renforcé');
+  near(b313Factors({ kind: 'tee', sec, teeType: 'reinforced', pad: 30 }).h, (4 * sec.t) / sec.rm, 1e-12, 'note 10');
   // réduction : i = 1,0
   assert.equal(b313Factors({ kind: 'reducer', sec, reducer: { i: 1.7 } }).i, 1);
   near(rangeFactor(7000), 1, 1e-12, 'f(7000)');
@@ -145,6 +146,36 @@ test('B31.3 : séisme, projection plan / hors plan faite avant les combinaisons'
     const sl = r.check.rows.find((y) => y.eq === 'SL' && y.ie === x.ie && y.end === x.end);
     assert.ok(x.stress >= sl.stress - 1e-9);
   }
+});
+
+test('B31.3-2012 : édition, plafond de 138 MPa dans S_A, domaine D/T ≤ 100, torsion d’un piquage réduit', () => {
+  assert.match(b313.label, /2012/);
+  assert.match(b313.reference, /B31\.3-2012/);
+  // S_c = 160, S_h = 150 saisis : S_A = f(1,25·138 + 0,25·138), S_h du critère permanent non plafonné
+  const m = setup('b31-3', { S: 150 });
+  m.materials[0].table[0].S = 160;
+  m.loadCases.push({ id: 'T1', type: 'thermal', label: 'Dilatation', enabled: true, imposed: true });
+  m.components.push(pipe('10', '20', 3000, 0, 0, { T1: 400 }), pipe('20', '30', 0, 3000, 0, { T1: 400 }), { type: 'bend', node: '20', radiusType: 'LR', radius: '', t: '', divisions: '' }, sup('10', 'anchor'), sup('30', 'anchor'));
+  const r = run(m);
+  near(r.check.summary.governing.find((g) => g.eq === 'SE').allow, 1.25 * 138 + 0.25 * 138, 1e-12, 'S_A plafonné');
+  assert.equal(r.check.summary.governing.find((g) => g.eq === 'SL').allow, 150);
+  assert.ok(!r.warnings.some((w) => w.includes('D/T')));
+  // tube mince : D/T > 100 signalé
+  const thin = setup('b31-3');
+  thin.sections[0].t = 1.5;
+  thin.components.push(pipe('10', '20', 2000, 0, 0), sup('10', 'anchor'));
+  assert.ok(run(thin).warnings.some((w) => w.includes('D/T > 100')));
+  // piquage réduit : flexion sur Z_e, torsion sur le module du tube
+  const b = fullBenchmark();
+  b.code = { id: 'b31-3', params: {} };
+  const rb = run(b);
+  const row = rb.check.rows.find((x) => x.eq === 'SE' && x.kind === 'tee' && x.calc.items.some((i) => String(i[0]).startsWith('Module Z_e')));
+  const val = (label) => row.calc.items.find((i) => String(i[0]).startsWith(label))[1];
+  const tc = rb.cases.find((c) => c.id === row.case);
+  const o = row.ie * 12 + (row.end === 0 ? 3 : 9);
+  const kE = row.detail.kE;
+  near(val('S_t'), (kE * Math.abs(tc.elemForces[o])) / (2 * val('Module du tube')), 1e-9, 'S_t = M_t/(2Z) avec Z du tube');
+  assert.ok(Math.abs(val('Module Z_e') - val('Module du tube')) > 1, 'Z_e distinct de Z');
 });
 
 test('B31.3 : étendue de dilatation, admissible (1a) puis (1b)', () => {
