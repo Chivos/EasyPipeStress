@@ -20,20 +20,28 @@ faire), **évolution** (travail non commencé).
   avertissement signale déjà une coupure placée dans la zone amplifiée du
   spectre.
 
-### 2. Module d'élasticité pour le poids, le modal et le séisme — à vérifier
+### 2. Module d'élasticité : modal et séisme — à vérifier
 
-- **Aujourd'hui** : module à froid, sans option. Seule la dilatation dispose de
-  l'option du projet « module à chaud » (activée par défaut).
+Le module à chaud est traité chargement par chargement. Seuls le modal et le
+séisme restent ouverts.
+
+| Chargement | Module utilisé | État |
+|---|---|---|
+| Dilatation thermique | à chaud par défaut, option du projet pour revenir à froid ; contraintes ramenées à l'équivalent froid selon le code | **réglé** (PR #43) |
+| Poids propre | à froid | sans enjeu : les efforts du poids dépendent très peu du module |
+| Analyse modale, séisme | à froid, sans option | **ouvert** |
+
 - **Question** : ajouter une option « module à chaud pour le modal et le
   séisme » ?
-- **Enjeu** : à 300 °C, les fréquences réelles sont environ 5 % plus basses
+- **Enjeu** : il porte sur les fréquences propres, pas sur les contraintes de
+  dilatation. À 300 °C elles sont environ 5 % plus basses au module à chaud
   (½·(1 − E_h/E_c)), ce qui déplace les modes sur le spectre.
 - **À faire avant de décider** : vérifier le réglage du modèle de comparaison
-  PIPESTRESS (présumé au module à chaud, à confirmer).
+  PIPESTRESS pour le modal (présumé au module à chaud, à confirmer).
 - **Indice** : sur le cas test collecteur DN200 (300 °C, E_h/E_c = 0,906), les
   modes 1 à 9 concordent à moins de 1 % avec le calcul de comparaison alors que
-  l'application calcule à froid. Un modal de référence au module à chaud
-  donnerait des fréquences environ 5 % plus basses : soit ce modal était à
+  l'application calcule le modal à froid. Un modal de référence au module à
+  chaud donnerait des fréquences environ 5 % plus basses : soit ce modal était à
   froid, soit un autre écart compense.
 - **Proposition** : option du projet décochée par défaut, pour ne pas modifier
   les cas validés.
