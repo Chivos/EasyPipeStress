@@ -224,7 +224,13 @@ test('EN 13480-3 : f_a avec E_h/E_c, taux indépendant du module de calcul', () 
   const hb = (4 * 228.6 * 7.11) / dm ** 2;
   near(bend.k, 1.65 / hb, 1e-12, 'k_B');
   near(bend.i, 0.9 / hb ** (2 / 3), 1e-12, 'i coude');
-  assert.deepEqual(en13480.componentFactors({ kind: 'tee', sec, teeType: 'welding' }), rccmFactors({ kind: 'tee', sec, teeType: 'welding' }));
+  assert.equal(en13480.componentFactors({ kind: 'tee', sec, teeType: 'welding' }).i, rccmFactors({ kind: 'tee', sec, teeType: 'welding' }).i);
+  // tableau H.3 : coude i_o = 0,75/h^(2/3), i_i = i ; tés i_o = i, i_i = 0,75·i_o + 0,25
+  near(bend.io, 0.75 / hb ** (2 / 3), 1e-12, 'i_o coude');
+  assert.equal(bend.ii, bend.i);
+  const teeF = en13480.componentFactors({ kind: 'tee', sec, teeType: 'welding' });
+  assert.equal(teeF.io, teeF.i);
+  near(teeF.ii, 0.75 * teeF.io + 0.25, 1e-12, 'i_i té');
   near(en13480.componentFactors({ kind: 'tee', sec, teeType: 'welding' }).h, (8.8 * 7.11) / dm, 1e-12, 'té forgé');
   near(en13480.componentFactors({ kind: 'tee', sec, teeType: 'unreinforced' }).h, (2 * 7.11) / dm, 1e-12, 'tubulure posée');
   // ligne 7 : anneau de renfort compté jusqu'à e_pl = e_n (1,5·e au RCC-M)
@@ -236,6 +242,59 @@ test('EN 13480-3 : f_a avec E_h/E_c, taux indépendant du module de calcul', () 
   const pc = en13480.componentFactors({ kind: 'bend', sec, bend: { radius: 228.6 }, P: 5, Ec: 200000, params: { pressureCorrection: true } });
   near(pc.i, bend.i / (1 + 3.25 * (5 / 200000) * (dm / (2 * 7.11)) ** 2.5 * ((2 * 228.6) / dm) ** (2 / 3)), 1e-12, 'i corrigé');
   near(pc.k, bend.k / (1 + 6 * (5 / 200000) * (dm / (2 * 7.11)) ** (7 / 3) * ((2 * 228.6) / dm) ** (1 / 3)), 1e-12, 'k_B corrigé');
+});
+
+test('EN 13480-3 : f_h = min(f_c ; f), corrosion (§12.3.1) et autre méthode (§12.3.8)', () => {
+  // f_h plafonnée par f_c (12.1.3-3) : admissible à chaud saisi supérieur à celui à froid
+  const m = setup('en13480-3');
+  m.materials[0].table = [{ T: 20, E: 200000, alpha: 12, S: 100, Sy: 200 }, { T: 300, E: 200000, alpha: 13, S: 130, Sy: 150 }];
+  m.loadCases.push({ id: 'T1', type: 'thermal', label: 'Dilatation', enabled: true, imposed: true });
+  m.components.push(pipe('10', '20', 3000, 0, 0, { T1: 300 }), pipe('20', '30', 0, 3000, 0, { T1: 300 }), { type: 'bend', node: '20', radiusType: 'LR', radius: '', t: '', divisions: '' }, sup('10', 'anchor'), sup('30', 'anchor'));
+  near(run(m).check.summary.governing.find((g) => g.eq === 's3').allow, 1.25 * 100 + 0.25 * 100, 1e-9, 'f_a avec f_h = f_c');
+
+  // corrosion : contraintes et coefficient i avec e_n − c₀, poids en épaisseur nominale
+  const build = (allowances) => {
+    const c = setup('en13480-3');
+    c.sections[0].corrosion = 1;
+    c.settings.allowances = allowances;
+    c.components.push(pipe('10', '20', 2000, 0, 0, { P1: 2 }), pipe('20', '30', 0, 0, -2000, { P1: 2 }), { type: 'bend', node: '20', radiusType: 'LR', radius: '', t: '', divisions: '' }, sup('10', 'anchor'));
+    return run(c);
+  };
+  const [nom, cor] = [build(false), build(true)];
+  const sc = pipeSection({ od: 168.3, t: 6.11 });
+  const at = (r, node) => rowAt(r, 's1', node);
+  near(at(cor, '10').stress - (2 * 168.3) / (4 * 6.11), ((at(nom, '10').stress - (2 * 168.3) / (4 * 7.11)) * pipeSection({ od: 168.3, t: 7.11 }).Z) / sc.Z, 1e-9, 'tube droit : Z corrodé');
+  const iNom = nom.check.rows.find((x) => x.eq === 's1' && x.kind === 'bend').detail.i;
+  const iCor = cor.check.rows.find((x) => x.eq === 's1' && x.kind === 'bend').detail.i;
+  const Rc = cor.mesh.elements.find((e) => e.kind === 'bend').bend.radius;
+  near(iCor, 0.9 / ((4 * Rc * 6.11) / (168.3 - 6.11) ** 2) ** (2 / 3), 1e-9, 'i du coude avec e_n − c₀');
+  assert.ok(iCor > iNom);
+  // même flexibilité (épaisseur nominale) : mêmes efforts dans les deux calculs
+  assert.deepEqual(Array.from(cor.cases[0].elemForces), Array.from(nom.cases[0].elemForces));
+
+  // autre méthode (12.3.8-1) : σ = √[(i_i·M_i)² + (i_o·M_o)² + M_t²]/Z
+  const alt = (method) => {
+    const a = setup('en13480-3');
+    a.code.params = { method };
+    a.components.push(pipe('10', '20', 2000, 0, 0), pipe('20', '30', 0, 2000, 0), { type: 'bend', node: '20', radiusType: 'LR', radius: '', t: '', divisions: '' }, sup('10', 'anchor'));
+    return run(a);
+  };
+  const [g, a] = [alt('general'), alt('alternative')];
+  const sec = pipeSection({ od: 168.3, t: 7.11 });
+  const wc = a.cases.find((c) => c.id === 'W');
+  near(rowAt(a, 's1', '10').stress, rowAt(g, 's1', '10').stress, 1e-9, 'tube droit : méthodes identiques');
+  let n = 0;
+  a.mesh.elements.forEach((e, ie) => {
+    if (e.kind !== 'bend') return;
+    for (const end of [0, 1]) {
+      const o = ie * 12 + (end === 0 ? 3 : 9);
+      const [Mi, Mo] = [wc.elemPlane[ie * 4 + end * 2], wc.elemPlane[ie * 4 + end * 2 + 1]];
+      const exp = Math.hypot(Math.max(1, 0.75 * e.factors.ii) * Mi, Math.max(1, 0.75 * e.factors.io) * Mo, wc.elemForces[o]) / sec.Z;
+      near(a.check.rows.find((x) => x.eq === 's1' && x.ie === ie && x.end === end).stress, exp, 1e-9, 'σ₁ (12.3.8-1)');
+      n++;
+    }
+  });
+  assert.ok(n > 4);
 });
 
 test('EN 13480-3 : coefficients k par niveau sismique et équation σ₄', () => {
