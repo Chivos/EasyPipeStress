@@ -50,6 +50,14 @@ séisme restent ouverts.
 
 Non traités (pas de déplacements imposés sismiques, pas de spectres multiples).
 
+### 3 bis. Analyse sismique temporelle — évolution
+
+L'application ne fait que de l'analyse spectrale et du statique équivalent. Le
+traitement rigoureux des jeux sous séisme demande une analyse temporelle
+linéaire par morceaux (méthode ADAMOS de PIPESTRESS : modes réévalués à chaque
+choc ou relâchement), avec des accélérogrammes en donnée d'entrée. Non prévue
+dans le découpage du solveur non linéaire (point 12).
+
 ## Codes de vérification
 
 ### 4. CODETI : module d'élasticité de l'étendue M_C — à décider
@@ -115,7 +123,11 @@ sont utilisées telles quelles. Pistes : une colonne par code, ou un calcul de f
 Second solveur, expérimental et au choix dans le projet ; le solveur linéaire
 reste le défaut. Principes consignés au § 7 de [THEORIE.md](THEORIE.md).
 
-- **Décidé** : séisme linéarisé autour de l'état de service, contacts figés.
+- **Décidé** : séisme calculé en linéaire sur une configuration figée ; appuis
+  unilatéraux figés dans l'état de service.
+- **À décider** (avant le lot C) : traitement des jeux en analyse spectrale —
+  jeu fermé (hypothèse actuelle, celle de PIPESTRESS hors analyse temporelle),
+  état figé, ou enveloppe des deux calculs (proposition).
 - **Proposé, à valider** : étendue de dilatation par différence entre l'état
   chaud et l'état froid ; part du poids par calcul à contacts figés pour chaque
   état (ASME B31.3, annexe S, exemple 2), et non par soustraction « service

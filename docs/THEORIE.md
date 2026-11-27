@@ -676,13 +676,37 @@ M_A est vérifié pour chaque configuration, la plus défavorable gouvernant. Da
 l'exemple de l'annexe S, la condition « appui retiré » est celle qui gouverne et
 elle n'est pas satisfaite, alors que le calcul appui en place l'était.
 
-### 7.4 Séisme : linéarisé autour de l'état de service
+### 7.4 Séisme : calcul linéaire sur une configuration figée
 
-L'analyse modale et spectrale est linéaire par nature. Elle est faite sur la
-structure à contacts figés dans l'état de service retenu (même principe qu'au
-§ 7.3) : un appui en contact reste bilatéral, un appui décollé ou un jeu ouvert
-reste libre. Les constats après calcul sont conservés : un appui dont l'effort
+L'analyse modale et spectrale est linéaire par nature : elle est faite sur une
+structure dont l'état des contacts est fixé à l'avance.
+
+**Appuis unilatéraux** (tuyauterie posée) : figés dans l'état de service retenu,
+même principe qu'au § 7.3. Un appui en contact reste bilatéral, un appui décollé
+reste libre. Le constat après calcul est conservé : un appui dont l'effort
 sismique dépasse la charge portée est signalé.
+
+**Jeux** : un jeu ne peut pas être traité exactement par une analyse spectrale,
+car le support s'engage et se libère au cours du mouvement. Le logiciel de
+comparaison (PIPESTRESS) ne traite les jeux en dynamique que par une analyse
+temporelle linéaire par morceaux (« adaptive modal summation », ADAMOS) : les
+modes et les amplitudes modales sont réévalués à chaque choc ou relâchement, sous
+un chargement donné en fonction du temps. Hors de cette méthode, un support à jeu
+y est assimilé à un support linéaire, avec sa raideur.
+
+C'est déjà l'hypothèse du solveur linéaire de l'application (§ 1.6) : la
+direction à jeu est libre en statique et bloquée en modal et en séisme. Pour le
+solveur non linéaire, trois conventions sont possibles en analyse spectrale :
+
+| Convention | Jeu ouvert dans l'état de service | Remarque |
+|---|---|---|
+| Jeu fermé | support actif, avec sa raideur | hypothèse actuelle, celle du logiciel de comparaison ; compte un support qui peut ne jamais s'engager |
+| État figé | support libre | ignore un support que le séisme engagerait |
+| Enveloppe | deux calculs, jeu libre puis jeu fermé, résultats enveloppés | le calcul « jeu libre » dit si le déplacement sismique atteint le jeu restant ; sinon lui seul est retenu |
+
+La convention est à arrêter avant le lot correspondant ; l'enveloppe est la
+proposition. Aucune des trois n'est rigoureuse : le traitement exact relève de
+l'analyse temporelle, que l'application ne fait pas.
 
 ### 7.5 Fiabilité
 
