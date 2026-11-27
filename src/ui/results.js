@@ -1,6 +1,7 @@
 // Restitution des résultats : synthèse, tableaux détaillés et données de
 // coloration de la vue 3D.
 
+import { eqName, coveredText } from '../codes/common.js';
 import { h } from './dom.js';
 import { fmt } from '../core/units.js';
 import { combineSigned } from '../analysis.js';
@@ -230,7 +231,7 @@ export function renderResultsPanel(app) {
         'section',
         { class: 'card' },
         h('h3', {}, `Dépouillement — ${r.code.label}`),
-        h('div', { class: `verdict ${s.ok ? 'ok' : 'ko'}` }, s.ok ? '✔ Critères satisfaits' : '✘ Critère(s) non satisfait(s)', h('small', {}, ` — taux maximal ${fmt(s.maxRatio, 2)}${s.covered ? ` (éq. (7) dépassée en ${s.covered} point(s), où l’éq. (8) est satisfaite)` : ''}`)),
+        h('div', { class: `verdict ${s.ok ? 'ok' : 'ko'}` }, s.ok ? '✔ Critères satisfaits' : '✘ Critère(s) non satisfait(s)', h('small', {}, ` — taux maximal ${fmt(s.maxRatio, 2)}${s.covered ? ` (${coveredText(r.code, s)})` : ''}`)),
         h(
           'table',
           { class: 'grid compact' },
@@ -463,7 +464,7 @@ function codeTable(app, r, nodeOk, internalChk) {
     h(
       'div',
       { class: 'toolbar' },
-      h('select', { onchange: (e) => app.setUi(() => (f.eq = e.target.value)) }, eqs.map((q) => h('option', { value: q, selected: q === f.eq }, q === 'e' ? 'Épaisseur' : `Éq. (${q})`))),
+      h('select', { onchange: (e) => app.setUi(() => (f.eq = e.target.value)) }, eqs.map((q) => h('option', { value: q, selected: q === f.eq }, eqName(r.code, q)))),
       internalChk,
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: f.sort, onchange: (e) => app.setUi(() => (f.sort = e.target.checked)) }), ' trier par taux'),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: f.failOnly, onchange: (e) => app.setUi(() => (f.failOnly = e.target.checked)) }), ' non conformes seulement'),
@@ -491,7 +492,8 @@ const rowHighlight = (x) => ({ elems: x.ie != null ? [x.ie] : [], node: x.node }
 function detailText(x) {
   const d = x.detail ?? {};
   const parts = [];
-  if (d.i !== undefined) parts.push(`i ${fmt(d.i, 3)}`);
+  if (d.ii !== undefined && d.io !== undefined) parts.push(`i_i ${fmt(d.ii, 3)} · i_o ${fmt(d.io, 3)}`);
+  else if (d.i !== undefined) parts.push(`i ${fmt(d.i, 3)}`);
   if (d.i75 !== undefined) parts.push(`0,75i ${fmt(d.i75, 3)}`);
   if (d.factor !== undefined && d.factor !== 1) parts.push(`séisme × ${fmt(d.factor, 2)}`);
   if (d.MA !== undefined) parts.push(`MA ${fmt(d.MA / 1000, 0)} N·m`);
@@ -523,11 +525,11 @@ export function openRowDetail(row) {
       c?.items ? [h('h4', {}, 'Données et termes du calcul'), kv(c.items)] : null,
       c?.moments?.length
         ? [
-            h('h4', {}, 'Moments à l’extrémité de l’élément (repère local, N·m)'),
+            h('h4', {}, c.momentTitle ?? 'Moments à l’extrémité de l’élément (repère local, N·m)'),
             h(
               'table',
               { class: 'grid compact' },
-              h('thead', {}, h('tr', {}, th('Cas'), th('Mt (torsion)', true), th('Mf,y', true), th('Mf,z', true), th('Résultant', true))),
+              h('thead', {}, h('tr', {}, th('Cas'), ...(c.momentCols ?? ['Mt (torsion)', 'Mf,y', 'Mf,z', 'Résultant']).map((t) => th(t, true)))),
               h('tbody', {}, c.moments.map((mo) => h('tr', {}, h('td', {}, mo.name), [mo.mt, mo.my, mo.mz, mo.res].map((v) => h('td', { class: 'num' }, fmt(v, 1)))))),
             ),
             c.moments.some((mo) => !mo.signed) ? h('p', { class: 'help' }, 'Séisme : composantes enveloppes (non signées) après combinaisons modale et directionnelle ; résultant calculé sur ces composantes.') : null,
@@ -539,7 +541,7 @@ export function openRowDetail(row) {
         'div',
         { class: `verdict ${ok ? 'ok' : 'ko'}` },
         `${row.unit === 'mm' ? 'eₘ' : 'σ'} = ${fmt(row.stress, 2)} ${row.unit ?? 'MPa'} ; admissible ${fmt(row.allow, 2)} ${row.unit ?? 'MPa'} ; taux ${fmt(row.ratio, 3)}`,
-        row.coveredBy ? ` — éq. (${row.coveredBy}) satisfaite en ce point` : '',
+        row.coveredBy ? ` — ${row.coveredName ?? `éq. (${row.coveredBy})`} satisfaite en ce point` : '',
       ),
     ],
     { label: 'Détail du calcul' },

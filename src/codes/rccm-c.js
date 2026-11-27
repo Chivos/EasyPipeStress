@@ -128,8 +128,25 @@ export function levelLimits(level) {
 export const rccmC = {
   id: 'rccm-c',
   label: 'RCC-M classe 2 (C 3650) — tuyauteries',
+  short: 'RCC-M C 3650',
   reference: 'RCC-M Section I sous-section C, §C 3650 — équations (6), (7), (8), (10)',
   defaults: DEFAULT_PARAMS,
+  materialHelp: 'Valeurs par défaut indicatives : à remplacer par celles de l’Annexe Z I de l’édition du RCC-M applicable.',
+  /** Niveaux de critère sismique : éq. (10) par niveau, coefficient k fixé par le code. */
+  levels: { B: { label: '10B', k: LEVEL_K.B }, C: { label: '10C', k: LEVEL_K.C }, D: { label: '10D', k: LEVEL_K.D } },
+  levelsTitle: 'Niveaux de critère vérifiés (éq. 10)',
+  levelsHelp: 'Les admissibles par niveau sont fixés par le code (onglet Code).',
+  /** Équations affichées dans l'onglet Code. */
+  equations: [
+    { ref: '(6)', name: 'Poids propre + pression', formula: 'S_L = P·Dₑ/(4eₙ) + 0,75i·M_A/Z ≤ 1,0·S_h   (0,75i ≥ 1)' },
+    { ref: '(7)', name: 'Dilatation thermique', formula: 'S_E = i·M_C/Z ≤ S_A = f(1,25 S_c + 0,25 S_h)' },
+    { ref: '(8)', name: '(6) + (7), si (7) non satisfaite', formula: 'P·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ S_h + S_A' },
+    { ref: '(10B) (10C) (10D)', name: 'Séisme, par niveau de critère', formula: 'P·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ k·S_h  (B : 1,2 — C : 1,8 — D : 2,4) ; M_B = séisme × coefficient du niveau' },
+  ],
+  help: [
+    'Module Z (C 3658) : π·r²·eₙ (r rayon moyen) ; tronçon réduit d’un té ou piquage réduit : π·r′ₘ²·tₛ, tₛ = min(Tᵣ, i·T_b). Moments résultants √(Mx² + My² + Mz²) à la jonction, branche par branche.',
+    'Coudes : h = eₙR/r², k = 1,65/h, i = 0,9/h^⅔ (≥ 1). Tés : i = 0,9/h^⅔ ≥ 1 avec h = 4,4eₙ/r (forgé), (eₙ + e_r/2)^(5/2)/(eₙ^(3/2)·r) (fabrication renforcé), eₙ/r (non renforcé).',
+  ],
   params: [
     { key: 'cycles', label: 'Nombre de cycles thermiques équivalents N', type: 'number', title: 'Détermine le facteur de réduction f de SA' },
     { key: 'pressureCorrection', label: 'Correction de pression sur k et i des coudes', type: 'checkbox' },

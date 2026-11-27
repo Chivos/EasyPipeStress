@@ -64,3 +64,50 @@ export function localResponses(r, mesh) {
     supportLoadsLocal: nodalToLocal(r.supportLoads, frames, (k) => mesh.supports[k].node),
   };
 }
+
+/**
+ * Normale (unitaire, repère global) au plan du composant à une extrémité
+ * d'élément : té au nœud s'il gouverne (même règle que le choix du facteur i),
+ * sinon plan du coude ; null pour un tube droit hors jonction.
+ */
+export function endPlane(e, end) {
+  const local = e.endFactors?.[end];
+  if (local?.plane && local.i >= e.factors.i) return local.plane;
+  const n = e.bend?.normal;
+  if (n) {
+    const l = Math.hypot(n[0], n[1], n[2]);
+    if (l > 1e-12) return [n[0] / l, n[1] / l, n[2] / l];
+  }
+  return local?.plane ?? null;
+}
+
+/**
+ * Moments de flexion dans le plan (Mi) et hors plan (Mo) du composant aux deux
+ * extrémités de chaque élément : [Mi₁, Mo₁, Mi₂, Mo₂] par élément (N·mm). Mi est
+ * le moment porté par la normale au plan (coude, té). Sans plan défini (tube
+ * droit), les deux flexions locales My, Mz sont reprises telles quelles. La
+ * projection est linéaire : pour un séisme, elle est faite mode par mode avant
+ * les combinaisons (src/loads/common.js).
+ */
+export function planeMoments(elemForces, mesh) {
+  const proj = mesh.planeProj ?? (mesh.planeProj = mesh.elements.map((e) => [0, 1].map((end) => {
+    const n = endPlane(e, end);
+    if (!n) return [1, 0];
+    const ny = dot(e.R.slice(3, 6), n);
+    const nz = dot(e.R.slice(6, 9), n);
+    const l = Math.hypot(ny, nz);
+    return l > 1e-9 ? [ny / l, nz / l] : [1, 0];
+  })));
+  const out = new Float64Array(mesh.elements.length * 4);
+  for (let ie = 0; ie < mesh.elements.length; ie++) {
+    for (const end of [0, 1]) {
+      const o = ie * 12 + (end === 0 ? 3 : 9);
+      const [cy, cz] = proj[ie][end];
+      const my = elemForces[o + 1];
+      const mz = elemForces[o + 2];
+      out[ie * 4 + end * 2] = my * cy + mz * cz;
+      out[ie * 4 + end * 2 + 1] = -my * cz + mz * cy;
+    }
+  }
+  return out;
+}

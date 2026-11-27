@@ -2,6 +2,7 @@
 // code, une par support, une par cas pour les déplacements et efforts internes,
 // modes propres), au choix de l'utilisateur.
 
+import { eqName } from '../codes/common.js';
 import { h, download } from './dom.js';
 import { buildXlsx } from '../core/xlsx.js';
 import { displayCases, pointResults, supportPoint, forcePoint, modalSums, showModal, frameAxes, LOCAL_FRAME_HELP } from './results.js';
@@ -54,10 +55,11 @@ function codeSheets(r) {
       rows.push(
         thick
           ? [x.node, x.elem, x.comp, r3(x.stress), r3(x.allow), r3(x.ratio), d.P, d.S, d.I]
-          : [x.eqLabel, x.case, x.node, x.elem, x.comp, r3(x.stress, 2), r3(x.allow, 2), r3(x.ratio), x.coveredBy ? `Éq. (${x.coveredBy})` : '', r3(d.i), r3(d.i75), r3(d.Z, 0), d.P, d.MA != null ? r3(d.MA / 1000, 1) : null, d.MB != null ? r3(d.MB / 1000, 1) : null, d.MC != null ? r3(d.MC / 1000, 1) : null, d.SA != null ? r3(d.SA, 2) : null],
+          : [x.eqLabel, x.case, x.node, x.elem, x.comp, r3(x.stress, 2), r3(x.allow, 2), r3(x.ratio), x.coveredBy ? eqName(r.code, x.coveredBy) : '', r3(d.i), r3(d.i75), r3(d.Z, 0), d.P, d.MA != null ? r3(d.MA / 1000, 1) : null, d.MB != null ? r3(d.MB / 1000, 1) : null, d.MC != null ? r3(d.MC / 1000, 1) : null, d.SA != null ? r3(d.SA, 2) : null],
       );
     }
-    return { name: thick ? 'Épaisseur' : `Éq ${eq}`, rows };
+    // nom de feuille : sans caractères interdits par Excel, 31 caractères au plus
+    return { name: thick ? 'Épaisseur' : eqName(r.code, eq).replace(/[()[\]:*?/\\.]/g, '').replace(/\s+/g, ' ').trim().slice(0, 31), rows };
   });
 }
 
