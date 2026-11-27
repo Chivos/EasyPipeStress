@@ -351,6 +351,8 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
         e.endFactors[end].component = desc.kind;
         e.endFactors[end].runSec = run.sec; // collecteur (module Z des piquages réduits)
         e.endFactors[end].plane = plane; // normale au plan du té (moments dans le plan / hors plan)
+        e.endFactors[end].desc = desc; // description du té (recalcul des facteurs par le code)
+        e.endFactors[end].runCorrosion = +run.secDef?.corrosion || 0;
       }
       tees.push({ node: i, ...desc });
     },

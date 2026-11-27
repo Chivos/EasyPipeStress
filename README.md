@@ -7,8 +7,7 @@ poutres, chargements poids propre, pression, dilatation thermique et séisme
 (classe 2), §C 3650** : équations (6) poids propre + pression, (7) dilatation,
 (8) = (6) + (7) et (10B), (10C), (10D) séisme par niveau de critère. D'autres
 codes peuvent être choisis dans l'onglet Code : **EN 13480-3** (2017, chapitre
-12), **ASME B31.3** (2018) et **CODETI** Division 1 (2013, section C10, à valider
-sur le texte du code).
+12), **ASME B31.3** (2018) et **CODETI 2006** Division 1 (section C3).
 
 Aucune installation ni serveur de calcul : c'est une page statique (modules
 JavaScript natifs, sans dépendance ni étape de compilation), publiée sur
@@ -152,7 +151,7 @@ plat, masse manquante, coefficients CQC, facteurs de coude) et vérifie les
 
 Outil d'aide à l'analyse. Les propriétés matériaux fournies sont **indicatives** ;
 les formules du dépouillement doivent être confrontées à l'édition du code
-applicable (le module CODETI n'a pas pu être contrôlé sur le texte du code). Les résultats doivent être vérifiés par un ingénieur qualifié avant
+applicable. Les résultats doivent être vérifiés par un ingénieur qualifié avant
 toute utilisation pour la justification d'un matériel.
 
 ## Licence

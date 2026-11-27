@@ -398,17 +398,58 @@ piquage) quand le facteur du té gouverne ; M_o est l'autre composante. La
 projection est linéaire : pour un séisme, elle est faite mode par mode, avant les
 combinaisons modale et directionnelle (comme les repères locaux du § 1.8).
 
-**CODETI Division 1, édition 2013, section C10 — non validé sur le texte.** Le
-code n'est pas en accès libre ; les sources secondaires consultées (guide
-professionnel citant C10.3.2 et C10.3.3, documentation de logiciels) montrent une
-section C10 parallèle au chapitre 12 de l'EN 13480-3. Le module applique donc les
-équations de l'EN 13480-3:2017 ci-dessus sous la numérotation C10.3.2 (charges
-permanentes), C10.3.3 (charges occasionnelles, mêmes coefficients k, 1,8 pour le
-séisme majoré de sécurité) et C10.3.4 (dilatation), avec les facteurs k et i du
-tableau H.1. Restent à confirmer sur le texte : le tableau des facteurs (le
-CODETI distinguerait i dans le plan et hors plan pour les piquages), le module Z
-des piquages réduits, l'épaisseur à retenir, le facteur U et la formule
-d'épaisseur minimale (non fournie). Un avertissement est émis à chaque calcul.
+**CODETI 2006, Division 1, partie C, section C3** (section C10 de l'édition 2013).
+
+| Réf. | Critère | Formule |
+|---|---|---|
+| (C3.3.2) | Charges permanentes | σ₁ = p·D_o/(4e_f) + 0,75i·M_A/Z ≤ f_chaud |
+| (C3.3.3) | Charges occasionnelles ou exceptionnelles (séisme) | σ₂ = p·D_o/(4e_f) + 0,75i·M_A/Z + 0,75i·M_B/Z ≤ k·f_chaud |
+| (C3.3.4-1) | Étendue de variation de contrainte | σ₃ = i·M_C/Z ≤ f_a = U·(1,25·f_froid + 0,25·f_chaud)·E_chaud/E_froid |
+| (C3.3.4-2) | Si (C3.3.4-1) non satisfaite | σ₄ = p·D_o/(4e_f) + 0,75i·M_A/Z + i·M_C/Z ≤ f_chaud + f_a |
+
+Coefficient k (C3.3.3), choisi par niveau du cas sismique : 1 (durée
+d'application supérieure à 10 % de toute période de 24 h), 1,15 (inférieure à
+10 %), 1,2 (inférieure à 1 % ; défaut du niveau 1), 1,3 (charges
+exceptionnelles), 1,4 (essai de résistance), 1,5 (SMHV ; niveau 2), 1,8 (séisme
+majoré de sécurité ; niveau 3). U suit le tableau C3.2.4.3 (mêmes valeurs que le
+facteur f du RCC-M). 0,75i ≥ 1 (C3.2.6.2).
+
+*Épaisseur de référence e_f* (C3.2.6.3) : épaisseur à la demi-plage des
+tolérances diminuée de la corrosion. Elle est prise égale à l'épaisseur nominale,
+diminuée de la surépaisseur de corrosion quand l'option « tolérance et
+corrosion » du projet est cochée (terme de pression, module Z et coefficients i
+recalculés avec e_f) ; la flexibilité reste calculée en épaisseur nominale
+(C3.2.1.4).
+
+*Coefficients* (tableau C3.2.6-1, D_m diamètre moyen) : coude ou cintre
+h = 4e_f·R_c/D_m², k = 1,65/h, i = i_i = 0,9/h^(2/3), i_o = 0,75/h^(2/3) ; le
+coefficient de flexibilité k est ramené à 1 pour une ouverture inférieure à 15°
+et interpolé linéairement entre 15° et 45° (C3.2.6.1). Tés : k = 1,
+i = i_o = 0,9/h^(2/3), i_i = 0,75·i_o + 0,25, avec h = 8,8e_f/D_m (té forgé),
+2e_f/D_m (reconstitué non renforcé), 2(e_f + e_r/2)^(5/2)/(e_f^(3/2)·D_m)
+(anneau ou selle de renfort, 8e_f/D_m si e_r > 1,5e_f). Réduction forgée :
+i = 0,5 + α/100·√(D₂/e₂) ≤ 2. Soudure bout à bout : 1,0, ou 1,8 si e_n < 5 mm ou
+δ > 0,1e_f. Module : π(D_o⁴ − D_i⁴)/(32D_o) ; dérivation réduite π/4·d_m²·e_x,
+e_x = min(e_f ; i·e_b). Correction de pression des coudes (note 4) en option.
+Les coefficients ne valent que pour D_m/e_f < 100 : un avertissement est émis
+au-delà.
+
+*Méthode alternative* (C3.3.2 à C3.3.4, C3.4.3), paramètre du code : les termes
+i·M/Z sont remplacés par σ = √(σ_b² + 4σ_T²), σ_b = √[(i_i·M_i)² + (i_o·M_o)²]/Z,
+avec 0,75·i_i et 0,75·i_o ≥ 1 pour σ₁ et σ₂. Le texte imprime σ_T = M_T/Z ; la
+valeur M_T/(2Z) est retenue, seule à redonner la méthode directe pour un tube
+droit (i = 1) et conforme à l'usage (ASME B31.3, EN 13480-3). Ce point est une
+interprétation à valider par l'utilisateur.
+
+*Module d'élasticité* : comme pour l'EN 13480-3, l'étendue M_C est prise au module
+à chaud et f_a porte le rapport E_chaud/E_froid (le texte ne précise pas le module
+du calcul de M_C ; avec un calcul à froid le rapport n'est pas appliqué, ce qui
+donne le même taux).
+
+Non repris : brides aux extrémités des coudes (note 3), coudes à sections,
+piquages forgés, extrudés et à selle insérée (lignes 8 à 10, 12, 13 et tableau
+C3.2.6-2), fluage σ₅ (C3.3.4-3), mouvement d'ancrage unique non répété σ₆
+(C3.3.5), épaisseur minimale (section C2).
 
 ## 5. Audit de l'implémentation
 
@@ -487,7 +528,7 @@ Sturm (modes doubles), température de référence de 0 °C, plafond du renfort 
 tés. Les autres codes (`tests/codes.test.mjs`) sont contrôlés sur des cas
 calculables à la main : σ₁ et S_L d'une console sous poids et pression, flexions
 dans le plan / hors plan d'un coude, admissibles (1a)/(1b), f_a et rapport
-E_h/E_c, coefficients k. Les cas de la littérature (`tests/reference.test.mjs`) sont rejoués à
+E_h/E_c, coefficients k, tableau C3.2.6-1 et méthode alternative du CODETI. Les cas de la littérature (`tests/reference.test.mjs`) sont rejoués à
 chaque exécution : NUREG/CR-1677 problème 1, ligne BM3, SDLL14.
 
 ### 5.4 Avertissements de validité
@@ -528,7 +569,7 @@ interpréter avec prudence (`src/diagnostics.js`), sans modifier les résultats 
   multiples.
 - Réductions et brides à ajouter comme composants (avec
   leurs SIF et indices B).
-- CODETI : implémentation à valider sur le texte du code (§ 4.1) ; EN 13480-3 :
+- CODETI : édition 2006 (section C3), sans fluage ni épaisseur minimale ; EN 13480-3 :
   édition 2017 à facteur i unique (pas d'A4:2021 / 2024) ; ASME B31.3 : édition
   2018 (pas de facteurs B31J). Admissibles de ces codes à saisir par
   l'utilisateur (une seule colonne S par matériau).
@@ -549,5 +590,5 @@ interpréter avec prudence (`src/diagnostics.js`), sans modifier les résultats 
 10. ASME Boiler & Pressure Vessel Code, Section III, Division 1, Subsections NB, NC (NB-3600, NC-3600) et Appendix N.
 12. EN 13480-3:2017, *Tuyauteries industrielles métalliques – Partie 3 : conception et calcul*, chapitre 12 et annexe H.
 13. ASME B31.3-2018, *Process Piping*, §302.3, §304, §319, §320 et Appendix D.
-14. SNCT, *CODETI – Code de construction des tuyauteries industrielles*, Division 1, édition 2013, section C10 (texte non consulté, voir § 4.1).
+14. SNCT, *CODETI 2006 – Code de construction des tuyauteries industrielles*, Division 1, partie C, section C3 « Analyse et critères d'acceptation ».
 11. WRC Bulletin 300, *Technical position on damping values for piping*, 1984 ; NUREG-1061, 1985.

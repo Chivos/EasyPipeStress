@@ -173,7 +173,7 @@ test('B31.3 : étendue de dilatation, admissible (1a) puis (1b)', () => {
 
 // ---------------------------------------------------------------- EN 13480-3, CODETI
 import { en13480, levelsFor } from '../src/codes/en13480.js';
-import { codeti } from '../src/codes/codeti.js';
+import { codeti, componentFactors as codetiFactors, levelsFor as codetiLevels } from '../src/codes/codeti.js';
 import { componentFactors as rccmFactors } from '../src/codes/rccm-c.js';
 
 test('EN 13480-3 : σ₁ d’une console sous poids propre et pression (12.3.2-1)', () => {
@@ -244,23 +244,120 @@ test('EN 13480-3 : coefficients k par niveau sismique et équation σ₄', () =>
   assert.ok(r.check.summary.coveredPairs.every((p) => p.eq === 's3' && p.by === 's4'));
 });
 
-test('CODETI : mêmes contraintes que l’EN 13480-3, avertissement de non-validation', () => {
+test('CODETI 2006 : coefficients du tableau C3.2.6-1', () => {
+  const sec = pipeSection({ od: 168.3, t: 7.11 });
+  const Dm = 168.3 - 7.11;
+  const R = 228.6;
+  const h = (4 * 7.11 * R) / Dm ** 2;
+  const b = codetiFactors({ kind: 'bend', sec, bend: { radius: R, angle: Math.PI / 2 } });
+  near(b.h, h, 1e-12, 'h = 4e_f·R_c/D_m²');
+  near(b.k, 1.65 / h, 1e-12, 'k');
+  near(b.i, 0.9 / h ** (2 / 3), 1e-12, 'i');
+  near(b.ii, 0.9 / h ** (2 / 3), 1e-12, 'i_i');
+  near(b.io, 0.75 / h ** (2 / 3), 1e-12, 'i_o');
+  // C3.2.6.1 : k = 1 sous 15° d'ouverture, interpolé entre 15° et 45° ; i inchangé
+  const rad = (d) => (d * Math.PI) / 180;
+  assert.equal(codetiFactors({ kind: 'bend', sec, bend: { radius: R, angle: rad(10) } }).k, 1);
+  near(codetiFactors({ kind: 'bend', sec, bend: { radius: R, angle: rad(30) } }).k, 1 + 0.5 * (1.65 / h - 1), 1e-12, 'k à 30°');
+  near(codetiFactors({ kind: 'bend', sec, bend: { radius: R, angle: rad(45) } }).k, 1.65 / h, 1e-12, 'k à 45°');
+  near(codetiFactors({ kind: 'bend', sec, bend: { radius: R, angle: rad(10) } }).i, b.i, 1e-12, 'i à 10°');
+  // tés : i = i_o = 0,9/h^(2/3), i_i = 0,75·i_o + 0,25
+  const tee = (teeType, pad = 0) => codetiFactors({ kind: 'tee', sec, teeType, pad });
+  const io = (hh) => 0.9 / hh ** (2 / 3);
+  near(tee('welding').io, io((8.8 * 7.11) / Dm), 1e-12, 'té forgé');
+  near(tee('welding').ii, 0.75 * tee('welding').io + 0.25, 1e-12, 'té forgé i_i');
+  assert.equal(tee('welding').i, tee('welding').io);
+  near(tee('unreinforced').io, io((2 * 7.11) / Dm), 1e-12, 'té non renforcé');
+  near(tee('reinforced', 8).io, io((2 * (7.11 + 4) ** 2.5) / (7.11 ** 1.5 * Dm)), 1e-12, 'té renforcé');
+  near(tee('reinforced', 12).h, (8 * 7.11) / Dm, 1e-12, 'e_r > 1,5·e_f : h = 8e_f/D_m');
+  assert.equal(codetiFactors({ kind: 'reducer', sec, reducer: { i: 1.4 } }).i, 1.4);
+});
+
+test('CODETI 2006 : équations de la méthode directe et coefficients k', () => {
   const a = fullBenchmark();
   a.code = { id: 'en13480-3', params: {} };
   const b = fullBenchmark();
   b.code = { id: 'codeti', params: {} };
   const ra = run(a);
   const rb = run(b);
-  assert.equal(ra.check.rows.length, rb.check.rows.length);
-  ra.check.rows.forEach((x, k) => {
-    assert.equal(rb.check.rows[k].stress, x.stress);
-    assert.equal(rb.check.rows[k].allow, x.allow);
-  });
-  assert.ok(codeti.caveat && rb.warnings.some((w) => w.includes('non consulté')), 'avertissement présent');
-  assert.ok(!ra.warnings.some((w) => w.includes('non consulté')));
-  assert.equal(eqName(codeti, 'c2C'), 'C10.3.3 niveau 2');
-  // pas de formule d'épaisseur confirmée pour ce code
+  // mêmes équations que l'EN 13480-3 pour σ₁, σ₃, σ₄ (coudes à 90°, té forgé, épaisseur nominale)
+  for (const [ea, eb] of [['s1', 'c1'], ['s3', 'c3'], ['s4', 'c4']]) {
+    const xa = ra.check.rows.filter((x) => x.eq === ea);
+    const xb = rb.check.rows.filter((x) => x.eq === eb);
+    assert.ok(xa.length > 0 && xa.length === xb.length, `${eb} : lignes`);
+    xa.forEach((x, k) => {
+      near(xb[k].stress, x.stress, 1e-12, `${eb} contrainte`);
+      near(xb[k].allow, x.allow, 1e-12, `${eb} admissible`);
+    });
+  }
+  // séisme du cas test : 2ᵉ niveau, k = 1,5 (SMHV) par défaut au CODETI
+  const occ = rb.check.rows.filter((x) => x.eq === 'c2C');
+  assert.ok(occ.length > 0);
+  for (const x of occ) near(x.allow, 1.5 * x.detail.S, 1e-12, 'k·f_chaud');
+  assert.deepEqual(Object.values(codetiLevels({})).map((x) => x.k), [1.2, 1.5, 1.8]);
+  assert.equal(codetiLevels({ kB: 1.4 }).B.k, 1.4);
+  // texte du code disponible : plus d'avertissement de non-validation ; pas de formule d'épaisseur (hors section C3)
+  assert.equal(codeti.caveat, undefined);
+  assert.ok(!rb.warnings.some((w) => w.includes('non consulté')));
   assert.equal(codeti.thickness, undefined);
+  assert.equal(eqName(codeti, 'c2C'), 'σ₂ niveau 2');
+});
+
+test('CODETI 2006 : épaisseur de référence e_f et domaine D_m/e_f < 100', () => {
+  const build = (allowances, t = 7.11) => {
+    const m = setup('codeti');
+    m.sections[0].t = t;
+    m.sections[0].corrosion = 1;
+    m.settings.allowances = allowances;
+    m.components.push(pipe('10', '20', 3000, 0, 0, { P1: 2 }), sup('10', 'anchor'));
+    return run(m);
+  };
+  const w = (t) => 7850e-12 * pipeSection({ od: 168.3, t }).A * G;
+  const nominal = build(false);
+  const corroded = build(true);
+  const sn = pipeSection({ od: 168.3, t: 7.11 });
+  const sc = pipeSection({ od: 168.3, t: 6.11 });
+  near(rowAt(nominal, 'c1', '10').stress, (2 * 168.3) / (4 * 7.11) + (w(7.11) * 3000 ** 2) / 2 / sn.Z, 1e-6, 'σ₁ nominal');
+  // corrosion déduite : contraintes avec e_f = e_n − c, poids toujours calculé en nominal
+  near(rowAt(corroded, 'c1', '10').stress, (2 * 168.3) / (4 * 6.11) + (w(7.11) * 3000 ** 2) / 2 / sc.Z, 1e-6, 'σ₁ avec e_f');
+  assert.ok(!nominal.warnings.some((x) => x.includes('D_m/e')));
+  // tube mince : D_m/e_f ≥ 100 signalé
+  assert.ok(build(false, 1.6).warnings.some((x) => x.includes('D_m/e')), 'avertissement de domaine');
+});
+
+test('CODETI 2006 : méthode alternative (dans le plan / hors plan)', () => {
+  const build = (method, dy) => {
+    const m = setup('codeti');
+    m.code.params = { method };
+    m.components.push(pipe('10', '20', 2000, 0, 0), pipe('20', '30', 0, dy, dy ? 0 : -2000), { type: 'bend', node: '20', radiusType: 'LR', radius: '', t: '', divisions: '' }, sup('10', 'anchor'));
+    return run(m);
+  };
+  const sec = pipeSection({ od: 168.3, t: 7.11 });
+  for (const dy of [0, 2000]) {
+    const d = build('direct', dy);
+    const a = build('alternative', dy);
+    const wc = a.cases.find((c) => c.id === 'W');
+    // tube droit (i = 1) : les deux méthodes coïncident
+    near(rowAt(a, 'c1', '10').stress, rowAt(d, 'c1', '10').stress, 1e-9, 'tube droit');
+    a.mesh.elements.forEach((e, ie) => {
+      if (e.kind !== 'bend') return;
+      for (const end of [0, 1]) {
+        const ra = a.check.rows.find((x) => x.eq === 'c1' && x.ie === ie && x.end === end);
+        const rd = d.check.rows.find((x) => x.eq === 'c1' && x.ie === ie && x.end === end);
+        const o = ie * 12 + (end === 0 ? 3 : 9);
+        const [Mi, Mo] = [wc.elemPlane[ie * 4 + end * 2], wc.elemPlane[ie * 4 + end * 2 + 1]];
+        const f = e.factors;
+        const exp = Math.hypot(Math.max(1, 0.75 * f.ii) * Mi, Math.max(1, 0.75 * f.io) * Mo, wc.elemForces[o]) / sec.Z;
+        near(ra.stress, exp, 1e-9, 'σ₁ méthode alternative');
+        // i_o < i = i_i et torsion non intensifiée : jamais plus sévère que la méthode directe
+        assert.ok(ra.stress <= rd.stress + 1e-9);
+      }
+    });
+    // flexion dans le plan seule (coude vertical) : égalité ; hors plan + torsion : gain
+    const max = (r) => Math.max(...r.check.rows.filter((x) => x.eq === 'c1' && x.kind === 'bend').map((x) => x.stress));
+    if (dy === 0) near(max(a), max(d), 1e-9, 'coude chargé dans son plan');
+    else assert.ok(max(a) < 0.95 * max(d), 'coude chargé hors plan');
+  }
 });
 
 test('tous les codes : synthèse ordonnée, cumuls décrits, RCC-M inchangé par la présence des autres', () => {

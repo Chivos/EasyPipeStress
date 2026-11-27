@@ -71,6 +71,7 @@ export function runAnalysis(model) {
   warnings.push(...resultDiagnostics({ mesh, cases, contacts }));
   const modal = cases.find((c) => c.modal)?.modal ?? null;
   let check = code ? code.check({ model, mesh, cases }) : null;
+  if (check?.warnings?.length) warnings.push(...check.warnings);
   // code dont l'implémentation n'a pas pu être contrôlée sur le texte : rappel à chaque calcul
   if (code?.caveat) warnings.push(`${code.short ?? code.label} : ${code.caveat}`);
   // épaisseur minimale (pression seule) : option du projet, formule fournie par le code

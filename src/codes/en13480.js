@@ -43,32 +43,36 @@ export const DEFAULT_PARAMS = {
 };
 
 export const K_OPTIONS = [1, 1.15, 1.2, 1.3, 1.8];
-const K_LABELS = {
+export const K_LABELS = {
   1: '1,0 — occasionnelle, plus de 10 % du temps',
   1.15: '1,15 — occasionnelle, moins de 10 % du temps',
   1.2: '1,2 — occasionnelle, moins de 1 % du temps (séisme de dimensionnement)',
   1.3: '1,3 — exceptionnelle',
   1.8: '1,8 — séisme majoré de sécurité',
 };
-const kOf = (v, d) => (K_OPTIONS.includes(+v) ? +v : d);
 
-/** Niveaux sismiques : coefficient k de l'admissible choisi par niveau (paramètres du code). */
-export const levelsFor = (params) =>
+/**
+ * Niveaux sismiques à coefficient k choisi par niveau (paramètres kB, kC, kD du
+ * code) : renvoie la fonction params → { B: { label, k }, C: …, D: … }.
+ */
+export const makeLevels = (options, defaults) => (params) =>
   Object.fromEntries(
     ['B', 'C', 'D'].map((L, n) => {
-      const k = kOf(params[`k${L}`], DEFAULT_PARAMS[`k${L}`]);
+      const k = options.includes(+params[`k${L}`]) ? +params[`k${L}`] : defaults[`k${L}`];
       return [L, { label: `niveau ${n + 1} (k = ${String(k).replace('.', ',')})`, k }];
     }),
   );
 
+export const levelsFor = makeLevels(K_OPTIONS, DEFAULT_PARAMS);
+
 /** Paramètres « coefficient k par niveau » de l'onglet Code. */
-export const kParams = (ref) =>
+export const kParams = (ref, options = K_OPTIONS, labels = K_LABELS) =>
   ['B', 'C', 'D'].map((L, n) => ({
     key: `k${L}`,
     label: `Coefficient k du niveau sismique ${n + 1}`,
     type: 'select',
-    options: () => K_OPTIONS,
-    optionLabel: (v) => K_LABELS[v],
+    options: () => options,
+    optionLabel: (v) => labels[v],
     title: `Coefficient k de l’équation ${ref} appliqué à ce niveau du cas sismique`,
   }));
 
