@@ -50,8 +50,10 @@ Le bouton **Exemple** propose plusieurs modèles : ligne DN150 inox entre trois
 piquages (té, robinet, masse, déplacement imposé), ligne DN100 × 3,6 inox,
 ligne DN200 acier carbone avec robinet, débitmètre, supports variables et
 support constant, cas test complet (collecteur DN200 avec té, réduction,
-robinet, supports variables, éq. (8) jouée) et cas de validation du problème
-de Hovgaard.
+robinet, supports variables, éq. (8) jouée) et cas de validation de la
+littérature : problème de Hovgaard (Code_Aster SSLL101 et SDLX02), Hovgaard à
+masses concentrées (NUREG/CR-1677), ligne BM3 (NUREG/CR-6645) et modes d'un
+coude mince (SDLL14).
 
 Ergonomie : les séparateurs entre le volet de saisie, la vue et le bandeau de
 résultats se déplacent à la souris (double-clic : taille par défaut). Dans les

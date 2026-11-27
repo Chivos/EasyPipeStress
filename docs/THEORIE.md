@@ -204,7 +204,7 @@ spectre par direction.
 
 Pour chaque direction d'excitation (X, Y, Z) :
 
-1. réponse du mode i : qᵢ = Γᵢ·Sa(fᵢ)/ωᵢ², avec interpolation log-log (ou linéaire, au choix) du
+1. réponse du mode i : qᵢ = Γᵢ·Sa(fᵢ)/ωᵢ², avec interpolation log-log (ou linéaire en fréquence, ou linéaire en période, au choix) du
    spectre ;
 2. combinaison modale **SRSS** ou **CQC** (Der Kiureghian, 1981 [6]) :
    ρᵢⱼ = 8ξ²(1+r)r^1,5 / [(1−r²)² + 4ξ²r(1+r)²], r = ωⱼ/ωᵢ ;
@@ -346,6 +346,9 @@ Vérifications numériques (tests automatiques) :
 | Cas test collecteur DN200 (exemple « Cas test ») : té forgé avec tronçon rigide de dérivation, réduction concentrique α = 9,5° à soudures brutes, robinet, deux supports variables, appuis 876 kN/mm, dilatation au module à chaud | PIPESTRESS | éq. (6), (7), (8), (10C) < 1 % aux points critiques (té : 232,5 contre 232,3 MPa en éq. (7), 251,8 contre 251,5 en éq. (8)) ; réactions de dilatation < 0,5 % (AG1 suivant X : 3 %) ; poids < 1 % (ancrage Équipement 1,5 %) ; fréquences des modes 1 à 9 < 1 %, modes 10 à 12 + 3 à 4 % ; réactions sismiques poids + séisme ≈ 1 à 3 % |
 | Problème de Hovgaard (Code_Aster SSLL101 ; Kellogg 1956, pb 5.9) : tuyauterie non plane à deux coudes R 922 mm, encastrée aux deux bouts, k = 1,65/h ; poids, dilatation ΔT = 472,22 °C, forces nodales | POUX, ADL, TITUS (poutre) | déplacements du point 3 < 0,2 % dans les trois cas ; moment résultant au point 1 sous poids < 0,05 % ; maillage du modèle A de SDLX02 (tubes droits non subdivisés, 4,5° par élément de coude) ; maillage fin (100 mm, 2,25°) : < 0,1 % |
 | Même ligne, analyse modale et réponse spectrale (Code_Aster SDLX02) : spectre 2 % (2 g de 10 à 30 Hz en X et Y, moitié en Z), interpolation log-log, SRSS modes et directions, sans correction statique | POUX, ADL, TITUS | fréquences (masses concentrées) < 2 % sur les 7 premiers modes ; déplacements < 1,3 % ; réactions aux encastrements < 3 % ; efforts généralisés aux points 3, 7, 11 de 1 à 4 % (Mz au point 3 : 7 %, axes locaux différents dans le coude) ; maillage fin : fréquences 0,2 à 3,3 % sous les valeurs à masse complète |
+| Hovgaard à masses concentrées (NUREG/CR-1677 vol. 1, problème 1) : tube sans masse, neuf masses ponctuelles, spectre tabulé en période (interpolation linéaire en période), facteurs 1 / 0,667 / 1, cinq modes en SRSS, sans masse manquante | rapport NRC (programme EPIPE, BNL 1980) | cinq fréquences < 0,05 % (28,54 contre 28,53 Hz…) ; facteurs de participation identiques à quatre chiffres ; déplacements et rotations < 0,2 % ; efforts et moments aux deux ancrages < 0,3 % |
+| Ligne BM3 (NUREG/CR-6645 ; Code_Aster SDLL149) : trois diamètres, dix coudes, trois ancrages, sept appuis élastiques, masses concentrées aux 38 nœuds du rapport ; spectre à 1 % suivant X, 14 modes en SRSS, masse manquante à 0,54 g | rapport NRC ; cibles du manuel de vérification ANSYS (valeur NRC × rapport publié, arrondies à 1 % environ) | 14 fréquences < 0,3 % ; 21 réactions d'appui < 2 % (critères NRC : 2 % et 10 %) ; masse volumique de la section 3 du rapport (1,2908·10⁻³ lb·s²/in⁴ ; avec la valeur d'ANSYS, 1,253·10⁻³, écarts jusqu'à 9 %) |
+| SDLL14 (guide VPCS AFNOR 1990 ; Code_Aster V2.02.014) : modes d'un coude mince à 90° (R = 1 m, tube 20 × 2), bras de 0, 0,6 et 2 m | PIPESTRESS et AFNOR (valeurs de la fiche Code_Aster) | quatre premières fréquences des trois configurations : < 0,25 % de PIPESTRESS, < 1,6 % de la solution analytique AFNOR (PIPESTRESS et Code_Aster en sont au même écart) |
 | Fréquence propre d'une console | 1,875²/2π·√(EI/mL⁴) | < 0,5 % |
 | Oscillateur simple, spectre plat | m·Sa·L | < 10⁻⁴ |
 | Masse manquante, modes tronqués | réponse statique rigide | < 10⁻⁶ |
@@ -372,7 +375,8 @@ des réactions, fréquence propre d'une console (1,875²/2π·√(EI/mL⁴)), os
 simple sous spectre plat, correction de masse manquante (égalité avec la réponse
 statique rigide), coefficients CQC, facteurs k et i des coudes, contrôle de
 Sturm (modes doubles), température de référence de 0 °C, plafond du renfort des
-tés.
+tés. Les cas de la littérature (`tests/reference.test.mjs`) sont rejoués à
+chaque exécution : NUREG/CR-1677 problème 1, ligne BM3, SDLL14.
 
 ### 5.4 Avertissements de validité
 
