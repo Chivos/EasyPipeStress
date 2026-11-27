@@ -473,10 +473,14 @@ valeur M_T/(2Z) est retenue, seule à redonner la méthode directe pour un tube
 droit (i = 1) et conforme à l'usage (ASME B31.3, EN 13480-3). Ce point est une
 interprétation à valider par l'utilisateur.
 
-*Module d'élasticité* : comme pour l'EN 13480-3 (qui le précise au §12.3.4),
-l'étendue M_C est prise au module à chaud et f_a porte le rapport E_chaud/E_froid ;
-le CODETI ne précise pas le module du calcul de M_C. Avec un calcul à froid le
-rapport n'est pas appliqué, ce qui donne le même taux.
+*Module d'élasticité* : la section C3 ne précise pas le module du calcul de M_C.
+**Choix retenu** : celui du logiciel de comparaison (PIPESTRESS) pour le CODETI
+antérieur à 2013 — l'étendue M_C est ramenée au module à froid (moments calculés
+à chaud multipliés par E_froid/E_chaud) et f_a porte toujours E_chaud/E_froid. Le
+résultat est le même que la dilatation soit calculée à chaud ou à froid.
+*Alternative non retenue* : le traitement de l'EN 13480-3 (§12.3.4), où M_C reste
+au module à chaud ; le critère serait moins sévère d'un facteur E_froid/E_chaud,
+soit environ 10 % à 300 °C.
 
 Non repris : brides aux extrémités des coudes (note 3), coudes à sections,
 piquages forgés, extrudés et à selle insérée (lignes 8 à 10, 12, 13 et tableau
@@ -610,6 +614,155 @@ Les points en attente d'une décision ou d'un texte de code sont suivis dans
   l'utilisateur (une seule colonne S par matériau).
 - Codes à ajouter : RCC-M classe 1 (B 3600, indices C, K, analyse en fatigue),
   classe 3 (D 3600), ASME B31.1.
+
+## 7. Calcul non linéaire des supports : principes retenus
+
+> **En projet.** Cette section fixe les principes du second solveur
+> (expérimental, au choix dans le projet) destiné aux supports non linéaires :
+> appuis unilatéraux, jeux, butées, frottement. Il n'est pas encore écrit ; le
+> solveur linéaire décrit plus haut reste le solveur par défaut et n'est pas
+> modifié.
+
+Les principes sont alignés sur le calcul statique non linéaire du logiciel de
+comparaison (PIPESTRESS, aide en ligne, « Non-Linear Static Analysis » et cartes
+NCAS, NRST, TITL), pour que les résultats soient directement comparables.
+
+### 7.1 Ce qui change : la superposition
+
+Le calcul linéaire traite chaque chargement séparément (poids, dilatation,
+séisme) puis les codes combinent les résultats. Avec des contacts, ce n'est plus
+permis : un appui peut porter sous le poids seul et décoller à chaud, un jeu peut
+se fermer en cours de dilatation. La superposition des solutions de deux
+chargements n'est pas la solution des chargements superposés, et ne l'est presque
+jamais avec du frottement. Les codes ne donnent pas de règle stricte pour ce cas :
+c'est à l'utilisateur de définir des cas qui respectent leur intention.
+
+Le calcul non linéaire porte donc sur des **états** réels de la tuyauterie,
+chacun avec son propre état des contacts :
+
+- état froid (montage) : poids seul ;
+- état chaud (service) : poids + dilatation, pour chaque cas thermique.
+
+Les équations des codes demandent pourtant des moments par nature de chargement
+(M_A pour le poids, M_C pour la dilatation, M_B pour le séisme). Les paragraphes
+suivants disent comment les obtenir à partir des états.
+
+### 7.2 Étendue de dilatation : différence entre états
+
+Le poids est inclus dans tous les cas de dilatation ; M_C est l'étendue entre
+ces états et l'état « poids seul » (plus grande différence entre deux états).
+C'est la méthode que la documentation du logiciel de comparaison donne en exemple,
+et la définition même de l'étendue dans les codes :
+
+- EN 13480-3:2017, §12.3.4 : M_C est déterminé « à partir de la plus grande
+  différence entre les moments », l'état nul devant être pris en compte ; §12.3.7,
+  éq. (12.3.7-3) : les moments variables sont la différence M_Te − M_Ta entre
+  deux instants ;
+- CODETI 2006, C3.3.4 : étendue « déterminée pour la plus grande différence entre
+  les moments » ;
+- ASME B31.3-2012, §319.3.1 (a) et annexe S, exemple 3 : l'étendue se calcule
+  par différence algébrique entre les conditions, y compris entre deux
+  conditions de service.
+
+Un calcul de « dilatation seule », sans le poids, n'a pas de sens avec des
+contacts : sans le poids, les appuis n'ont pas le bon état.
+
+### 7.3 Part du poids : le poids seul, à froid
+
+Une pratique obtient la part du poids à chaud par soustraction : état de service
+moins un calcul de dilatation seule. Elle n'est pas retenue, parce que les deux
+calculs soustraits n'ont pas le même état des contacts : leur différence ne
+correspond à aucune structure réelle.
+
+**Choix retenu** : M_A est le moment du cas « poids seul », calculé en non
+linéaire (état froid). C'est le M_A de l'exemple de la documentation du logiciel
+de comparaison (PIPESTRESS), donc directement comparable.
+
+*Alternative non retenue, possible en complément* : vérifier aussi M_A dans la
+configuration de service, c'est-à-dire le poids appliqué à la tuyauterie dont
+les contacts sont figés dans l'état chaud (appui décollé retiré, jeu fermé
+actif), effets thermiques exclus, le plus défavorable gouvernant. C'est le
+principe de l'ASME B31.3-2012, annexe S, exemple 2 (« Anticipated sustained
+conditions considering pipe lift-off ») et du §320.1, qui demande la plus grande
+contrainte S_L pour chaque condition de service. Dans cet exemple, la
+configuration « appui retiré » gouverne et n'est pas satisfaite, alors que le
+calcul appui en place l'était : le choix retenu peut donc être moins sévère quand
+un appui décolle à chaud. Les constats de décollement restent signalés.
+
+### 7.4 Modèle de support et algorithme
+
+**Raideur par zones.** Chaque direction d'un support non linéaire a une raideur
+qui dépend du déplacement d le long de cette direction, sur quatre zones séparées
+par d₁ ≤ 0 ≤ d₂ : k₁ pour d < d₁, k₂ pour d₁ ≤ d < 0, k₃ pour 0 ≤ d < d₂, k₄ pour
+d ≥ d₂. Le problème reste linéaire par morceaux. Ce modèle couvre :
+
+| Support | d₁, d₂ | Raideurs |
+|---|---|---|
+| Appui simple (tuyauterie posée) | d₁ = 0 | k₁ rigide, les autres nulles : n'agit que contre la descente |
+| Jeu de part et d'autre | d₁ = −jeu, d₂ = +jeu | k₁ et k₄ rigides, k₂ = k₃ = 0 |
+| Butées d'un support à ressort | courses basse et haute | k₂ = k₃ = raideur du ressort, k₁ et k₄ majorées de la butée |
+
+**Frottement.** Coefficient de Coulomb μ par support : une force opposée au
+déplacement transversal de la tuyauterie, d'intensité μ·|R|, R étant la réaction
+du support. Elle est obtenue par une raideur ajoutée dans le plan transversal à
+la direction du support, ajustée jusqu'à produire la bonne force ; force et
+déplacement sont alors colinéaires par construction. Un problème avec frottement
+peut avoir plusieurs solutions d'équilibre.
+
+**Itérations.** À chaque itération, deux hypothèses par support : la zone où se
+trouve le déplacement, et la raideur transversale de frottement. Un calcul
+linéaire est fait sur ces hypothèses, puis elles sont contrôlées :
+
+1. *zone* : le déplacement calculé est dans la zone supposée ;
+2. *frottement* : l'une des trois conditions suivantes, F_c étant la force
+   calculée et F_t = μ·|R| la force théorique :
+   - |F_c/F_t − 1| < ε₁ (0,001 par défaut dans le logiciel de comparaison) ;
+   - |F_c − F_t| < ε₂ ;
+   - raideur transversale au plafond et F_c ≤ F_t : le support ne glisse pas.
+
+Si une hypothèse est fausse, l'écart sert à la corriger pour l'itération
+suivante. Au-delà d'un nombre maximal d'itérations, le calcul échoue
+explicitement : aucun résultat non convergé n'est rendu.
+
+### 7.5 Séisme : supports linéaires
+
+L'analyse modale et spectrale est linéaire par nature : elle est faite sur une
+structure dont l'état des contacts est fixé à l'avance. Dans le logiciel de
+comparaison, un support non linéaire est calculé comme un support linéaire
+ordinaire, avec sa raideur, pour l'analyse dynamique : le jeu est ignoré, l'appui
+est bilatéral. C'est déjà l'hypothèse du solveur linéaire de l'application
+(§ 1.6), qui reste donc valable telle quelle pour le solveur non linéaire.
+
+Le traitement exact des jeux sous séisme relève de l'analyse temporelle linéaire
+par morceaux (méthode « adaptive modal summation », ADAMOS, du logiciel de
+comparaison : modes et amplitudes modales réévalués à chaque choc ou
+relâchement), que l'application ne fait pas.
+
+**Choix retenu** : supports actifs, comme le logiciel de comparaison. Un support
+décollé ou à jeu ouvert en service est compté actif, avec sa raideur ; les
+constats après calcul (§ 1.6) le signalent.
+
+*Alternatives non retenues* :
+
+| Convention | Support décollé ou jeu ouvert en service | Remarque |
+|---|---|---|
+| Supports actifs (retenu) | actif, avec sa raideur | compte un support qui peut ne jamais s'engager |
+| État figé | libre | ignore un support que le séisme engagerait |
+| Enveloppe | deux calculs, libre puis actif, résultats enveloppés | le calcul « libre » dit si le déplacement sismique atteint le jeu restant ; coût doublé |
+
+L'enveloppe serait le raffinement à privilégier si le choix retenu se révélait
+insuffisant. Aucune des trois n'est rigoureuse.
+
+### 7.6 Fiabilité
+
+- Sans support non linéaire actif, le solveur non linéaire doit redonner
+  exactement les résultats du solveur linéaire : tous les cas de validation
+  existants le contrôlent.
+- À chaque calcul : équilibre global, conditions de contact (pas de traction sur
+  un appui posé, pas de pénétration au-delà d'un jeu), compte rendu de
+  convergence ; un calcul non convergé échoue explicitement.
+- Cas à solution analytique (décollement, fermeture d'un jeu, glissement) et
+  comparaison avec le logiciel de référence sur un cas à jeux et frottement.
 
 ## Références
 

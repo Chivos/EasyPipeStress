@@ -20,7 +20,7 @@ faire), **évolution** (travail non commencé).
   avertissement signale déjà une coupure placée dans la zone amplifiée du
   spectre.
 
-### 2. Module d'élasticité : modal et séisme — à vérifier
+### 2. Module d'élasticité : modal et séisme — à vérifier, sans modification pour le moment
 
 Le module à chaud est traité chargement par chargement. Seuls le modal et le
 séisme restent ouverts.
@@ -37,7 +37,10 @@ séisme restent ouverts.
   dilatation. À 300 °C elles sont environ 5 % plus basses au module à chaud
   (½·(1 − E_h/E_c)), ce qui déplace les modes sur le spectre.
 - **À faire avant de décider** : vérifier le réglage du modèle de comparaison
-  PIPESTRESS pour le modal (présumé au module à chaud, à confirmer).
+  PIPESTRESS pour le modal. D'après son aide en ligne (carte FREQ, champ RF), le
+  modal est au module à chaud si la carte FREQ désigne un cas de référence, et au
+  module à froid si ce champ est omis : il suffit de lire la carte FREQ du
+  fichier d'entrée.
 - **Indice** : sur le cas test collecteur DN200 (300 °C, E_h/E_c = 0,906), les
   modes 1 à 9 concordent à moins de 1 % avec le calcul de comparaison alors que
   l'application calcule le modal à froid. Un modal de référence au module à
@@ -45,20 +48,35 @@ séisme restent ouverts.
   froid, soit un autre écart compense.
 - **Proposition** : option du projet décochée par défaut, pour ne pas modifier
   les cas validés.
+- **Décision** : aucune modification pour le moment ; le modal et le séisme
+  restent au module à froid tant que le réglage de PIPESTRESS n'est pas vérifié.
 
 ### 3. Mouvements sismiques différentiels d'ancrages — évolution
 
 Non traités (pas de déplacements imposés sismiques, pas de spectres multiples).
 
+### 3 bis. Analyse sismique temporelle — évolution
+
+L'application ne fait que de l'analyse spectrale et du statique équivalent. Le
+traitement rigoureux des jeux sous séisme demande une analyse temporelle
+linéaire par morceaux (méthode ADAMOS de PIPESTRESS : modes réévalués à chaque
+choc ou relâchement), avec des accélérogrammes en donnée d'entrée. Non prévue
+dans le découpage du solveur non linéaire (point 12).
+
 ## Codes de vérification
 
-### 4. CODETI : module d'élasticité de l'étendue M_C — à décider
+### 4. CODETI : module d'élasticité de l'étendue M_C — décidé
 
-- **Aujourd'hui** : moments au module à chaud, comparés à f_a qui porte
-  E_chaud/E_froid, comme l'EN 13480-3 (qui le précise au §12.3.4).
-- **Question** : la section C3 du CODETI 2006 ne précise pas le module. Si la
-  pratique est de calculer M_C à froid et de le comparer à f_a réduit, le critère
-  est plus sévère d'un facteur E_froid/E_chaud (environ 10 % à 300 °C).
+La section C3 du CODETI 2006 ne précise pas le module du calcul de M_C.
+
+- **Choix retenu** : comme PIPESTRESS. Son aide en ligne (carte LCAS) indique
+  qu'avec l'option module à chaud, les efforts des cas de dilatation sont
+  multipliés par E_froid/E_chaud pour tous les codes sauf, notamment, l'EN
+  13480-3 et le CODETI à partir de l'édition 2013. Pour le CODETI 2006, M_C est
+  donc ramené au module à froid, et f_a porte toujours E_chaud/E_froid.
+- **Alternative non retenue** : le traitement de l'EN 13480-3, où M_C reste au
+  module à chaud ; critère moins sévère d'un facteur E_froid/E_chaud (environ
+  10 % à 300 °C).
 
 ### 5. CODETI : torsion de la méthode alternative — décidé
 
@@ -112,9 +130,21 @@ sont utilisées telles quelles. Pistes : une colonne par code, ou un calcul de f
 
 ### 12. Supports non linéaires — évolution
 
-Le calcul est linéaire : décollement, jeux et courses sont contrôlés après
-calcul et signalés. Reste à faire (lot 2) : recherche de l'état des contacts
-(état froid, état chaud), frottement.
+Second solveur, expérimental et au choix dans le projet ; le solveur linéaire
+reste le défaut. Principes consignés au § 7 de [THEORIE.md](THEORIE.md), alignés
+sur le calcul statique non linéaire de PIPESTRESS (aide en ligne).
+
+| Sujet | Choix retenu (comme PIPESTRESS) | Alternative notée |
+|---|---|---|
+| Étendue de dilatation M_C | différence entre états, le poids étant inclus dans tous les cas de dilatation | — (c'est aussi la définition des codes) |
+| Part du poids M_A | cas « poids seul » en non linéaire, à froid | vérifier aussi M_A dans la configuration de service à contacts figés (ASME B31.3, annexe S, exemple 2) |
+| Supports sous séisme | supports non linéaires comptés actifs, avec leur raideur | état figé dans l'état de service, ou enveloppe de deux calculs (supports libres / actifs) |
+| Modèle et algorithme | raideur par zones (d₁, d₂, k₁ à k₄), frottement par raideur transversale ajustée, mêmes critères de convergence | — |
+
+- **Découpage** : A — calcul par états, raideur par zones (appuis unilatéraux,
+  jeux, butées) ; B — équations des codes alimentées par les états ;
+  C — frottement. Le séisme ne demande pas de lot propre.
+- **Non commencé.**
 
 ## Validation
 

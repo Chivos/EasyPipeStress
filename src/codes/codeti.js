@@ -11,6 +11,11 @@
 //  C3.3.4-2  si (C3.3.4-1) non satisfaite
 //                                        σ₄ = p·D_o/(4e_f) + 0,75i·M_A/Z + i·M_C/Z ≤ f_chaud + f_a
 //  C3.2.4.2  f_a = U(1,25 f_froid + 0,25 f_chaud)·E_chaud/E_froid ; U : tableau C3.2.4.3
+//            M_C est ramené au module à froid (× E_froid/E_chaud si la dilatation est
+//            calculée à chaud), le rapport de f_a étant toujours appliqué : traitement
+//            du logiciel de comparaison (PIPESTRESS) pour le CODETI antérieur à 2013.
+//            Autre lecture possible, non retenue : celle de l'EN 13480-3, où M_C reste
+//            au module à chaud (critère moins sévère de E_froid/E_chaud).
 //  C3.2.6.2  0,75i ≥ 1 ; coefficients valables pour D_m/e_f < 100
 //  C3.2.6.3  e_f : épaisseur de référence des contraintes (demi-plage des
 //            tolérances, diminuée de la corrosion) ; ici l'épaisseur nominale,
@@ -145,6 +150,10 @@ const spec = {
   rangeFactor: (params) => rangeReductionFactor(+params.cycles || 7000),
   levelsFor,
   alternative: (params) => params.method === 'alternative',
+  // module de M_C non précisé par la section C3 : étendue ramenée au module à froid,
+  // f_a portant E_chaud/E_froid, comme le logiciel de comparaison pour le CODETI
+  // antérieur à 2013 (plus sévère que le traitement de l'EN 13480-3 de E_froid/E_chaud)
+  rangeModulus: 'cold',
   // e_f : épaisseur de référence (C3.2.6.3), corrosion déduite si l'option du projet est cochée
   stressSection: corrodedSection,
   stressFactors: corrodedFactors(componentFactors),
@@ -181,7 +190,7 @@ export const codeti = {
     { ref: '(C3.3.4-2)', name: 'Permanentes + dilatation, si σ₃ > f_a', formula: spec.eq.comb.formula },
   ],
   help: [
-    'e_f : épaisseur de référence des contraintes (C3.2.6.3), prise égale à l’épaisseur nominale, diminuée de la surépaisseur de corrosion si l’option « tolérance et corrosion » du projet est cochée ; la flexibilité est calculée en épaisseur nominale (C3.2.1.4). Module Z = π(D_o⁴ − D_i⁴)/(32D_o) ; dérivation réduite : π/4·d_m²·e_x, e_x = min(e_f ; i·e_b). M_C : étendue calculée au module à chaud, E_chaud/E_froid porté par f_a.',
+    'e_f : épaisseur de référence des contraintes (C3.2.6.3), prise égale à l’épaisseur nominale, diminuée de la surépaisseur de corrosion si l’option « tolérance et corrosion » du projet est cochée ; la flexibilité est calculée en épaisseur nominale (C3.2.1.4). Module Z = π(D_o⁴ − D_i⁴)/(32D_o) ; dérivation réduite : π/4·d_m²·e_x, e_x = min(e_f ; i·e_b). M_C : étendue ramenée au module à froid (moments calculés à chaud × E_froid/E_chaud), f_a portant E_chaud/E_froid.',
     'Tableau C3.2.6-1 : coudes h = 4e_f·R_c/D_m², k = 1,65/h (ramené à 1 sous 15° d’ouverture, interpolé jusqu’à 45°), i = i_i = 0,9/h^⅔, i_o = 0,75/h^⅔. Tés : i = i_o = 0,9/h^⅔, i_i = 0,75·i_o + 0,25, avec h = 8,8e_f/D_m (forgé), 2(e_f + e_r/2)^2,5/(e_f^1,5·D_m) (renforcé, 8e_f/D_m si e_r > 1,5e_f), 2e_f/D_m (non renforcé). Réduction forgée : i = 0,5 + α/100·√(D₂/e₂) ≤ 2. Soudure bout à bout : 1,0, ou 1,8 si e_n < 5 mm ou δ > 0,1e_f (colonne « Soudures » des réductions). Coefficients valables pour D_m/e_f < 100.',
     'Méthode alternative (C3.4.3), au choix ci-dessus : les termes i·M/Z deviennent σ = √(σ_b² + 4σ_T²), σ_b = √[(i_i·M_i)² + (i_o·M_o)²]/Z, σ_T = M_T/(2Z) ; le texte imprime σ_T = M_T/Z, non retenu car il ne redonne pas la méthode directe pour un tube droit. Non vérifiés : épaisseur minimale, fluage σ₅ (C3.3.4-3), mouvement d’ancrage non répété σ₆ (C3.3.5).',
   ],

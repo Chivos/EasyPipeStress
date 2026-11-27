@@ -161,6 +161,7 @@ const spec = {
   rangeFactor: (params) => rangeReductionFactor(+params.cycles || 7000),
   levelsFor,
   alternative: (params) => params.method === 'alternative',
+  rangeModulus: 'hot', // §12.3.4 : M_C aux modules des températures correspondantes
   // §12.3.1 : corrosion considérable → module d'inertie et coefficient i avec (e_n − c₀)
   stressSection: corrodedSection,
   stressFactors: corrodedFactors(componentFactors),
