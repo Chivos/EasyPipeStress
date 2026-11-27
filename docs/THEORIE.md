@@ -386,33 +386,43 @@ tableau H.2, tés extrudés et piquages forgés du tableau H.3, fluage σ₅
 (12.3.5-1), mouvement d'ancrage unique non répété σ₆ (12.3.6-1), plafond R_m/3
 de f_c (à intégrer dans la valeur saisie), amendements postérieurs à la version 1.
 
-**ASME B31.3-2018 (§320.2, §319.4.4, §302.3.6, Appendix D).** Les flexions sont
-séparées dans le plan (M_i) et hors plan (M_o) du coude ou du té, avec des
+**ASME B31.3-2012 (révision de l'édition 2010) — §302.3.5, §302.3.6, §319.4.4,
+§320 et Appendix D.** Module contrôlé sur le texte de cette édition. Les flexions
+sont séparées dans le plan (M_i) et hors plan (M_o) du coude ou du té, avec des
 facteurs distincts i_i, i_o ; la torsion n'est pas intensifiée ; l'effort normal
 est pris en compte.
 
 | Réf. | Critère | Formule |
 |---|---|---|
-| (23a) | Charges permanentes | S_L = √[(\|S_a\| + S_b)² + (2S_t)²] ≤ S_h ; S_a = F_a/A_p, S_b = √[(I_i·M_i)² + (I_o·M_o)²]/Z, S_t = M_t/(2Z) ; I = max(1 ; 0,75i) |
-| (17), (1a) | Étendue de dilatation | S_E = √[(\|S_a\| + S_b)² + (2S_t)²] ≤ S_A = f·(1,25·S_c + 0,25·S_h) ; S_a = i_a·F_a/A_p, S_b = √[(i_i·M_i)² + (i_o·M_o)²]/Z |
+| (23a) | Charges permanentes | S_L = √[(\|S_a\| + S_b)² + (2S_t)²] ≤ S_h ; S_a = I_a·F_a/A_p, S_b = √[(I_i·M_i)² + (I_o·M_o)²]/Z, S_t = I_t·M_t/(2Z) ; I_i, I_o = max(1 ; 0,75i), I_a = I_t = 1 |
+| (17), (1a) | Étendue des contraintes de déplacement | S_E = √[(\|S_a\| + S_b)² + (2S_t)²] ≤ S_A = f·(1,25·S_c + 0,25·S_h) ; S_a = i_a·F_a/A_p, S_b = √[(i_i·M_i)² + (i_o·M_o)²]/Z, S_t = i_t·M_t/(2Z) |
 | (1b) | Si (1a) non satisfaite et S_h > S_L | S_E ≤ f·[1,25·(S_c + S_h) − S_L] |
 | §302.3.6 | Charges occasionnelles (séisme) | S_L + S_occ ≤ 1,33·S_h, S_occ calculée comme S_L avec les efforts du séisme |
-| §304.1.2, §304.2.1 | Épaisseur minimale (option) | t = P·D/[2(S·E·W/I + P·Y)], Y = 0,4, E = W = 1 |
+| §304.1.2, §304.2.1 | Épaisseur minimale (option) | t = P·D/[2(S·E·W/I + P·Y)] (3a, 3c), Y = 0,4, E = W = 1 ; I = (4R₁/D − 1)/(4R₁/D − 2) à l'intrados (3d) |
 
-F_a des charges permanentes : effort normal du poids + effet de fond P·A_f.
-f = 6·N^−0,2 borné entre 0,15 et 1,0 (le plafond 1,2 des aciers à R_m ≤ 517 MPa
-n'est pas utilisé). i_a = 1 pour les coudes, i_o pour les autres composants.
-Z = π(D⁴ − d⁴)/(32D) ; piquage réduit : Z_e = π·r₂²·T_s, T_s = min(T_h ; i_i·T_b).
-S_L est calculée avec l'épaisseur diminuée de la surépaisseur de corrosion si
-l'option « tolérance et corrosion » du projet est cochée, S_E toujours avec les
-dimensions nominales et au module de référence (moments × E_c/E_h si calcul à
-chaud). Tableau D300 : coude h = T·R₁/r₂², k = 1,65/h, i_i = 0,9/h^(2/3),
+F_a des charges permanentes : effort normal du poids + effet de fond P·A_f
+(§320.2). f = 6·N^−0,2 borné entre 0,15 et f_m (1c) ; f_m = 1,0 est retenu (le
+code admet 1,2 pour les aciers à R_m ≤ 517 MPa jusqu'à 371 °C). Dans S_A, S_c et
+S_h sont plafonnés à 138 MPa (§302.3.5 d). i_a = 1 pour les coudes, i_o pour les
+autres composants ; i_t = 1. Z = π(D⁴ − d⁴)/(32D) ; flexion du tronçon réduit d'un
+té ou piquage réduit (éq. 20) : Z_e = π·r₂²·T_s, T_s = min(T_h ; i_i·T_b), la
+torsion restant rapportée au module du tube. S_L est calculée avec l'épaisseur
+diminuée des surépaisseurs (§320.1) quand l'option « tolérance et corrosion » du
+projet est cochée, le poids restant calculé en épaisseur nominale ; S_E toujours
+avec les dimensions nominales (§319.3.5) et au module de référence à 21 °C
+(§319.2.2 b 4 : efforts calculés à chaud multipliés par E_a/E, élément par
+élément). Tableau D300 : coude h = T·R₁/r₂², k = 1,65/h, i_i = 0,9/h^(2/3),
 i_o = 0,75/h^(2/3) ; tés i_o = 0,9/h^(2/3), i_i = 0,75·i_o + 0,25, avec
-h = 3,1·T/r₂ (té forgé B16.9), (T + T_r/2)^2,5/(T^1,5·r₂) (renforcé, T_r ≤ 1,5·T),
-T/r₂ (non renforcé) ; réduction et soudure bout à bout : i = 1,0 (l'option
-« soudures brutes » des réductions est sans effet). Un seul critère occasionnel :
-le premier niveau coché du cas sismique. Non repris : éditions 2020 et suivantes
-(facteurs de l'ASME B31J), f de l'édition 2022.
+h = 3,1·T/r₂ (té forgé B16.9), (T + T_r/2)^2,5/(T^1,5·r₂) (renforcé ; 4·T/r₂ si
+T_r > 1,5·T, note 10), T/r₂ (non renforcé) ; réduction et soudure bout à bout :
+i = 1,0 (l'option « soudures brutes » des réductions est sans effet). Les
+facteurs valent pour D/T ≤ 100 (note 1) : un avertissement est émis au-delà. Un
+seul critère occasionnel : le premier niveau coché du cas sismique ; le code ne
+donne pas la formule de la contrainte occasionnelle, calculée ici comme S_L.
+Non repris : brides aux extrémités des coudes (note 5), coudes à onglets,
+h = 4,4·T/r₂ des tés forgés à gorge épaisse (note 8), tés extrudés et piquages
+forgés, limite alternative des charges occasionnelles à haute température,
+éditions 2020 et suivantes (facteurs de l'ASME B31J).
 
 *Moments dans le plan et hors plan.* M_i est la composante du moment de flexion
 portée par la normale au plan du coude, ou du té (plan du collecteur et du
@@ -593,7 +603,7 @@ interpréter avec prudence (`src/diagnostics.js`), sans modifier les résultats 
   leurs SIF et indices B).
 - CODETI : édition 2006 (section C3), sans fluage ni épaisseur minimale ; EN 13480-3 :
   édition 2017 version 1 (pas d'A4:2021 / 2024) ; ASME B31.3 : édition
-  2018 (pas de facteurs B31J). Admissibles de ces codes à saisir par
+  2012 (pas de facteurs B31J). Admissibles de ces codes à saisir par
   l'utilisateur (une seule colonne S par matériau).
 - Codes à ajouter : RCC-M classe 1 (B 3600, indices C, K, analyse en fatigue),
   classe 3 (D 3600), ASME B31.1.
@@ -611,6 +621,6 @@ interpréter avec prudence (`src/diagnostics.js`), sans modifier les résultats 
 9. AFCEN, *RCC-M – Règles de conception et de construction des matériels mécaniques des îlots nucléaires REP*, Section I, sous-sections B, C, Annexe Z I.
 10. ASME Boiler & Pressure Vessel Code, Section III, Division 1, Subsections NB, NC (NB-3600, NC-3600) et Appendix N.
 12. EN 13480-3:2017 (F), version 1 (décembre 2017), *Tuyauteries industrielles métalliques – Partie 3 : conception et calcul*, article 12 et annexe H.
-13. ASME B31.3-2018, *Process Piping*, §302.3, §304, §319, §320 et Appendix D.
+13. ASME B31.3-2012 (révision de l'ASME B31.3-2010), *Process Piping*, §302.3, §304, §319, §320 et Appendix D.
 14. SNCT, *CODETI 2006 – Code de construction des tuyauteries industrielles*, Division 1, partie C, section C3 « Analyse et critères d'acceptation ».
 11. WRC Bulletin 300, *Technical position on damping values for piping*, 1984 ; NUREG-1061, 1985.

@@ -7,7 +7,7 @@ poutres, chargements poids propre, pression, dilatation thermique et séisme
 (classe 2), §C 3650** : équations (6) poids propre + pression, (7) dilatation,
 (8) = (6) + (7) et (10B), (10C), (10D) séisme par niveau de critère. D'autres
 codes peuvent être choisis dans l'onglet Code : **EN 13480-3:2017** (version 1, article
-12), **ASME B31.3** (2018) et **CODETI 2006** Division 1 (section C3).
+12), **ASME B31.3-2012** et **CODETI 2006** Division 1 (section C3).
 
 Aucune installation ni serveur de calcul : c'est une page statique (modules
 JavaScript natifs, sans dépendance ni étape de compilation), publiée sur
