@@ -18,11 +18,18 @@
 //  24 h, 1,15 si moins de 10 %, 1,2 si moins de 1 % (séisme de dimensionnement),
 //  1,3 pour une charge exceptionnelle, 1,8 pour le séisme majoré de sécurité ;
 //  un coefficient par niveau du cas sismique (paramètres du code).
-//  Annexe H, tableau H.1 : coude h = 4R·e_n/d_m², k_B = 1,65/h, i = 0,9/h^(2/3) ;
-//  té forgé h = 8,8e_n/d_m ; piquage h = 2e_n/d_m ; piquage avec anneau de renfort
-//  h = 2(e_n + e_pl/2)^2,5/(d_m·e_n^1,5) ; réduction i = 0,5 + α/100·√(d/e_n) ≤ 2 ;
-//  soudure bout à bout 1,0 (1,8 si e_n < 5 mm ou désalignement > 0,1e_n).
-//  Mêmes expressions que le RCC-M classe 2 (d_m = 2r).
+//  Annexe H, tableau H.1 (contrôlé sur le texte de la norme) :
+//   2  coude lisse          h = 4R·e_n/d_m², k_B = 1,65/h, i = 0,9/h^(2/3)
+//   5  réduction forgée     i = 0,5 + α/100·√(d_o/e_n) ≤ 2 (α ≤ 60°, e_n ≥ d_o/100)
+//   6  té à tubulure posée, pénétrante ou extrudée    h = 2e_n/d_m
+//   7  idem avec anneau de renfort   h = 2(e_n + e_pl/2)^(5/2)/(d_m·e_n^(3/2)), e_pl ≤ e_n
+//   8  té forgé             h = 8,8e_n/d_m
+//      tés : k_B = 1, i = 0,9/h^(2/3) ; module de la tubulure π/4·d_m,b²·e_x,
+//      e_x = min(e_n ; i·e_n,b)
+//   9  soudure bout à bout  1,0 (e_n ≥ 5 mm et δ ≤ 0,1e_n), sinon 1,8
+//  Notes h, i (option) : i et k_B des coudes divisés par les termes de pression.
+//  Non repris : brides aux extrémités des coudes (note c), coudes à sections
+//  (lignes 3, 4), tableau H.2, coefficients i_o et i_i du tableau H.3.
 //  Épaisseur minimale (§6.1, coudes §6.2.3) : e = p_c·D_o/(2f·z + p_c), z = 1.
 //
 //  Les admissibles sont lus dans la colonne S des matériaux, à saisir comme la
@@ -37,6 +44,7 @@ import { reducedBranch } from './shared.js';
 
 export const DEFAULT_PARAMS = {
   cycles: 7000,
+  pressureCorrection: false,
   kB: 1.2,
   kC: 1.3,
   kD: 1.8,
@@ -75,6 +83,16 @@ export const kParams = (ref, options = K_OPTIONS, labels = K_LABELS) =>
     optionLabel: (v) => labels[v],
     title: `Coefficient k de l’équation ${ref} appliqué à ce niveau du cas sismique`,
   }));
+
+/**
+ * Coefficients du tableau H.1 : mêmes expressions que le RCC-M classe 2 (d_m = 2r),
+ * sauf l'anneau de renfort d'un piquage (ligne 7), compté jusqu'à e_pl = e_n.
+ * Notes h et i (option) : correction de pression sur i et k_B des coudes.
+ */
+export function componentFactors(desc) {
+  if (desc.kind === 'tee' && desc.teeType === 'reinforced') return b311Factors({ ...desc, pad: Math.min(desc.pad ?? 0, desc.sec.t) });
+  return b311Factors(desc);
+}
 
 /** Module Z : π(d_o⁴ − d_i⁴)/(32d_o) ; piquage réduit : π/4·d_m,b²·e_b, e_b = min(e_n ; i·e_n,b). */
 export function modulus(pt, sec) {
@@ -135,8 +153,12 @@ export const en13480 = {
   reference: 'EN 13480-3:2017, §12.3 — équations (12.3.2-1), (12.3.3-1), (12.3.4-1), (12.3.4-2) ; facteur i unique de l’annexe H (tableau H.1)',
   defaults: DEFAULT_PARAMS,
   materialHelp: 'Colonne S : contrainte de calcul f de l’EN 13480-3 (§5.2 : min(Rp0,2/t / 1,5 ; Rm / 2,4) pour les aciers non austénitiques, Rp1,0/t / 1,5 pour les austénitiques à A ≥ 35 %) ; les valeurs par défaut de la bibliothèque sont indicatives et établies pour le RCC-M.',
-  params: [{ key: 'cycles', label: 'Nombre de cycles équivalents N', type: 'number', title: 'Détermine le facteur de réduction U de f_a (tableau 12.1.3-1)' }, ...kParams('(12.3.3-1)')],
-  componentFactors: b311Factors,
+  params: [
+    { key: 'cycles', label: 'Nombre de cycles équivalents N', type: 'number', title: 'Détermine le facteur de réduction U de f_a (tableau 12.1.3-1)' },
+    { key: 'pressureCorrection', label: 'Correction de pression sur k_B et i des coudes', type: 'checkbox', title: 'Tableau H.1, notes h et i : grand diamètre, petite épaisseur' },
+    ...kParams('(12.3.3-1)'),
+  ],
+  componentFactors,
   eqName: (eq) => ({ s1: 'σ₁', s2B: 'σ₂ niveau 1', s2C: 'σ₂ niveau 2', s2D: 'σ₂ niveau 3', s3: 'σ₃', s4: 'σ₄' })[eq] ?? eq,
   levelsFor,
   levelsTitle: 'Niveaux sismiques vérifiés (σ₂, éq. 12.3.3-1)',
@@ -149,8 +171,8 @@ export const en13480 = {
   ],
   help: [
     'Module Z = π(d_o⁴ − d_i⁴)/(32d_o) ; tronçon réduit d’un té ou piquage réduit : π/4·d_m,b²·e_b, e_b = min(e_n ; i·e_n,b). Moments résultants √(Mx² + My² + Mz²) à la jonction, branche par branche. M_C : étendue calculée au module à chaud, E_h/E_c porté par l’admissible.',
-    'Annexe H (tableau H.1) : coudes h = 4R·e_n/d_m², k_B = 1,65/h, i = 0,9/h^⅔ (≥ 1). Tés : i = 0,9/h^⅔ avec h = 8,8e_n/d_m (forgé), 2(e_n + e_pl/2)^2,5/(d_m·e_n^1,5) (piquage renforcé), 2e_n/d_m (piquage non renforcé). Réduction : i = 0,5 + α/100·√(d/e_n) ≤ 2. Soudure bout à bout : 1,0, ou 1,8 si e_n < 5 mm ou désalignement > 0,1e_n (colonne « Soudures » des réductions).',
-    'f_f, f_c, f_h : contrainte de calcul f du matériau (colonne S) à la température de calcul, à froid et à chaud. Édition 2017 ; non repris : effort axial et facteurs i_i, i_o, i_t (amendement A4:2021, édition 2024), fluage (12.3.5), déplacement d’appui non répété (12.3.6).',
+    'Annexe H (tableau H.1) : coudes h = 4R·e_n/d_m², k_B = 1,65/h, i = 0,9/h^⅔ (≥ 1). Tés : i = 0,9/h^⅔ avec h = 8,8e_n/d_m (forgé), 2(e_n + e_pl/2)^2,5/(d_m·e_n^1,5) (anneau de renfort, compté jusqu’à e_pl = e_n), 2e_n/d_m (tubulure posée, pénétrante ou extrudée). Réduction forgée : i = 0,5 + α/100·√(d_o/e_n) ≤ 2. Soudure bout à bout : 1,0, ou 1,8 si e_n < 5 mm ou désalignement > 0,1e_n (colonne « Soudures » des réductions).',
+    'f_f, f_c, f_h : contrainte de calcul f du matériau (colonne S) à la température de calcul, à froid et à chaud. Édition 2017 ; non repris : coefficients i_o et i_i du tableau H.3, brides aux extrémités des coudes (note c), effort axial et coefficient i_t (amendement A4:2021, édition 2024), fluage (12.3.5), déplacement d’appui non répété (12.3.6).',
   ],
 
   thickness: {

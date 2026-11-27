@@ -357,13 +357,19 @@ exceptionnelle ; niveau 2), 1,8 (séisme majoré de sécurité ; niveau 3).
 réduit l'admissible de E_h/E_c (même étendue de déformation). Avec l'option du
 projet « module à chaud » (défaut), les moments sont pris tels quels et f_a porte
 le rapport ; avec un calcul à froid, le rapport n'est pas appliqué : le taux est
-le même dans les deux cas. Les facteurs du tableau H.1 ont les mêmes expressions
-que ceux du RCC-M classe 2 (d_m = 2r) : coude h = 4R·eₙ/d_m², k_B = 1,65/h,
-i = 0,9/h^(2/3) ; té forgé h = 8,8eₙ/d_m ; piquage h = 2eₙ/d_m ; avec renfort
-h = 2(eₙ + e_pl/2)^2,5/(d_m·eₙ^1,5) ; réduction i = 0,5 + α/100·√(d/eₙ) ≤ 2.
-Non repris : effort axial, section corrodée et facteurs i_i, i_o, i_t du tableau
-H.3 (amendement A4:2021, édition 2024), fluage (12.3.5), déplacement d'appui non
-répété (12.3.6), plafond R_m/3 de f_c (à intégrer dans la valeur saisie).
+le même dans les deux cas. Les coefficients du tableau H.1, contrôlés sur le texte
+de la norme, ont les mêmes expressions que ceux du RCC-M classe 2 (d_m = 2r) :
+coude lisse h = 4R·eₙ/d_m², k_B = 1,65/h, i = 0,9/h^(2/3) ; té forgé
+h = 8,8eₙ/d_m ; té à tubulure posée, pénétrante ou extrudée h = 2eₙ/d_m ; réduction
+forgée i = 0,5 + α/100·√(d_o/eₙ) ≤ 2 ; soudure bout à bout 1,0 ou 1,8. Seule
+différence : l'anneau de renfort d'un piquage, h = 2(eₙ + e_pl/2)^(5/2)/(d_m·eₙ^(3/2)),
+est compté jusqu'à e_pl = eₙ (1,5·e au RCC-M). La correction de pression de i et
+k_B des coudes (notes h et i) est une option du code.
+Non repris : coefficients i_o, i_i du tableau H.3 (flexions dans le plan et hors
+plan), brides aux extrémités des coudes (note c), coudes à sections, tableau H.2,
+effort axial, section corrodée et coefficient i_t (amendement A4:2021, édition
+2024), fluage (12.3.5), déplacement d'appui non répété (12.3.6), plafond R_m/3 de
+f_c (à intégrer dans la valeur saisie).
 
 **ASME B31.3-2018 (§320.2, §319.4.4, §302.3.6, Appendix D).** Les flexions sont
 séparées dans le plan (M_i) et hors plan (M_o) du coude ou du té, avec des

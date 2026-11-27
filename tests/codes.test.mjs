@@ -217,8 +217,25 @@ test('EN 13480-3 : f_a avec E_h/E_c, taux indépendant du module de calcul', () 
   // même étendue de déformation : même taux quel que soit le module du calcul
   near(s3h.ratio, s3c.ratio, 1e-5, 'taux σ₃'); // à la raideur de pénalité des ancrages près
   near(s3c.stress / s3h.stress, 200000 / 170000, 1e-5, 'σ₃ froid / chaud');
-  // facteurs de l'annexe H : mêmes expressions que le RCC-M classe 2
-  assert.equal(en13480.componentFactors, rccmFactors);
+  // tableau H.1 : mêmes expressions que le RCC-M classe 2 pour le coude et le té forgé
+  const sec = pipeSection({ od: 168.3, t: 7.11 });
+  const dm = 168.3 - 7.11;
+  const bend = en13480.componentFactors({ kind: 'bend', sec, bend: { radius: 228.6 } });
+  const hb = (4 * 228.6 * 7.11) / dm ** 2;
+  near(bend.k, 1.65 / hb, 1e-12, 'k_B');
+  near(bend.i, 0.9 / hb ** (2 / 3), 1e-12, 'i coude');
+  assert.deepEqual(en13480.componentFactors({ kind: 'tee', sec, teeType: 'welding' }), rccmFactors({ kind: 'tee', sec, teeType: 'welding' }));
+  near(en13480.componentFactors({ kind: 'tee', sec, teeType: 'welding' }).h, (8.8 * 7.11) / dm, 1e-12, 'té forgé');
+  near(en13480.componentFactors({ kind: 'tee', sec, teeType: 'unreinforced' }).h, (2 * 7.11) / dm, 1e-12, 'tubulure posée');
+  // ligne 7 : anneau de renfort compté jusqu'à e_pl = e_n (1,5·e au RCC-M)
+  const hr = (epl) => (2 * (7.11 + 0.5 * epl) ** 2.5) / (dm * 7.11 ** 1.5);
+  near(en13480.componentFactors({ kind: 'tee', sec, teeType: 'reinforced', pad: 5 }).h, hr(5), 1e-12, 'renfort 5 mm');
+  near(en13480.componentFactors({ kind: 'tee', sec, teeType: 'reinforced', pad: 10 }).h, hr(7.11), 1e-12, 'renfort plafonné à e_n');
+  assert.ok(rccmFactors({ kind: 'tee', sec, teeType: 'reinforced', pad: 10 }).h > hr(7.11));
+  // notes h, i : correction de pression (option), i et k_B diminués
+  const pc = en13480.componentFactors({ kind: 'bend', sec, bend: { radius: 228.6 }, P: 5, Ec: 200000, params: { pressureCorrection: true } });
+  near(pc.i, bend.i / (1 + 3.25 * (5 / 200000) * (dm / (2 * 7.11)) ** 2.5 * ((2 * 228.6) / dm) ** (2 / 3)), 1e-12, 'i corrigé');
+  near(pc.k, bend.k / (1 + 6 * (5 / 200000) * (dm / (2 * 7.11)) ** (7 / 3) * ((2 * 228.6) / dm) ** (1 / 3)), 1e-12, 'k_B corrigé');
 });
 
 test('EN 13480-3 : coefficients k par niveau sismique et équation σ₄', () => {
