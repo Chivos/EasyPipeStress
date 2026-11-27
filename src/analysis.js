@@ -8,6 +8,7 @@ import { codes } from './codes/index.js';
 import { summarize, thicknessRows, verifiedLevels } from './codes/common.js';
 import { seismicLevels } from './loads/seismic.js';
 import { localResponses, planeMoments } from './core/frames.js';
+import { runNonlinearStatics } from './nonlinear.js';
 import { seismicDiagnostics, resultDiagnostics, contactFindings } from './diagnostics.js';
 
 export function runAnalysis(model) {
@@ -18,10 +19,13 @@ export function runAnalysis(model) {
   const warnings = [...mesh.warnings];
   const cases = [];
   const ctx = { model, mesh, sys };
+  // solveur non linéaire (expérimental) : poids et dilatation calculés par états
+  const nonlinear = model.settings.solver === 'nonlinear' ? runNonlinearStatics(ctx) : null;
   for (const lc of model.loadCases) {
     if (lc.enabled === false) continue;
     const type = loadTypes.get(lc.type);
-    const run = type.run(ctx, lc);
+    const run = nonlinear?.cases.get(lc.id) ?? type.run(ctx, lc);
+    if (nonlinear?.contacts.length && lc.type === 'forces') warnings.push(`Cas ${lc.id}${lc.label ? ` (${lc.label})` : ''} : forces nodales calculées en linéaire, hors des états du solveur non linéaire (appuis simples bilatéraux, jeux ouverts).`);
     if (lc.type === 'forces' && code) warnings.push(`Cas ${lc.id}${lc.label ? ` (${lc.label})` : ''} : forces nodales non attribuées à un chargement du code (poids, dilatation, séisme), sans effet sur les équations de ${code.label}.`);
     // déplacements et efforts sur supports en repères locaux (déjà combinés pour le séisme)
     const r0 = run.uLocal ? run : { ...run, ...localResponses(run, mesh) };
@@ -67,7 +71,7 @@ export function runAnalysis(model) {
     if (lc.type === 'seismic') warnings.push(...seismicDiagnostics(lc, r, mesh));
   }
   // état des contacts (appuis simples, jeux, courses) d'après le calcul linéaire
-  const contacts = contactFindings({ mesh, cases });
+  const contacts = contactFindings({ mesh, cases, nonlinear: nonlinear ? { contacts: nonlinear.contacts, states: nonlinear.states } : null });
   warnings.push(...resultDiagnostics({ mesh, cases, contacts }));
   const modal = cases.find((c) => c.modal)?.modal ?? null;
   let check = code ? code.check({ model, mesh, cases }) : null;
@@ -83,7 +87,7 @@ export function runAnalysis(model) {
       warnings.push(`Le code « ${code.label} » ne fournit pas de formule d’épaisseur minimale : vérification non faite.`);
     }
   }
-  return { mesh, sys, dynSys: ctx.dynSys ?? sys, contacts, cases, modal, check, code, warnings, elapsed: Date.now() - t0 };
+  return { mesh, sys, dynSys: ctx.dynSys ?? sys, contacts, nonlinear: nonlinear ? { contacts: nonlinear.contacts, states: nonlinear.states } : null, cases, modal, check, code, warnings, elapsed: Date.now() - t0 };
 }
 
 /** Combinaison algébrique de cas signés (ex. état de service W + T1). */

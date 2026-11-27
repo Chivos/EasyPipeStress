@@ -617,11 +617,12 @@ Les points en attente d'une décision ou d'un texte de code sont suivis dans
 
 ## 7. Calcul non linéaire des supports : principes retenus
 
-> **En projet.** Cette section fixe les principes du second solveur
-> (expérimental, au choix dans le projet) destiné aux supports non linéaires :
-> appuis unilatéraux, jeux, butées, frottement. Il n'est pas encore écrit ; le
-> solveur linéaire décrit plus haut reste le solveur par défaut et n'est pas
-> modifié.
+> **Expérimental.** Second solveur, au choix dans l'onglet Projet, destiné aux
+> supports non linéaires. Le solveur linéaire décrit plus haut reste le solveur
+> par défaut et n'est pas modifié. Sont en place : le calcul statique par états
+> et la raideur par zones (appuis simples, jeux, butées des supports à ressort),
+> qui alimentent directement les équations des codes. Reste à faire : le
+> frottement.
 
 Les principes sont alignés sur le calcul statique non linéaire du logiciel de
 comparaison (PIPESTRESS, aide en ligne, « Non-Linear Static Analysis » et cartes
@@ -724,6 +725,38 @@ Si une hypothèse est fausse, l'écart sert à la corriger pour l'itération
 suivante. Au-delà d'un nombre maximal d'itérations, le calcul échoue
 explicitement : aucun résultat non convergé n'est rendu.
 
+**Mise en œuvre (sans frottement).** Dans une zone donnée, un contact apporte sa
+raideur et un terme de charge qui assure la continuité de l'effort ; chaque
+itération est donc un calcul linéaire ordinaire. Le contrôle de zone est fait sur
+l'effort : un contact est cohérent si l'effort de la branche supposée égale celui
+de la loi par morceaux au déplacement calculé (écart inférieur à 10⁻³ N ou à 10⁻⁹
+de l'effort de contact le plus grand). Ce critère évite toute hésitation à la
+frontière d'une zone. Toutes les zones fausses sont corrigées à la fois ; si un
+état des contacts se répète (cycle), une seule correction est faite par
+itération, celle du contact le plus en défaut. Le calcul échoue explicitement
+après 60 itérations, si le cycle persiste, ou si la tuyauterie n'est plus retenue
+quand des supports cessent d'agir (les supports en cause sont nommés).
+
+**Cas rendus au reste de l'application.** Pour que les équations des codes, les
+tableaux et les combinaisons gardent leur sens :
+
+- le cas de poids est l'état froid (poids seul, module à froid) : M_A ;
+- chaque cas de dilatation est la différence entre l'état de service (poids +
+  dilatation) et l'état « poids seul », tous deux calculés au module de la
+  dilatation : M_C. Avec le module à chaud, cela demande un troisième calcul, le
+  poids seul au module à chaud.
+
+La somme des deux cas redonne l'état de service, au module près : le poids y est
+compté au module à froid, comme dans le solveur linéaire. La répartition du poids
+dépendant un peu du module (supports à ressort, tronçons à des températures
+différentes), cette somme laisse sur un appui décollé un petit effort résiduel,
+de l'ordre du newton sur le cas test collecteur. L'état des contacts affiché, lui,
+est celui de l'état de service calculé : effort nul sur un appui décollé.
+
+**Limites de cette version.** Un seul cas de poids propre actif ; les cas de
+forces nodales restent calculés en linéaire ; pas de frottement ; les
+dispositifs auto-bloquants restent libres en statique.
+
 ### 7.5 Séisme : supports linéaires
 
 L'analyse modale et spectrale est linéaire par nature : elle est faite sur une
@@ -761,8 +794,12 @@ insuffisant. Aucune des trois n'est rigoureuse.
 - À chaque calcul : équilibre global, conditions de contact (pas de traction sur
   un appui posé, pas de pénétration au-delà d'un jeu), compte rendu de
   convergence ; un calcul non convergé échoue explicitement.
-- Cas à solution analytique (décollement, fermeture d'un jeu, glissement) et
-  comparaison avec le logiciel de référence sur un cas à jeux et frottement.
+- Cas à solution analytique sur une console (`tests/nonlinear.test.mjs`) :
+  appui qui décolle quand l'encastrement monte, jeu ouvert ou rattrapé, butée
+  d'un support à ressort ; équilibre vertical et état des contacts sur le cas
+  test collecteur avec un appui posé qui décolle à chaud.
+- Reste à faire : comparaison avec le logiciel de référence sur un cas à jeux,
+  puis frottement (glissement).
 
 ## Références
 

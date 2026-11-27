@@ -224,6 +224,7 @@ export function renderResultsPanel(app) {
     ),
   );
   if (!r) return h('div', {}, out);
+  if (r.nonlinear) out.push(contactCard(r));
   if (r.check) {
     const s = r.check.summary;
     out.push(
@@ -447,6 +448,59 @@ export function renderBottom(app) {
     default:
       return h('div');
   }
+}
+
+/** Libellé de l'état d'un contact calculé par le solveur non linéaire. */
+export function contactStateText(c, st) {
+  const mm = (v) => `${fmt(Math.abs(v), 2)} mm`;
+  const N = (v) => `${fmt(Math.abs(v), 0)} N`;
+  switch (st.status) {
+    case 'contact':
+      return `en contact (${N(st.force)})`;
+    case 'lifted':
+      return `décollé (${mm(st.d)})`;
+    case 'open':
+      return `ouvert (${mm(st.d)} sur ${mm(c.d2)})`;
+    case 'closedPlus':
+    case 'closedMinus':
+      return `fermé (${N(st.force)})`;
+    case 'stopHigh':
+      return `butée haute (${N(st.force)})`;
+    case 'stopLow':
+      return `butée basse (${N(st.force)})`;
+    default:
+      return `libre (${mm(st.d)})`;
+  }
+}
+
+/** Lignes du tableau d'état des contacts : [support, nature, état par état calculé…]. */
+export function contactRows(r) {
+  const kinds = { rest: 'appui simple', gap: 'jeu', stop: 'butées du ressort' };
+  const axis = (d) => ['X', 'Y', 'Z'].find((_, i) => Math.abs(Math.abs(d[i]) - 1) < 1e-6) ?? 'biais';
+  return r.nonlinear.contacts.map((c, i) => {
+    const sup = r.mesh.supports[c.support];
+    return [`${sup.label} (${r.mesh.nodes[sup.node].label})`, c.kind === 'gap' ? `${kinds.gap} ${axis(c.dir)}` : kinds[c.kind], ...r.nonlinear.states.map((st) => contactStateText(c, st.contacts[i]))];
+  });
+}
+
+/** Carte « État des contacts » du solveur non linéaire : un état par colonne. */
+function contactCard(r) {
+  const { contacts, states } = r.nonlinear;
+  const changed = (i) => new Set(states.map((st) => st.contacts[i].status)).size > 1 || states.some((st) => ['lifted', 'closedPlus', 'closedMinus', 'stopHigh', 'stopLow'].includes(st.contacts[i].status));
+  return h(
+    'section',
+    { class: 'card' },
+    h('h3', {}, 'État des contacts — solveur non linéaire'),
+    h('p', { class: 'help' }, `Expérimental. États calculés : ${states.map((st) => `${st.name} (${st.iterations} itération${st.iterations > 1 ? 's' : ''})`).join(', ')}. Sans frottement ; séisme linéaire, tous supports actifs.`),
+    contacts.length
+      ? h(
+          'table',
+          { class: 'grid compact' },
+          h('thead', {}, h('tr', {}, th('Support'), th('Contact'), ...states.map((st) => th(st.name)))),
+          h('tbody', {}, contactRows(r).map((row, i) => h('tr', { class: changed(i) ? 'sel' : '' }, row.map((v) => h('td', {}, v))))),
+        )
+      : h('p', { class: 'muted' }, 'Aucun support à contact (appui simple, jeu, butée de support à ressort) : résultats identiques à ceux du solveur linéaire.'),
+  );
 }
 
 const MAX_ROWS = 200; // lignes affichées par défaut (les plus chargées si tri par taux)
@@ -683,6 +737,14 @@ function hangerText(r, k) {
  * (course d'un auto-bloquant, jeu restant).
  */
 function contactText(r, k) {
+  // solveur non linéaire : état calculé de chaque contact du support, état par état
+  if (r.nonlinear) {
+    const mine = r.nonlinear.contacts.map((c, i) => ({ c, i })).filter(({ c }) => c.support === k);
+    const snub = r.mesh.springs.some((s) => s.support === k && s.dynamicOnly && !(s.gap > 0));
+    if (!mine.length) return snub ? ' Libre en poids et en dilatation, bloqué en séisme.' : '';
+    const kinds = { rest: 'appui simple', gap: 'jeu', stop: 'butées' };
+    return ` Solveur non linéaire — ${mine.map(({ c, i }) => `${kinds[c.kind]} : ${r.nonlinear.states.map((st) => `${contactStateText(c, st.contacts[i])} sous ${st.name}`).join(', ')}`).join(' ; ')}. Sous séisme, le support est compté actif.`;
+  }
   const sup = r.mesh.supports[k];
   const springs = r.mesh.springs.filter((s) => s.support === k && s.dynamicOnly);
   if (!springs.length) return '';

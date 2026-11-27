@@ -3,7 +3,7 @@
 import { fmt } from '../core/units.js';
 import { components } from '../components/index.js';
 import { SUPPORT_KINDS, SNUBBER_DIRS } from '../components/support.js';
-import { displayCases, modalSums } from './results.js';
+import { displayCases, modalSums, contactRows } from './results.js';
 import { spectrumFor, seismicLevels } from '../loads/seismic.js';
 import { codes } from '../codes/index.js';
 import { coveredText } from '../codes/common.js';
@@ -37,6 +37,7 @@ export function buildReport(state, snapshot) {
         ['Tolérance de fabrication et corrosion', m.settings.allowances ? 'prises en compte (épaisseur minimale)' : 'non prises en compte'],
         ['Épaisseur minimale (pression seule)', m.settings.checkThickness ? `vérifiée${r?.code?.thickness ? ` (${r.code.thickness.ref})` : ''}` : 'non vérifiée'],
         ['Supports', 'Linéaires bilatéraux, rigidité de pénalité 10¹⁰ N/mm / 10¹⁴ N·mm/rad'],
+        ['Solveur', m.settings.solver === 'nonlinear' ? 'Non linéaire (expérimental) : poids et dilatation calculés par états, avec recherche de l’état des contacts (appuis simples, jeux, butées) ; sans frottement ; séisme linéaire, tous supports actifs' : 'Linéaire'],
         ['Code', r?.code?.label ?? m.code.id],
         // paramètres déclarés par le code, avec leur libellé (les clés obsolètes
         // d'anciens projets ne sont pas reprises)
@@ -78,6 +79,13 @@ export function buildReport(state, snapshot) {
 
   if (r) {
     parts.push('<h2>4. Résultats</h2>');
+    if (r.nonlinear) {
+      const st = r.nonlinear.states;
+      parts.push('<h3>État des contacts (solveur non linéaire, expérimental)</h3>');
+      parts.push(`<p class="meta">États calculés : ${esc(st.map((x) => `${x.name} (${x.iterations} itération${x.iterations > 1 ? 's' : ''})`).join(', '))}. Le cas de poids est l’état froid ; chaque cas de dilatation est la différence entre l’état de service et l’état « poids seul » au même module.</p>`);
+      if (r.nonlinear.contacts.length) parts.push(table(['Support', 'Contact', ...st.map((x) => x.name)], contactRows(r)));
+      else parts.push('<p>Aucun support à contact : résultats identiques à ceux du solveur linéaire.</p>');
+    }
     if (r.warnings.length) parts.push(`<ul class="warn">${r.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>`);
     if (r.modal) {
       parts.push('<h3>Modes propres</h3>');

@@ -32,6 +32,14 @@ export function renderProject(app) {
     { key: 'bendDivisionAngle', label: 'Angle maximal par élément de coude', unit: '°', type: 'number' },
     { key: 'shear', label: 'Déformation d’effort tranchant (Timoshenko)', type: 'checkbox', default: true },
     {
+      key: 'solver',
+      label: 'Solveur',
+      type: 'select',
+      options: () => ['linear', 'nonlinear'],
+      optionLabel: (v) => (v === 'nonlinear' ? 'non linéaire — expérimental (appuis posés, jeux, butées)' : 'linéaire (par défaut)'),
+      title: 'Linéaire : les supports à contact reçoivent une hypothèse, contrôlée après calcul et signalée si elle est en défaut. Non linéaire (expérimental) : le poids et la dilatation sont calculés par états, avec recherche de l’état des contacts — appui simple qui décolle, jeu qui se ferme, butée d’un support à ressort. Le séisme reste linéaire, tous supports actifs. Sans frottement.',
+    },
+    {
       key: 'thermalModulus',
       label: 'Module d’Young de la dilatation',
       type: 'select',

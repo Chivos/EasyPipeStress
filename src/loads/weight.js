@@ -16,14 +16,25 @@ export const weight = {
 
   run(ctx, lc) {
     const { sys } = ctx;
-    const a = sys.mesh.up.map((v) => -v * G_STD);
-    const loads = bodyForceLoads(sys, a, { metal: true, fluid: lc.fluid !== false, insul: lc.insulation !== false });
-    // précharge des supports variables et constants : effort vers le haut sur la tuyauterie
-    const hangers = sys.mesh.supports.map((s, k) => ({ s, k })).filter(({ s }) => s.preload);
-    for (const { s } of hangers) for (let d = 0; d < 3; d++) loads.F[s.node * 6 + d] += s.preload * s.dir[d];
+    const loads = weightLoads(sys, lc);
     const r = sys.solveStatic(loads);
-    // effort exercé par la tuyauterie sur le support : précharge (vers le bas) + raideur
-    for (const { s, k } of hangers) for (let d = 0; d < 3; d++) r.supportLoads[k * 6 + d] -= s.preload * s.dir[d];
+    applyPreload(r.supportLoads, sys.mesh);
     return { signed: true, ...r, info: {} };
   },
 };
+
+/** Charges du poids propre { F, elemEq } : pesanteur et précharge des supports à ressort. */
+export function weightLoads(sys, lc) {
+  const a = sys.mesh.up.map((v) => -v * G_STD);
+  const loads = bodyForceLoads(sys, a, { metal: true, fluid: lc.fluid !== false, insul: lc.insulation !== false });
+  // précharge des supports variables et constants : effort vers le haut sur la tuyauterie
+  for (const s of sys.mesh.supports) if (s.preload) for (let d = 0; d < 3; d++) loads.F[s.node * 6 + d] += s.preload * s.dir[d];
+  return loads;
+}
+
+/** Effort exercé par la tuyauterie sur un support à ressort : précharge (vers le bas) + raideur. */
+export function applyPreload(supportLoads, mesh) {
+  mesh.supports.forEach((s, k) => {
+    if (s.preload) for (let d = 0; d < 3; d++) supportLoads[k * 6 + d] -= s.preload * s.dir[d];
+  });
+}
