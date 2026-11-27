@@ -925,3 +925,16 @@ test('Jeux et courses : contrôle après calcul linéaire (jeu rattrapé, butée
   // étrier (bilatéral) : aucun contrôle de soulèvement
   assert.deepEqual(run([sup('3', 'clamp')], [{ id: 'W', type: 'weight', enabled: true }, seismic]).contacts, []);
 });
+
+test('Support à un té : directions axiale et latérale prises sur le collecteur, pas sur le piquage', async () => {
+  const { buildMesh } = await import('../src/core/mesher.js');
+  const m = setup();
+  m.components.push(pipe('10', '20', 1000, 0, 0), pipe('20', '30', 1000, 0, 0), pipe('20', '40', 0, 800, 0), { type: 'tee', node: '20', teeType: 'welding', pad: '', sif: '', label: '' });
+  m.components.push(sup('10', 'anchor'), sup('20', 'axial'), sup('20', 'guide'), { type: 'support', node: '20', kind: 'snubber', dir: 'axial', stiffness: '', label: 'DAB' });
+  const mesh = buildMesh(normalizeModel(ensureIds(m)));
+  const at = (kind) => mesh.springs.filter((s) => mesh.supports[s.support].kind === kind).map((s) => s.dir.map((v) => Math.abs(v)));
+  const close = (d, ref) => d.every((v, k) => Math.abs(v - ref[k]) < 1e-9);
+  assert.ok(close(at('axial')[0], [1, 0, 0]), 'butée axiale suivant le collecteur');
+  assert.ok(close(at('snubber')[0], [1, 0, 0]), 'dispositif auto-bloquant axial suivant le collecteur');
+  assert.ok(close(at('guide')[0], [0, 1, 0]), 'guide latéral perpendiculaire au collecteur');
+});

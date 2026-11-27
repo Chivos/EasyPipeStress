@@ -111,3 +111,27 @@ export function planeMoments(elemForces, mesh) {
   }
   return out;
 }
+
+/**
+ * Axe de la tuyauterie au nœud `node` (vecteur unitaire) : moyenne des axes des
+ * éléments qui y aboutissent. À une jonction (té), seul le collecteur compte —
+ * les deux éléments les plus alignés — pour que « axial » et « latéral » ne
+ * soient pas faussés par le piquage.
+ */
+export function pipeAxisAtNode(elems, node) {
+  let list = elems ?? [];
+  if (list.length >= 3) {
+    const out = list.map((e) => (e.n1 === node ? e.R.slice(0, 3) : e.R.slice(0, 3).map((v) => -v)));
+    let best = null;
+    for (let a = 0; a < out.length; a++) for (let b = a + 1; b < out.length; b++) if (!best || dot(out[a], out[b]) < best.d) best = { a, b, d: dot(out[a], out[b]) };
+    list = [list[best.a], list[best.b]];
+  }
+  let a = [0, 0, 0];
+  for (const e of list) {
+    let x = e.R.slice(0, 3);
+    if (dot(x, a) < 0) x = x.map((v) => -v);
+    a = [a[0] + x[0], a[1] + x[1], a[2] + x[2]];
+  }
+  const l = Math.hypot(a[0], a[1], a[2]);
+  return l > 0 ? [a[0] / l, a[1] / l, a[2] / l] : [1, 0, 0];
+}
