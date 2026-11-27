@@ -4,6 +4,7 @@
 import { DEFAULT_MATERIALS } from './materials.js';
 import { DEFAULT_SECTIONS } from './sections.js';
 import { DEFAULT_PARAMS as RCCM_C_PARAMS } from '../codes/rccm-c.js';
+import { codes } from '../codes/index.js';
 
 export const MODEL_VERSION = 1;
 
@@ -119,9 +120,12 @@ export function normalizeModel(raw) {
   const m = { ...base, ...raw };
   m.meta = { ...base.meta, ...(raw.meta ?? {}) };
   m.settings = { ...base.settings, ...(raw.settings ?? {}) };
-  m.code = { ...base.code, ...(raw.code ?? {}), params: { ...base.code.params, ...(raw.code?.params ?? {}) } };
+  // paramètres du code du projet : valeurs par défaut de ce code, complétées par celles du fichier
+  const known = (id) => (codes.has(id) ? codes.get(id).defaults ?? {} : null);
+  const defaults = known(raw.code?.id) ?? (raw.code?.id ? {} : base.code.params);
+  m.code = { ...base.code, ...(raw.code ?? {}), params: { ...defaults, ...(raw.code?.params ?? {}) } };
   // paramètres retirés du code (anciens projets) : supprimés
-  if (m.code.id === base.code.id) for (const k of Object.keys(m.code.params)) if (!(k in base.code.params)) delete m.code.params[k];
+  if (known(m.code.id)) for (const k of Object.keys(m.code.params)) if (!(k in known(m.code.id))) delete m.code.params[k];
   m.components = (raw.components ?? []).map((c) => (c.type === 'support' && c.kind === 'spring' ? { ...c, kind: 'variable', preload: c.preload ?? '' } : c)); // ancien « ressort »
   m.nodeCoords = raw.nodeCoords ?? base.nodeCoords;
   m.loadCases = raw.loadCases ?? base.loadCases;

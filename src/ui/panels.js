@@ -8,6 +8,7 @@ import { components } from '../components/index.js';
 import { SUPPORT_FAMILIES, hasAdvanced } from '../components/support.js';
 import { loadTypes } from '../loads/index.js';
 import { codes } from '../codes/index.js';
+import { codeLevels } from '../codes/common.js';
 import { newId } from '../core/model.js';
 import { DEFAULT_SPECTRUM } from '../core/model.js';
 import { seismicAxes, seismicLevels, defaultLevels, LEVELS } from '../loads/seismic.js';
@@ -163,7 +164,7 @@ function renderMaterials(app) {
   const mi = m.materials.indexOf(mat);
   return section(
     'Matériaux',
-    help('Valeurs par défaut indicatives : à remplacer par celles de l’Annexe Z I de l’édition du RCC-M applicable. α est le coefficient moyen de dilatation entre 20 °C et T.'),
+    help(`${codes.has(m.code?.id) && codes.get(m.code.id).materialHelp ? codes.get(m.code.id).materialHelp : 'Valeurs par défaut indicatives : à remplacer par celles de l’édition du code applicable.'} α est le coefficient moyen de dilatation entre 20 °C et T.`),
     h(
       'div',
       { class: 'toolbar' },
@@ -668,19 +669,26 @@ function seismicEditor(app, lc, li) {
 /** Niveaux de critère vérifiés (éq. 10B, 10C, 10D) : coefficient sur le spectre par niveau. */
 function levelsEditor(app, lc, li) {
   const current = seismicLevels(lc);
-  const rows = LEVELS.map((L) => current.find((x) => x.level === L) ?? { level: L, enabled: false, factor: 1 });
+  const code = codes.has(app.state.model.code?.id) ? codes.get(app.state.model.code.id) : null;
+  const lv = codeLevels(code, app.state.model);
+  // tous les niveaux sont conservés dans le cas ; seuls ceux du code sont affichés et vérifiés
+  const all = LEVELS.map((L) => current.find((x) => x.level === L) ?? { level: L, enabled: false, factor: 1 });
+  // code à critère occasionnel unique : seul le premier niveau coché est vérifié
+  const first = all.find((r) => r.enabled !== false) ?? all[0];
+  const rows = code?.singleLevel ? [first] : all.filter((r) => lv[r.level]);
+  const rowLabel = (r) => (code?.singleLevel ? code.singleLevel.label : lv[r.level].label);
   const set = (L, key, v) =>
     app.update((mm) => {
       const c = mm.loadCases[li];
-      c.levels = rows.map((r) => ({ ...r }));
+      c.levels = all.map((r) => ({ ...r }));
       c.levels.find((x) => x.level === L)[key] = v;
       delete c.level;
     });
   return h(
     'div',
     {},
-    h('h4', {}, 'Niveaux de critère vérifiés (éq. 10)'),
-    help('Même spectre d’entrée pour tous les niveaux : cocher les niveaux à vérifier, leur donner un nom (repris dans le bilan et la note de calcul) et le coefficient appliqué au séisme calculé. Les admissibles par niveau se règlent dans l’onglet Code.'),
+    h('h4', {}, code?.levelsTitle ?? 'Niveaux de critère vérifiés (éq. 10)'),
+    help(`Même spectre d’entrée pour tous les niveaux : cocher les niveaux à vérifier, leur donner un nom (repris dans le bilan et la note de calcul) et le coefficient appliqué au séisme calculé. ${code?.levelsHelp ?? 'Les admissibles par niveau sont fixés par le code (onglet Code).'}`),
     h(
       'table',
       { class: 'grid compact levels' },
@@ -692,7 +700,7 @@ function levelsEditor(app, lc, li) {
           h(
             'tr',
             {},
-            h('td', {}, h('b', {}, `10${r.level}`)),
+            h('td', {}, h('b', {}, rowLabel(r))),
             h('td', {}, h('input', { type: 'checkbox', checked: r.enabled !== false, onchange: (e) => set(r.level, 'enabled', e.target.checked) })),
             h('td', {}, fieldInput({ type: 'text', placeholder: 'ex. SMHV' }, r.name ?? '', (v) => set(r.level, 'name', v), { focusKey: `lc${li}:lvlname${r.level}` })),
             h('td', {}, fieldInput({ type: 'number' }, r.factor, (v) => set(r.level, 'factor', v === '' ? 1 : v), { focusKey: `lc${li}:lvl${r.level}` })),
@@ -802,30 +810,30 @@ export function renderCode(app) {
       'Code de vérification',
       h(
         'select',
-        { onchange: (e) => app.update((mm) => (mm.code.id = e.target.value)) },
+        // changement de code : paramètres du nouveau code remis à leurs valeurs par défaut
+        { style: { maxWidth: '100%' }, onchange: (e) => app.update((mm) => (mm.code = { id: e.target.value, params: { ...(codes.get(e.target.value).defaults ?? {}) } })) },
         codes.list().map((c) => h('option', { value: c.id, selected: c.id === m.code.id }, c.label)),
       ),
       code ? help(code.reference) : null,
+      code?.caveat ? h('div', { class: 'alert warn' }, code.caveat) : null,
       code ? fieldForm(code.params, m.code.params, (k, v) => app.update((mm) => (mm.code.params[k] = v)), { model: m, focusPrefix: 'code' }) : null,
     ),
-    section(
-      'Équations vérifiées (RCC-M C 3650)',
-      h(
-        'table',
-        { class: 'eqs' },
-        h(
-          'tbody',
-          {},
-          code?.thickness ? eqRow(code.thickness.ref, 'Épaisseur minimale — tenue à la pression seule (option de l’onglet Projet)', code.thickness.formula) : null,
-          eqRow('(6)', 'Poids propre + pression', 'S_L = P·Dₑ/(4eₙ) + 0,75i·M_A/Z ≤ 1,0·S_h   (0,75i ≥ 1)'),
-          eqRow('(7)', 'Dilatation thermique', 'S_E = i·M_C/Z ≤ S_A = f(1,25 S_c + 0,25 S_h)'),
-          eqRow('(8)', '(6) + (7), si (7) non satisfaite', 'P·Dₑ/(4eₙ) + 0,75i·M_A/Z + i·M_C/Z ≤ S_h + S_A'),
-          eqRow('(10B) (10C) (10D)', 'Séisme, par niveau de critère', 'P·Dₑ/(4eₙ) + 0,75i·(M_A + M_B)/Z ≤ k·S_h  (B : 1,2 — C : 1,8 — D : 2,4) ; M_B = séisme × coefficient du niveau'),
-        ),
-      ),
-      help('Module Z (C 3658) : π·r²·eₙ (r rayon moyen) ; tronçon réduit d’un té ou piquage réduit : π·r′ₘ²·tₛ, tₛ = min(Tᵣ, i·T_b). Moments résultants √(Mx² + My² + Mz²) à la jonction, branche par branche.'),
-      help('Coudes : h = eₙR/r², k = 1,65/h, i = 0,9/h^⅔ (≥ 1). Tés : i = 0,9/h^⅔ ≥ 1 avec h = 4,4eₙ/r (forgé), (eₙ + e_r/2)^(5/2)/(eₙ^(3/2)·r) (fabrication renforcé), eₙ/r (non renforcé).'),
-    ),
+    code?.equations
+      ? section(
+          `Équations vérifiées (${code.short ?? code.label})`,
+          h(
+            'table',
+            { class: 'eqs' },
+            h(
+              'tbody',
+              {},
+              code.thickness ? eqRow(code.thickness.ref, 'Épaisseur minimale — tenue à la pression seule (option de l’onglet Projet)', code.thickness.formula) : null,
+              code.equations.map((q) => eqRow(q.ref, q.name, q.formula)),
+            ),
+          ),
+          (code.help ?? []).map((t) => help(t)),
+        )
+      : null,
     combinationsSection(code, m),
   );
 }

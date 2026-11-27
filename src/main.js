@@ -13,6 +13,7 @@ import { openExportDialog } from './ui/export.js';
 import { buildMesh } from './core/mesher.js';
 import { runAnalysis } from './analysis.js';
 import { codes } from './codes/index.js';
+import { eqName } from './codes/common.js';
 
 const STORAGE_KEY = 'easypipestress:model';
 
@@ -194,7 +195,7 @@ function renderViewToolbar() {
   if (r) {
     for (const c of displayCases(r)) opts.push([`case:${c.id}`, `${c.signed ? 'Déformée' : 'Enveloppe'} ${c.id} – ${c.label}`]);
     if (r.check) {
-      for (const eq of [...new Set(r.check.rows.map((x) => x.eq))]) opts.push([`ratio:${eq}`, eq === 'e' ? 'Taux : épaisseur' : `Taux : éq. (${eq})`]);
+      for (const eq of [...new Set(r.check.rows.map((x) => x.eq))]) opts.push([`ratio:${eq}`, eq === 'e' ? 'Taux : épaisseur' : `Taux : ${eqName(r.code, eq)}`]);
     }
     r.modal?.modes.slice(0, 30).forEach((m, k) => opts.push([`mode:${k}`, `Mode ${k + 1} – ${m.freq.toFixed(2)} Hz`]));
   }

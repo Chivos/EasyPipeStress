@@ -30,6 +30,25 @@ const RIGID_FACTOR = 1000; // raideur d'un tronçon rigide (× tube), assez gran
 const genericFactors = ({ kind }) => ({ k: 1, i: 1, B1: 0.5, B2: 1, note: kind });
 
 /**
+ * Normale unitaire au plan d'une jonction en té : plan du collecteur (les deux
+ * éléments les plus alignés) et du piquage. null si la jonction n'a pas trois
+ * branches ou si elles sont alignées.
+ */
+function junctionNormal(elems, node) {
+  const dirs = elems.map((e) => (e.n1 === node ? e.R.slice(0, 3) : vec.scale(e.R.slice(0, 3), -1)));
+  if (dirs.length < 3) return null;
+  let best = null;
+  for (let a = 0; a < dirs.length; a++) for (let b = a + 1; b < dirs.length; b++) if (!best || vec.dot(dirs[a], dirs[b]) < best.d) best = { a, b, d: vec.dot(dirs[a], dirs[b]) };
+  const runAxis = vec.unit(vec.sub(dirs[best.a], dirs[best.b]));
+  for (let k = 0; k < dirs.length; k++) {
+    if (k === best.a || k === best.b) continue;
+    const n = vec.cross(runAxis, dirs[k]);
+    if (vec.norm(n) > 1e-6) return vec.unit(n);
+  }
+  return null;
+}
+
+/**
  * @param model modèle utilisateur
  * @param opts.factors (elemDescriptor) → { k, i, B1, B2 } (fourni par le code)
  * @param opts.tolerant si vrai, ne lève pas d'exception (aperçu géométrique)
@@ -325,11 +344,15 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
       // le SIF d'un té se calcule avec les dimensions du collecteur (tube principal :
       // plus grand diamètre, puis plus grande épaisseur) et s'applique aux trois branches
       const run = [...nodeElems[i]].sort((a, b) => b.sec.od - a.sec.od || b.sec.t - a.sec.t)[0];
+      const plane = junctionNormal(nodeElems[i], i);
       for (const e of nodeElems[i]) {
         const end = e.n1 === i ? 0 : 1;
         e.endFactors[end] = factors({ ...desc, sec: run.sec, P: run.P1, Ec: run.E, params: model.code?.params ?? {} });
         e.endFactors[end].component = desc.kind;
         e.endFactors[end].runSec = run.sec; // collecteur (module Z des piquages réduits)
+        e.endFactors[end].plane = plane; // normale au plan du té (moments dans le plan / hors plan)
+        e.endFactors[end].desc = desc; // description du té (recalcul des facteurs par le code)
+        e.endFactors[end].runCorrosion = +run.secDef?.corrosion || 0;
       }
       tees.push({ node: i, ...desc });
     },

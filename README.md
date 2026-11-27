@@ -5,7 +5,9 @@ entièrement dans le navigateur : modélisation 3D, calcul par éléments finis 
 poutres, chargements poids propre, pression, dilatation thermique et séisme
 (spectral ou statique), puis dépouillement selon le **RCC-M, sous-section C
 (classe 2), §C 3650** : équations (6) poids propre + pression, (7) dilatation,
-(8) = (6) + (7) et (10B), (10C), (10D) séisme par niveau de critère.
+(8) = (6) + (7) et (10B), (10C), (10D) séisme par niveau de critère. D'autres
+codes peuvent être choisis dans l'onglet Code : **EN 13480-3** (2017, chapitre
+12), **ASME B31.3** (2018) et **CODETI 2006** Division 1 (section C3).
 
 Aucune installation ni serveur de calcul : c'est une page statique (modules
 JavaScript natifs, sans dépendance ni étape de compilation), publiée sur
@@ -39,9 +41,11 @@ exportables/importables en JSON.
    spectre horizontal commun aux deux directions horizontales et
    spectre vertical, ou un spectre par direction, CQC/SRSS, masse manquante,
    100-40-40/SRSS, ou statique équivalente).
-4. **Code** : paramètres du RCC-M C (nombre de cycles, coefficients des
-   admissibles par équation et par niveau, tableau du cumul des chargements,
-   correction de pression des coudes). La vérification d'épaisseur minimale
+4. **Code** : choix du code (RCC-M classe 2 par défaut, CODETI, EN 13480-3,
+   ASME B31.3), ses paramètres (nombre de cycles, coefficients des
+   admissibles par équation et par niveau, correction de pression des coudes),
+   les équations vérifiées et le tableau du cumul des chargements. La colonne S
+   des matériaux est la contrainte admissible du code retenu. La vérification d'épaisseur minimale
    par tenue à la pression seule est une option de l'onglet Projet (désactivée
    par défaut).
 5. **Calculer** (Ctrl + Entrée) : synthèse du dépouillement, taux de travail en
@@ -97,7 +101,8 @@ src/
   loads/                    types de chargement (registre)
              weight.js  pressure.js  thermal.js  seismic.js
   codes/                    codes de vérification (registre)
-             rccm-c.js
+             rccm-c.js  en13480.js  codeti.js  b31-3.js
+             moment-family.js  shared.js  common.js
   analysis.js               orchestration (utilisable hors navigateur)
   ui/                       vue 3D canvas, panneaux, résultats, note de calcul
 tests/                      validation analytique et non-régression
@@ -125,8 +130,9 @@ des descripteurs `fields`.
   `src/loads/xxx.js` exportant `{ id, label, fields, create, run(ctx, lc) }` ;
   `run` utilise `ctx.sys.solveStatic(...)` ou `ctx.sys.modal(...)` et renvoie
   `{ signed, u, elemForces, supportLoads, info }`.
-- **Nouveau code** (RCC-M B/D, EN 13480-3, B31.3…) : `src/codes/xxx.js`
-  exportant `{ id, label, params, componentFactors, check, thickness }`. `componentFactors`
+- **Nouveau code** (RCC-M B/D, B31.1…) : `src/codes/xxx.js`
+  exportant `{ id, label, params, componentFactors, check, thickness }`, plus les
+  descripteurs d'interface `equations`, `help`, `eqName`, `levels`. `componentFactors`
   fournit les facteurs k et i au mailleur ; `check({ model, mesh, cases })` renvoie les
   lignes de vérification et la synthèse ; `thickness` (facultatif) fournit la
   formule d'épaisseur minimale par tenue à la pression seule, appliquée quand
@@ -144,7 +150,7 @@ plat, masse manquante, coefficients CQC, facteurs de coude) et vérifie les
 ## Avertissement
 
 Outil d'aide à l'analyse. Les propriétés matériaux fournies sont **indicatives** ;
-les formules du dépouillement doivent être confrontées à l'édition du RCC-M
+les formules du dépouillement doivent être confrontées à l'édition du code
 applicable. Les résultats doivent être vérifiés par un ingénieur qualifié avant
 toute utilisation pour la justification d'un matériel.
 

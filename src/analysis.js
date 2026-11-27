@@ -5,9 +5,9 @@ import { buildMesh } from './core/mesher.js';
 import { FeSystem } from './fem/system.js';
 import { loadTypes } from './loads/index.js';
 import { codes } from './codes/index.js';
-import { summarize, thicknessRows } from './codes/common.js';
+import { summarize, thicknessRows, verifiedLevels } from './codes/common.js';
 import { seismicLevels } from './loads/seismic.js';
-import { localResponses } from './core/frames.js';
+import { localResponses, planeMoments } from './core/frames.js';
 import { seismicDiagnostics, resultDiagnostics, contactFindings } from './diagnostics.js';
 
 export function runAnalysis(model) {
@@ -24,11 +24,13 @@ export function runAnalysis(model) {
     const run = type.run(ctx, lc);
     if (lc.type === 'forces' && code) warnings.push(`Cas ${lc.id}${lc.label ? ` (${lc.label})` : ''} : forces nodales non attribuées à un chargement du code (poids, dilatation, séisme), sans effet sur les équations de ${code.label}.`);
     // déplacements et efforts sur supports en repères locaux (déjà combinés pour le séisme)
-    const r = run.uLocal ? run : { ...run, ...localResponses(run, mesh) };
+    const r0 = run.uLocal ? run : { ...run, ...localResponses(run, mesh) };
+    // moments dans le plan / hors plan des coudes et tés (codes à facteurs i séparés)
+    const r = r0.elemPlane ? r0 : { ...r0, elemPlane: planeMoments(r0.elemForces, mesh) };
     if (lc.type === 'seismic') {
       // un cas par niveau de critère : même réponse, mise à l'échelle par le coefficient du niveau
       const used = new Set();
-      for (const lv of seismicLevels(lc).filter((x) => x.enabled !== false)) {
+      for (const { lv, info } of verifiedLevels(code, model, seismicLevels(lc))) {
         const k = Number.isFinite(+lv.factor) && lv.factor !== '' ? +lv.factor : 1;
         // repère du cas : nom du séisme s'il est donné (ex. S1-SMHV), sinon niveau (S1-B)
         const name = String(lv.name ?? '').trim();
@@ -38,7 +40,7 @@ export function runAnalysis(model) {
         cases.push({
           ...r,
           id: `${lc.id}-${suffix}`,
-          label: `${lc.label || type.label}${name ? ` ${name}` : ''} — niveau ${lv.level} (× ${k})`,
+          label: `${lc.label || type.label}${name ? ` ${name}` : ''} — ${code?.levels || code?.levelsFor || code?.singleLevel ? info.label : `niveau ${lv.level}`} (× ${k})`,
           levelName: name,
           type: lc.type,
           level: lv.level,
@@ -47,6 +49,7 @@ export function runAnalysis(model) {
           fe: true,
           u: scale(r.u),
           elemForces: scale(r.elemForces),
+          elemPlane: scale(r.elemPlane),
           supportLoads: scale(r.supportLoads),
           uLocal: scale(r.uLocal),
           supportLoadsLocal: scale(r.supportLoadsLocal),
@@ -68,6 +71,9 @@ export function runAnalysis(model) {
   warnings.push(...resultDiagnostics({ mesh, cases, contacts }));
   const modal = cases.find((c) => c.modal)?.modal ?? null;
   let check = code ? code.check({ model, mesh, cases }) : null;
+  if (check?.warnings?.length) warnings.push(...check.warnings);
+  // code dont l'implémentation n'a pas pu être contrôlée sur le texte : rappel à chaque calcul
+  if (code?.caveat) warnings.push(`${code.short ?? code.label} : ${code.caveat}`);
   // épaisseur minimale (pression seule) : option du projet, formule fournie par le code
   if (check && model.settings.checkThickness === true) {
     if (code.thickness) {

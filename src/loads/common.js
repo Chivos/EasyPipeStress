@@ -1,7 +1,7 @@
 // Outils partagés par les types de chargement.
 
 import { rotateToLocal, uniformLoadEquivalent } from '../fem/beam3d.js';
-import { localResponses } from '../core/frames.js';
+import { localResponses, planeMoments } from '../core/frames.js';
 
 /**
  * Charges dues à un champ d'accélération uniforme a (mm/s², repère global) :
@@ -28,13 +28,14 @@ export function bodyForceLoads(sys, a, parts = { metal: true, fluid: true, insul
 /**
  * Réponse sous forme d'un vecteur unique (combinaisons modales et directionnelles).
  * Avec `sys`, les déplacements et efforts sur supports projetés dans les repères
- * locaux des nœuds sont ajoutés : la projection étant linéaire, elle est faite
+ * locaux des nœuds, ainsi que les moments dans le plan / hors plan des composants
+ * (coudes, tés), sont ajoutés : la projection étant linéaire, elle est faite
  * avant la combinaison (mode par mode), seule manière correcte d'obtenir les
  * valeurs enveloppes d'un séisme dans un autre repère.
  */
 export function pack(r, sys = null) {
   const loc = sys ? localResponses(r, sys.mesh) : null;
-  const parts = [r.u, r.elemForces, r.supportLoads, ...(loc ? [loc.uLocal, loc.supportLoadsLocal] : [])];
+  const parts = [r.u, r.elemForces, r.supportLoads, ...(loc ? [loc.uLocal, loc.supportLoadsLocal, planeMoments(r.elemForces, sys.mesh)] : [])];
   const out = new Float64Array(parts.reduce((s, a) => s + a.length, 0));
   let o = 0;
   for (const a of parts) {
@@ -55,7 +56,9 @@ export function unpack(v, sys) {
   };
   if (v.length > n + ne + ns) {
     out.uLocal = v.slice(n + ne + ns, 2 * n + ne + ns);
-    out.supportLoadsLocal = v.slice(2 * n + ne + ns);
+    out.supportLoadsLocal = v.slice(2 * n + ne + ns, 2 * n + ne + 2 * ns);
+    // moments dans le plan / hors plan des composants (4 par élément)
+    out.elemPlane = v.slice(2 * n + ne + 2 * ns);
   }
   return out;
 }

@@ -6,6 +6,7 @@ import { SUPPORT_KINDS, SNUBBER_DIRS } from '../components/support.js';
 import { displayCases, modalSums } from './results.js';
 import { spectrumFor, seismicLevels } from '../loads/seismic.js';
 import { codes } from '../codes/index.js';
+import { coveredText } from '../codes/common.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const table = (headers, rows) => `<table><thead><tr>${headers.map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
@@ -19,7 +20,7 @@ export function buildReport(state, snapshot) {
   if (m.meta.notes) parts.push(`<p>${esc(m.meta.notes)}</p>`);
   if (r?.check) {
     const s = r.check.summary;
-    parts.push(`<div class="verdict ${s.ok ? 'ok' : 'ko'}">${s.ok ? 'Critères satisfaits' : 'Critère(s) non satisfait(s)'} — taux maximal ${fmt(s.maxRatio, 2)}${s.covered ? ` (éq. (7) dépassée en ${s.covered} point(s), où l’éq. (8) est satisfaite)` : ''} — ${esc(r.code.label)}</div>`);
+    parts.push(`<div class="verdict ${s.ok ? 'ok' : 'ko'}">${s.ok ? 'Critères satisfaits' : 'Critère(s) non satisfait(s)'} — taux maximal ${fmt(s.maxRatio, 2)}${s.covered ? ` (${esc(coveredText(r.code, s))})` : ''} — ${esc(r.code.label)}</div>`);
   } else {
     parts.push('<div class="verdict ko">Résultats non disponibles : lancer le calcul avant d’éditer la note.</div>');
   }
