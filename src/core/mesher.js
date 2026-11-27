@@ -17,6 +17,7 @@ import { materialAt, refTemperature } from './materials.js';
 import { densityToInternal, kgToT, AXES } from './units.js';
 import { vec } from './linalg.js';
 import { elementFrame } from '../fem/beam3d.js';
+import { pipeAxisAtNode } from './frames.js';
 
 export class ModelError extends Error {
   constructor(errors, warnings = []) {
@@ -324,17 +325,7 @@ export function buildMesh(model, { factors = genericFactors, tolerant = false } 
       else errors.push(`${what} : nœud « ${l} » inexistant.`);
       return -1;
     },
-    pipeAxisAt(i) {
-      const es = nodeElems[i];
-      if (!es.length) return [1, 0, 0];
-      let a = [0, 0, 0];
-      for (const e of es) {
-        let x = e.R.slice(0, 3);
-        if (vec.dot(x, a) < 0) x = vec.scale(x, -1);
-        a = vec.add(a, x);
-      }
-      return vec.unit(a);
-    },
+    pipeAxisAt: (i) => pipeAxisAtNode(nodeElems[i], i),
     addSpring: (s) => springs.push(s),
     addSupport: (s) => supports.push(s) - 1,
     addPointMass: (m) => pointMasses.push(m),

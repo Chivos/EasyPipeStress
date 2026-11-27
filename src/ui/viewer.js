@@ -5,6 +5,7 @@
 import { vec } from '../core/linalg.js';
 import { toLocalVector } from '../fem/beam3d.js';
 import { SUPPORT_KINDS } from '../components/support.js';
+import { pipeAxisAtNode } from '../core/frames.js';
 
 const SUPPORT_COLORS = { anchor: '#c0392b', rest: '#2471a3', guide: '#7d3c98', restguide: '#1f618d', clamp: '#2e4053', clampguide: '#34495e', axial: '#b9770e', variable: '#148f77', constant: '#d35400', snubber: '#d32f2f', custom: '#566573' };
 
@@ -390,13 +391,13 @@ export class Viewer {
           let lug = null;
           let bias = -0.05 * od;
           if (Math.abs(vec.dot(d, axis)) > 0.9) {
-            let off = vec.sub(mesh.up, vec.scale(axis, vec.dot(mesh.up, axis)));
-            if (vec.norm(off) < 1e-6) off = Math.abs(axis[0]) < 0.9 ? vec.cross(axis, [1, 0, 0]) : vec.cross(axis, [0, 1, 0]);
+            let off = vec.sub(mesh.up, vec.scale(d, vec.dot(mesh.up, d)));
+            if (vec.norm(off) < 1e-6) off = Math.abs(d[0]) < 0.9 ? vec.cross(d, [1, 0, 0]) : vec.cross(d, [0, 1, 0]);
             off = vec.unit(off);
             // patte d'attache : depuis la paroi en 3D, depuis l'axe en filaire
             lug = solid ? vec.add(p, vec.scale(off, R)) : p;
             tip = vec.add(p, vec.scale(off, R + 0.75 * od));
-            tail = vec.add(tip, vec.scale(axis, Ls));
+            tail = vec.add(tip, vec.scale(d, Ls)); // suivant la direction réellement bloquée
             // amortisseur le long du tube : devant lui s'il est du côté de l'observateur, derrière sinon
             bias = (this.viewDir(off)[2] > 0 ? -1 : 1) * 2 * od;
           } else {
@@ -1045,13 +1046,7 @@ export class Viewer {
 
   /** Axe du tube au nœud (moyenne des éléments qui y aboutissent). */
   nodeAxis(mesh, i) {
-    let a = [0, 0, 0];
-    for (const e of mesh.nodeElems?.[i] ?? []) {
-      let x = e.R.slice(0, 3);
-      if (vec.dot(x, a) < 0) x = vec.scale(x, -1);
-      a = vec.add(a, x);
-    }
-    return vec.norm(a) > 0 ? vec.unit(a) : [1, 0, 0];
+    return pipeAxisAtNode(mesh.nodeElems?.[i], i);
   }
 
   /** Flèche 3D projetée (tige + pointe), pointe en `tip`. */
