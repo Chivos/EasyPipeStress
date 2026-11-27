@@ -6,7 +6,7 @@ import { vec } from '../core/linalg.js';
 import { toLocalVector } from '../fem/beam3d.js';
 import { SUPPORT_KINDS } from '../components/support.js';
 
-const SUPPORT_COLORS = { anchor: '#c0392b', rest: '#2471a3', guide: '#7d3c98', restguide: '#1f618d', clamp: '#2e4053', clampguide: '#34495e', axial: '#b9770e', variable: '#148f77', constant: '#d35400', snubber: '#c2185b', custom: '#566573' };
+const SUPPORT_COLORS = { anchor: '#c0392b', rest: '#2471a3', guide: '#7d3c98', restguide: '#1f618d', clamp: '#2e4053', clampguide: '#34495e', axial: '#b9770e', variable: '#148f77', constant: '#d35400', snubber: '#d32f2f', custom: '#566573' };
 
 export class Viewer {
   constructor(canvas, { onPick } = {}) {
@@ -377,6 +377,36 @@ export class Viewer {
       if (sup.kind === 'variable' || sup.kind === 'constant') {
         // support variable / constant : ressort sous le tube, effort vers le haut
         if (!solid) this.drawHanger(ctx, p, mesh.up, R, hangerLength(od), color, od, sup.kind === 'constant'); // en 3D : dessiné avec les tubes
+        return;
+      }
+      if (sup.kind === 'snubber') {
+        // dispositif auto-bloquant : amortisseur, d'un seul côté du tube (sous le tube
+        // en vertical, le long du tube en axial), œil d'attache contre la paroi
+        const Ls = Math.max(3 * od, (2.2 * minPx) / pxPerMm);
+        for (const sp of springs.filter((x) => !x.rot)) {
+          const d = sp.dir;
+          let tip;
+          let tail;
+          let lug = null;
+          let bias = -0.05 * od;
+          if (Math.abs(vec.dot(d, axis)) > 0.9) {
+            let off = vec.sub(mesh.up, vec.scale(axis, vec.dot(mesh.up, axis)));
+            if (vec.norm(off) < 1e-6) off = Math.abs(axis[0]) < 0.9 ? vec.cross(axis, [1, 0, 0]) : vec.cross(axis, [0, 1, 0]);
+            off = vec.unit(off);
+            // patte d'attache : depuis la paroi en 3D, depuis l'axe en filaire
+            lug = solid ? vec.add(p, vec.scale(off, R)) : p;
+            tip = vec.add(p, vec.scale(off, R + 0.75 * od));
+            tail = vec.add(tip, vec.scale(axis, Ls));
+            // amortisseur le long du tube : devant lui s'il est du côté de l'observateur, derrière sinon
+            bias = (this.viewDir(off)[2] > 0 ? -1 : 1) * 2 * od;
+          } else {
+            const sg = vec.dot(d, mesh.up) > 0.9 ? -1 : 1;
+            tip = vec.add(p, vec.scale(d, sg * R));
+            tail = vec.add(tip, vec.scale(d, sg * Ls));
+          }
+          if (!solid) this.drawSnubber(ctx, tail, tip, color, od, lug);
+          else prims.push({ depth: (this.toScreen(tail)[2] + this.toScreen(tip)[2]) / 2 + bias, draw: (c) => this.drawSnubber3D(c, tail, tip, color, od, lug) });
+        }
         return;
       }
       for (const sp of springs.filter((x) => !x.rot)) {
@@ -1184,6 +1214,151 @@ export class Viewer {
     // plateau supérieur, tige et flèche contre la paroi
     cylinder(h1, h1 + plate, 0.42 * od);
     this.drawArrow(ctx, at(h1 + plate), vec.add(p, vec.scale(up, -R)), tint(0.9), od);
+  }
+
+  /**
+   * Dispositif auto-bloquant en vue filaire : symbole d'amortisseur entre le point
+   * d'ancrage `tail3` (hachures) et l'attache sur le tube `tip3` (œil) — tige,
+   * piston dans un cylindre ouvert côté tube. `lug3` : point de la paroi relié à
+   * l'œil quand l'amortisseur est parallèle au tube.
+   */
+  drawSnubber(ctx, tail3, tip3, color, od, lug3 = null) {
+    const a = this.toScreen(tail3);
+    const b = this.toScreen(tip3);
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const l = Math.hypot(dx, dy);
+    const s = this.frame.s;
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = Math.max(1.6, 0.06 * od * s);
+    if (lug3) {
+      const g = this.toScreen(lug3);
+      ctx.beginPath();
+      ctx.moveTo(g[0], g[1]);
+      ctx.lineTo(b[0], b[1]);
+      ctx.stroke();
+    }
+    const eye = Math.max(2.5, 0.1 * od * s);
+    if (l < 8) {
+      // amortisseur vu de bout : cylindre et tige en coupe
+      ctx.beginPath();
+      ctx.arc(b[0], b[1], Math.max(5, 0.3 * od * s), 0, 2 * Math.PI);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(b[0], b[1], eye, 0, 2 * Math.PI);
+      ctx.fill();
+      return;
+    }
+    const ux = dx / l;
+    const uy = dy / l;
+    const at = (t, off = 0) => [a[0] + ux * t - uy * off, a[1] + uy * t + ux * off];
+    const w = Math.max(4, Math.min(0.3 * od * s, l * 0.16)); // demi-largeur du cylindre
+    const c0 = 0.18 * l; // fond du cylindre
+    const c1 = 0.6 * l; // bord ouvert, côté tube
+    const pp = 0.42 * l; // piston
+    const line = (...pts) => {
+      ctx.beginPath();
+      ctx.moveTo(...pts[0]);
+      for (const q of pts.slice(1)) ctx.lineTo(...q);
+      ctx.stroke();
+    };
+    // ancrage : barre et hachures
+    line(at(0, -1.2 * w), at(0, 1.2 * w));
+    ctx.lineWidth = Math.max(1, 0.03 * od * s);
+    for (let k = -2; k <= 2; k++) line(at(0, k * 0.5 * w), at(-0.5 * w, k * 0.5 * w - 0.4 * w));
+    ctx.lineWidth = Math.max(1.6, 0.06 * od * s);
+    // tige fixe, cylindre ouvert côté tube (fond légèrement teinté)
+    line(at(0), at(c0));
+    ctx.globalAlpha = 0.18;
+    ctx.beginPath();
+    ctx.moveTo(...at(c0, -w));
+    ctx.lineTo(...at(c1, -w));
+    ctx.lineTo(...at(c1, w));
+    ctx.lineTo(...at(c0, w));
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    line(at(c1, -w), at(c0, -w), at(c0, w), at(c1, w));
+    // piston et tige mobile jusqu'à l'œil d'attache sur le tube
+    ctx.lineWidth = Math.max(2.2, 0.09 * od * s);
+    line(at(pp, -0.78 * w), at(pp, 0.78 * w));
+    ctx.lineWidth = Math.max(1.6, 0.06 * od * s);
+    line(at(pp), at(l - eye));
+    ctx.beginPath();
+    ctx.arc(b[0], b[1], eye, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+
+  /**
+   * Dispositif auto-bloquant en 3D : platine d'ancrage, corps cylindrique ombré,
+   * tige et œil d'attache contre le tube, dessinés du plus éloigné au plus proche.
+   */
+  drawSnubber3D(ctx, tail3, tip3, color, od, lug3 = null) {
+    const L = vec.norm(vec.sub(tip3, tail3));
+    if (!(L > 0)) return;
+    const u = vec.scale(vec.sub(tip3, tail3), 1 / L);
+    const e1 = vec.unit(vec.cross(u, Math.abs(u[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]));
+    const e2 = vec.cross(u, e1);
+    const s = this.frame.s;
+    const rgb = toRGB(color);
+    const tint = (f) => `rgb(${Math.min(255, rgb[0] * f) | 0},${Math.min(255, rgb[1] * f) | 0},${Math.min(255, rgb[2] * f) | 0})`;
+    const at = (h, r = 0, t = 0) => vec.add(tail3, vec.add(vec.scale(u, h), vec.add(vec.scale(e1, r * Math.cos(t)), vec.scale(e2, r * Math.sin(t)))));
+    const towards = this.viewDir(u)[2] > 0; // extrémité côté tube tournée vers l'observateur
+    const cylinder = (h0, h1, r, f = 1) => {
+      const N = 28;
+      const ring = (h) => Array.from({ length: N }, (_, k) => this.toScreen(at(h, r, (2 * Math.PI * k) / N)));
+      const lo = ring(h0);
+      const hi = ring(h1);
+      const hull = convexHull([...lo, ...hi]);
+      // dégradé transversal : arête éclairée d'un côté, ombre de l'autre
+      ctx.fillStyle = tint(0.82 * f);
+      polygon(ctx, hull);
+      ctx.fill();
+      ctx.fillStyle = tint(1.08 * f);
+      polygon(ctx, towards ? hi : lo);
+      ctx.fill();
+      ctx.strokeStyle = tint(0.5);
+      ctx.lineWidth = 1;
+      polygon(ctx, hull);
+      ctx.stroke();
+      polygon(ctx, towards ? hi : lo);
+      ctx.stroke();
+    };
+    const parts = [
+      () => cylinder(0, 0.04 * L, 0.4 * od, 0.85), // platine d'ancrage
+      () => cylinder(0.04 * L, 0.16 * L, 0.1 * od, 0.7), // tige fixe
+      () => cylinder(0.16 * L, 0.2 * L, 0.3 * od, 0.75), // fond du corps
+      () => cylinder(0.2 * L, 0.56 * L, 0.26 * od), // corps de l'amortisseur
+      () => cylinder(0.56 * L, 0.6 * L, 0.3 * od, 0.75), // collerette
+      () => cylinder(0.6 * L, L, 0.09 * od, 1.2), // tige mobile
+    ];
+    const eye = () => {
+      const q = this.toScreen(tip3);
+      if (lug3) {
+        const g = this.toScreen(lug3);
+        ctx.strokeStyle = tint(0.75);
+        ctx.lineCap = 'round';
+        ctx.lineWidth = Math.max(2, 0.12 * od * s);
+        ctx.beginPath();
+        ctx.moveTo(g[0], g[1]);
+        ctx.lineTo(q[0], q[1]);
+        ctx.stroke();
+      }
+      ctx.fillStyle = tint(0.7);
+      ctx.beginPath();
+      ctx.arc(q[0], q[1], Math.max(3, 0.16 * od * s), 0, 2 * Math.PI);
+      ctx.fill();
+    };
+    if (towards) {
+      for (const d of parts) d();
+      eye();
+    } else {
+      eye();
+      for (const d of [...parts].reverse()) d();
+    }
   }
 
   /** Disque dans le plan de section du tube (normal à l'axe), rayon r. */
