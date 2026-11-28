@@ -834,9 +834,11 @@ tableaux et les combinaisons gardent leur sens :
 - chaque cas de dilatation est la différence entre l'état de service (poids +
   dilatation) et l'état « poids seul », tous deux calculés au module de la
   dilatation : M_C. Avec le module à chaud, cela demande un troisième calcul, le
-  poids seul au module à chaud.
+  poids seul au module à chaud ;
+- quand le supportage de service diffère de celui de l'état froid, un cas
+  supplémentaire W(T1) : le poids dans cette configuration (§ 7.3).
 
-La somme des deux cas redonne l'état de service, au module près : le poids y est
+La somme des cas de poids et de dilatation redonne l'état de service, au module près : le poids y est
 compté au module à froid, comme dans le solveur linéaire. La répartition du poids
 dépendant un peu du module (supports à ressort, tronçons à des températures
 différentes), cette somme laisse sur un appui décollé un petit effort résiduel,
