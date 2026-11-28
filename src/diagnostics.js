@@ -70,6 +70,7 @@ export function seismicDiagnostics(lc, r, mesh) {
  *  - 'liftoff'  appui simple dont l'effort est dirigé vers le haut ;
  *  - 'seismicLiftoff' appui simple dont l'effort sismique dépasse la charge portée ;
  *  - 'gap'      jeu rattrapé (la direction, libre dans le calcul statique, devrait porter) ;
+ *  - 'oneWay'   butée à un seul sens, au contact, sollicitée dans le sens où elle est libre ;
  *  - 'travel' / 'seismicTravel' course d'un support à ressort dépassée (butée atteinte).
  * Chaque constat : { type, support, state, value, limit }. Ces constats alimentent
  * les avertissements ; ils désignent aussi les contacts qu'un calcul non linéaire
@@ -106,13 +107,26 @@ export function contactFindings({ mesh, cases, nonlinear = null }) {
         }
       }
     }
-    // jeux : déplacement libre suivant la direction, comparé au jeu
+    // jeux : déplacement libre suivant la direction, comparé au jeu du côté où il se fait
+    // (solveur non linéaire : le jeu rattrapé est déjà porté par le support)
     for (const sp of springs) {
-      if (!(sp.gap > 0)) continue;
-      const moves = states.map((st) => ({ st, d: sum(st.list, (c) => along(c.u, sup.node * 6, sp.dir)) }));
-      const worst = moves.reduce((a, b) => (Math.abs(b.d) > Math.abs(a.d) ? b : a));
-      // solveur non linéaire : le jeu rattrapé est déjà porté par le support
-      if (!nonlinear && Math.abs(worst.d) > sp.gap + 1e-6) out.push({ type: 'gap', support: k, state: worst.st.name, value: Math.abs(worst.d), limit: sp.gap, dir: sp.dir });
+      if (!sp.gapped || nonlinear) continue;
+      if (sp.oneWay) {
+        // butée au contact d'un côté, prise dans les deux sens : effort de la tuyauterie sur la butée,
+        // suivant sa direction ; elle ne tient que si la tuyauterie pousse du côté du contact
+        const loads = states.map((st) => ({ st, f: sum(st.list, (c) => along(c.supportLoads, k * 6, sp.dir)) }));
+        const worst = loads.reduce((a, b) => (b.f * sp.oneWay < a.f * sp.oneWay ? b : a));
+        if (worst.f * sp.oneWay < -1) out.push({ type: 'oneWay', support: k, state: worst.st.name, value: Math.abs(worst.f), limit: 0, dir: sp.dir, side: -sp.oneWay });
+        continue;
+      }
+      // dépassement le plus grand, d'un côté ou de l'autre
+      const moves = states.map((st) => {
+        const d = sum(st.list, (c) => along(c.u, sup.node * 6, sp.dir));
+        const limit = d >= 0 ? sp.gapPlus : sp.gapMinus;
+        return { st, d, limit, over: Math.abs(d) - limit };
+      });
+      const worst = moves.reduce((a, b) => (b.over > a.over ? b : a));
+      if (worst.over > 1e-6) out.push({ type: 'gap', support: k, state: worst.st.name, value: Math.abs(worst.d), limit: worst.limit, dir: sp.dir, side: worst.d >= 0 ? 1 : -1, sided: sp.gapMinus !== sp.gapPlus });
     }
     // supports à ressort : course depuis la position de réglage
     if (sup.travelUp != null || sup.travelDown != null) {
@@ -138,7 +152,9 @@ export function contactFindings({ mesh, cases, nonlinear = null }) {
     nonlinear.contacts.forEach((c, i) => {
       if (c.kind !== 'gap') return;
       const open = nonlinear.states.filter((st) => st.contacts[i].status === 'open');
-      if (open.length) out.push({ type: 'seismicGapOpen', support: c.support, state: open.map((st) => st.name).join(', '), value: Math.max(...open.map((st) => Math.abs(st.contacts[i].d))), limit: c.d2, dir: c.dir });
+      // jeu annoncé : le plus petit des deux côtés qui ont une butée
+      const limit = Math.min(c.d2, -c.d1);
+      if (open.length) out.push({ type: 'seismicGapOpen', support: c.support, state: open.map((st) => st.name).join(', '), value: Math.max(...open.map((st) => Math.abs(st.contacts[i].d))), limit, dir: c.dir, sides: c.d2 === -c.d1 ? null : [-c.d1, c.d2] });
     });
   }
   return out;
@@ -163,17 +179,26 @@ export function resultDiagnostics({ mesh, cases, contacts = contactFindings({ me
   const seismicLift = of('seismicLiftoff').map((c) => `${name(c)} : effort sismique vertical ${round(c.value, 0)} N pour ${round(c.limit, 0)} N portés (${c.state})`);
   if (seismicLift.length) out.push(`Appui(s) simple(s) qui décollerai(en)t sous séisme — ${seismicLift.join(' ; ')}. Le calcul sismique les prend bilatéraux.`);
   const axis = (d) => ['X', 'Y', 'Z'].find((_, i) => Math.abs(Math.abs(d[i]) - 1) < 1e-6) ?? `(${d.map((x) => round(x, 2)).join(' ; ')})`;
-  const gaps = of('gap').map((c) => `${name(c)}, direction ${axis(c.dir)} : déplacement ${round(c.value, 2)} mm pour un jeu de ${round(c.limit, 2)} mm sous ${c.state}`);
+  const sideName = (c) => `${c.side > 0 ? '+' : '−'}${axis(c.dir)}`;
+  const gaps = of('gap').map((c) => `${name(c)}, direction ${axis(c.dir)} : déplacement ${round(c.value, 2)} mm pour un jeu de ${round(c.limit, 2)} mm${c.sided ? ` côté ${sideName(c)}` : ''} sous ${c.state}`);
   if (gaps.length) {
     out.push(
       `Jeu(x) rattrapé(s) — ${gaps.join(' ; ')}. Le calcul statique laisse cette direction libre : le support devrait porter, efforts et contraintes sont à confirmer en supprimant le jeu de ce support.`,
+    );
+  }
+  const oneWay = of('oneWay').map((c) => `${name(c)}, direction ${axis(c.dir)} : ${round(c.value, 0)} N vers ${sideName(c)} sous ${c.state}`);
+  if (oneWay.length) {
+    out.push(
+      `Butée(s) à un seul sens sollicitée(s) en sens inverse — ${oneWay.join(' ; ')}. Le calcul est linéaire : la butée retient la tuyauterie du côté où elle est libre. ` +
+        'Résultats à confirmer avec le solveur non linéaire, ou en supprimant cette butée dans les cas concernés.',
     );
   }
   const travel = of('travel').map((c) => `${name(c)} : butée ${c.side}, déplacement ${round(c.value, 2)} mm pour une course de ${round(c.limit, 2)} mm sous ${c.state}`);
   if (travel.length) out.push(`Course de support à ressort dépassée — ${travel.join(' ; ')}. Le calcul ne bloque pas le support sur sa butée : choisir un support de course suffisante ou revoir son réglage.`);
   const restLifted = of('seismicRestLifted').map((c) => `${name(c)} : décollé sous ${c.state}`);
   if (restLifted.length) out.push(`Appui(s) décollé(s) en service, compté(s) actif(s) sous séisme — ${restLifted.join(' ; ')}. L’analyse sismique est linéaire : elle prend l’appui bilatéral.`);
-  const gapOpen = of('seismicGapOpen').map((c) => `${name(c)}, direction ${axis(c.dir)} : jeu de ${round(c.limit, 2)} mm ouvert sous ${c.state}`);
+  const gapSize = (c) => (c.sides ? `${c.sides.map((g, i) => (Number.isFinite(g) ? `${i ? '+' : '−'}${round(g, 2)}` : `${i ? '+' : '−'} libre`)).join(' / ')} mm` : `${round(c.limit, 2)} mm`);
+  const gapOpen = of('seismicGapOpen').map((c) => `${name(c)}, direction ${axis(c.dir)} : jeu de ${gapSize(c)} ouvert sous ${c.state}`);
   if (gapOpen.length) out.push(`Jeu(x) ouvert(s) en service, support(s) compté(s) actif(s) sous séisme — ${gapOpen.join(' ; ')}. L’analyse sismique est linéaire : elle ignore le jeu.`);
   const seismicTravel = of('seismicTravel').map((c) => `${name(c)} : butée ${c.side}, ${round(c.value, 2)} mm pour une course de ${round(c.limit, 2)} mm (${c.state})`);
   if (seismicTravel.length) out.push(`Course de support à ressort dépassée sous séisme — ${seismicTravel.join(' ; ')}.`);

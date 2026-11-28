@@ -459,11 +459,16 @@ export function contactStateText(c, st) {
       return `en contact (${N(st.force)})`;
     case 'lifted':
       return `décollé (${mm(st.d)})`;
-    case 'open':
-      return `ouvert (${mm(st.d)} sur ${mm(c.d2)})`;
+    case 'open': {
+      // jeu du côté où se fait le déplacement ; un côté sans butée reste libre
+      const limit = st.d >= 0 ? c.d2 : -c.d1;
+      if (!Number.isFinite(limit)) return `libre de ce côté (${mm(st.d)})`;
+      return `ouvert (${mm(st.d)} sur ${mm(limit)}${c.d2 === -c.d1 ? '' : ` côté ${st.d >= 0 ? '+' : '−'}`})`;
+    }
     case 'closedPlus':
+      return `fermé côté + (${N(st.force)})`;
     case 'closedMinus':
-      return `fermé (${N(st.force)})`;
+      return `fermé côté − (${N(st.force)})`;
     case 'stopHigh':
       return `butée haute (${N(st.force)})`;
     case 'stopLow':
@@ -485,6 +490,17 @@ export function frictionStateText(f) {
 
 const CONTACT_KINDS = { rest: 'appui simple', gap: 'jeu', stop: 'butées du ressort', fixed: 'blocage' };
 const axisName = (d) => ['X', 'Y', 'Z'].find((_, i) => Math.abs(Math.abs(d[i]) - 1) < 1e-6) ?? 'biais';
+/** Jeux d'une direction, côté − puis côté + (mm) : « 5 » s'ils sont égaux, « −2 / +5 », « − libre / +3 ». */
+export function gapText(minus, plus) {
+  if (minus === plus) return `${fmt(minus, 2)} mm`;
+  const side = (g, sign) => (Number.isFinite(g) ? `${sign}${fmt(g, 2)}` : `${sign} libre`);
+  return `${side(minus, '−')} / ${side(plus, '+')} mm`;
+}
+/** Nature d'un contact pour les tableaux : type, direction, et jeux s'ils diffèrent d'un côté à l'autre. */
+function contactKindText(c, kinds = CONTACT_KINDS) {
+  if (c.kind !== 'gap' && c.kind !== 'fixed') return kinds[c.kind];
+  return `${kinds[c.kind]} ${axisName(c.dir)}${c.kind === 'gap' && c.d2 !== -c.d1 ? ` (${gapText(-c.d1, c.d2)})` : ''}`;
+}
 
 /**
  * Lignes du tableau d'état des contacts : [support, nature, état par état calculé…],
@@ -495,7 +511,7 @@ export function contactRows(r) {
   const { contacts, states } = r.nonlinear;
   const name = (k) => `${r.mesh.supports[k].label} (${r.mesh.nodes[r.mesh.supports[k].node].label})`;
   const rows = contacts.map((c, i) => {
-    const row = [name(c.support), c.kind === 'gap' || c.kind === 'fixed' ? `${CONTACT_KINDS[c.kind]} ${axisName(c.dir)}` : CONTACT_KINDS[c.kind], ...states.map((st) => contactStateText(c, st.contacts[i]))];
+    const row = [name(c.support), contactKindText(c), ...states.map((st) => contactStateText(c, st.contacts[i]))];
     const st = states.map((x) => x.contacts[i].status);
     row.changed = new Set(st).size > 1 || st.some((x) => ['lifted', 'closedPlus', 'closedMinus', 'stopHigh', 'stopLow'].includes(x));
     return row;
@@ -810,12 +826,12 @@ function contactText(r, k) {
   // solveur non linéaire : état calculé de chaque contact du support, état par état
   if (r.nonlinear) {
     const mine = r.nonlinear.contacts.map((c, i) => ({ c, i })).filter(({ c }) => c.support === k);
-    const snub = r.mesh.springs.some((s) => s.support === k && s.dynamicOnly && !(s.gap > 0));
+    const snub = r.mesh.springs.some((s) => s.support === k && s.dynamicOnly && !s.gapped);
     if (!mine.length) return snub ? ' Libre en poids et en dilatation, bloqué en séisme.' : '';
     const kinds = { ...CONTACT_KINDS, stop: 'butées' };
     const j = (r.nonlinear.states[0]?.friction ?? []).findIndex((f) => f.support === k);
     const rub = j >= 0 ? ` ; frottement μ = ${fmt(r.nonlinear.states[0].friction[j].mu, 2)} : ${r.nonlinear.states.map((st) => `${frictionStateText(st.friction[j])} sous ${st.name}`).join(', ')}` : '';
-    return ` Solveur non linéaire — ${mine.map(({ c, i }) => `${kinds[c.kind]}${c.kind === 'gap' || c.kind === 'fixed' ? ` ${axisName(c.dir)}` : ''} : ${r.nonlinear.states.map((st) => `${contactStateText(c, st.contacts[i])} sous ${st.name}`).join(', ')}`).join(' ; ')}${rub}. Sous séisme, le support est compté actif${j >= 0 ? ', sans frottement' : ''}.`;
+    return ` Solveur non linéaire — ${mine.map(({ c, i }) => `${contactKindText(c, kinds)} : ${r.nonlinear.states.map((st) => `${contactStateText(c, st.contacts[i])} sous ${st.name}`).join(', ')}`).join(' ; ')}${rub}. Sous séisme, le support est compté actif${j >= 0 ? ', sans frottement' : ''}.`;
   }
   const sup = r.mesh.supports[k];
   const springs = r.mesh.springs.filter((s) => s.support === k && s.dynamicOnly);
@@ -827,7 +843,7 @@ function contactText(r, k) {
   const parts = springs.map((s) => {
     const moves = [['poids', along(W, s.dir)], ...T.map((t) => [`poids + ${t.id}`, along([...W, t], s.dir)])];
     const text = moves.map(([n, d]) => `${fmt(d, 2)} mm sous ${n}`).join(', ');
-    return s.gap > 0 ? `direction ${dirName(s.dir)}, jeu ${fmt(s.gap, 2)} mm : déplacement libre ${text}` : `direction ${dirName(s.dir)} : déplacement libre (course) ${text}`;
+    return s.gapped ? `direction ${dirName(s.dir)}, jeu ${gapText(s.gapMinus, s.gapPlus)} : déplacement libre ${text}` : `direction ${dirName(s.dir)} : déplacement libre (course) ${text}`;
   });
   return ` Libre en poids et en dilatation, bloqué en séisme — ${parts.join(' ; ')}.`;
 }

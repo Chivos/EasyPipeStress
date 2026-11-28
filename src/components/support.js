@@ -135,8 +135,12 @@ const F = {
   },
 };
 const GAP_HELP =
-  'Jeu avant contact, de part et d’autre : une valeur pour toutes les directions bloquées, ou une valeur par direction (dans l’ordre des directions du support, séparées par un espace). ' +
-  'Solveur linéaire : la direction est libre en poids et en dilatation (un avertissement signale un jeu rattrapé) et bloquée en séisme. Solveur non linéaire : le jeu se ferme quand il est rattrapé.';
+  'Jeu avant contact (mm). Une valeur : même jeu des deux côtés (5). Deux valeurs séparées par « / » : côté − puis côté + de la direction (2/5) ; ' +
+  '« - » à la place d’une valeur : pas de butée de ce côté (0/- : butée à un seul sens, au contact ; 3/- : appui placé 3 mm sous le tube). ' +
+  'Le côté + est celui des coordonnées globales croissantes (le haut pour une direction verticale). ' +
+  'Plusieurs directions bloquées : une entrée par direction, séparées par un espace, dans l’ordre des directions du support. ' +
+  'Solveur linéaire : une direction à jeu des deux côtés est libre en poids et en dilatation (un avertissement signale un jeu rattrapé) et bloquée en séisme ; ' +
+  'une butée au contact d’un côté est prise dans les deux sens (un avertissement signale un effort en sens inverse). Solveur non linéaire : le jeu se ferme quand il est rattrapé.';
 
 /**
  * Familles de supports de l'onglet de saisie : chacune a ses types, ses colonnes
@@ -148,7 +152,7 @@ export const SUPPORT_FAMILIES = [
     label: 'Points fixes et blocages',
     addLabel: 'blocage',
     kinds: ['anchor', 'guide', 'axial', 'clamp', 'clampguide', 'custom'],
-    help: 'Blocages bilatéraux, rigides par défaut. Le blocage personnalisé se définit par ses DDL globaux (réglages avancés).',
+    help: 'Blocages bilatéraux, rigides par défaut. Le blocage personnalisé se définit par ses DDL globaux (réglages avancés). Un jeu, différent de chaque côté si besoin, ou une butée à un seul sens se saisissent dans la colonne « Jeu » des réglages avancés (5, 2/5, 0/-).',
     fields: [F.node, F.kind(['anchor', 'guide', 'axial', 'clamp', 'clampguide', 'custom']), F.label],
     advanced: [
       { key: 'dofs', label: 'DDL (perso.)', type: 'text', width: 110, placeholder: 'DX DY RZ…', title: 'Pour le blocage personnalisé : DX DY DZ RX RY RZ' },
@@ -172,7 +176,7 @@ export const SUPPORT_FAMILIES = [
     label: 'Supports à ressort',
     addLabel: 'support à ressort',
     kinds: ['variable', 'constant'],
-    help: 'Support variable : ressort vertical de raideur k, actif dans tous les cas, et précharge P (effort de réglage vers le haut) appliquée dans le cas poids propre ; effort repris = P − k·u. Support constant : précharge P seule, sans raideur.',
+    help: 'Support variable : ressort vertical de raideur k, actif dans tous les cas, et précharge P (effort de réglage vers le haut) appliquée dans le cas poids propre ; effort repris = P − k·u. Support constant : précharge P seule, sans raideur. Les courses vers le haut et vers le bas, avant butée, se saisissent séparément (réglages avancés).',
     fields: [
       F.node,
       F.kind(['variable', 'constant']),
@@ -181,8 +185,8 @@ export const SUPPORT_FAMILIES = [
       F.label,
     ],
     advanced: [
-      { key: 'travelUp', label: 'Course haut', unit: 'mm', type: 'number', width: 80, placeholder: 'libre', title: 'Course disponible vers le haut depuis la position de réglage, avant la butée haute. Un avertissement signale une butée atteinte (poids, dilatation, séisme).' },
-      { key: 'travelDown', label: 'Course bas', unit: 'mm', type: 'number', width: 80, placeholder: 'libre', title: 'Course disponible vers le bas depuis la position de réglage, avant la butée basse.' },
+      { key: 'travelUp', label: 'Course haut', unit: 'mm', type: 'number', width: 80, placeholder: 'libre', title: 'Course disponible vers le haut depuis la position de réglage, avant la butée haute ; vide : pas de butée de ce côté. Solveur linéaire : un avertissement signale une butée atteinte (poids, dilatation, séisme). Solveur non linéaire : la butée arrête le support.' },
+      { key: 'travelDown', label: 'Course bas', unit: 'mm', type: 'number', width: 80, placeholder: 'libre', title: 'Course disponible vers le bas depuis la position de réglage, avant la butée basse ; vide : pas de butée de ce côté. Elle peut différer de la course vers le haut.' },
     ],
   },
   {
@@ -249,8 +253,8 @@ export const support = {
     // jeux : sur les directions de translation bloquées, hors appui de la tuyauterie posée
     const gapped = specs.filter((s) => !s.rot && !s.bearing && !s.dynamicOnly && !kindDef.hanger);
     const gaps = parseGaps(comp.gap, gapped.length);
-    if (gaps === null) ctx.warn(`Support au nœud ${comp.node} : jeu « ${comp.gap} » non compris (une valeur, ou ${gapped.length} valeur(s) séparées par un espace) ; jeu ignoré.`);
-    else if (gaps.some((g) => g > 0) && comp.kind === 'anchor') ctx.warn(`Ancrage au nœud ${comp.node} : un jeu n’a pas de sens sur un ancrage ; jeu ignoré.`);
+    if (gaps === null) ctx.warn(`Support au nœud ${comp.node} : jeu « ${comp.gap} » non compris (une valeur par direction bloquée, ${gapped.length} ici, ou une seule pour toutes ; « 2/5 » pour un jeu différent de chaque côté, « - » pour un côté sans butée) ; jeu ignoré.`);
+    else if (gaps.some((g) => g.minus > 0 || g.plus > 0) && comp.kind === 'anchor') ctx.warn(`Ancrage au nœud ${comp.node} : un jeu n’a pas de sens sur un ancrage ; jeu ignoré.`);
     const travel = (v) => (v === '' || v == null || !(+v >= 0) ? null : +v);
     // frottement : sur les blocages en translation ; sans objet pour un ancrage, un support à ressort ou un auto-bloquant
     let mu = 0;
@@ -272,28 +276,62 @@ export const support = {
     const rigid = rigidStiffness(ctx.elementsAt(idx));
     for (const s of specs) {
       const k = s.rot ? rigid.kr : kUser > 0 ? kUser : rigid.kt;
-      const gap = comp.kind !== 'anchor' && gaps ? gaps[gapped.indexOf(s)] ?? 0 : 0;
+      const g = (comp.kind !== 'anchor' && gaps ? gaps[gapped.indexOf(s)] : null) ?? { minus: 0, plus: 0 };
+      const hasGap = g.minus > 0 || g.plus > 0;
+      if (g.minus === Infinity && g.plus === Infinity) {
+        ctx.warn(`Support au nœud ${comp.node} : une direction sans butée d’aucun côté (jeu « ${comp.gap} ») ne retient rien ; direction ignorée.`);
+        continue;
+      }
+      // jeu des deux côtés : direction libre en statique linéaire (jeu supposé ouvert, contrôlé), bloquée en
+      // dynamique ; butée au contact d'un côté : active, prise dans les deux sens par le calcul linéaire
+      const open = g.minus > 0 && g.plus > 0;
       ctx.addSpring({
         node: idx,
         rot: s.rot,
-        dir: vec.unit(s.dir),
+        // direction à jeu : orientée dans le sens global croissant, qui définit ses côtés − et +
+        dir: hasGap ? positiveSense(vec.unit(s.dir)) : vec.unit(s.dir),
         k,
         support: supIdx,
         bearing: !!s.bearing,
-        // direction à jeu : libre en statique (jeu supposé ouvert, contrôlé), bloquée en dynamique
-        gap: gap > 0 ? gap : 0,
-        dynamicOnly: !!s.dynamicOnly || gap > 0,
+        gapped: hasGap,
+        ...(hasGap ? { gapMinus: g.minus, gapPlus: g.plus, oneWay: open ? 0 : g.minus === 0 ? -1 : 1 } : {}),
+        dynamicOnly: !!s.dynamicOnly || open,
       });
     }
   },
 };
 
-/** Jeux par direction : '' → aucun ; une valeur → toutes les directions ; n valeurs → une par direction ; null si incompris. */
+/** Direction orientée dans le sens global croissant : sa plus grande composante est positive. */
+function positiveSense(d) {
+  const i = [0, 1, 2].reduce((a, b) => (Math.abs(d[b]) > Math.abs(d[a]) + 1e-9 ? b : a), 0);
+  return d[i] < 0 ? d.map((v) => (v === 0 ? 0 : -v)) : d;
+}
+
+/**
+ * Jeux par direction : [{ minus, plus }] en mm, du côté − et du côté + de la direction
+ * (Infinity : pas de butée de ce côté). '' → aucun jeu ; une entrée → toutes les directions ;
+ * n entrées → une par direction. Une entrée : « 5 » (même jeu des deux côtés), « 2/5 »
+ * (côté − / côté +), « - » à la place d'une valeur pour un côté sans butée. null si incompris.
+ */
 function parseGaps(text, n) {
-  if (text == null || String(text).trim() === '') return new Array(n).fill(0);
-  const parts = String(text).trim().replace(/,/g, '.').split(/[\s;]+/).map(Number);
-  if (parts.some((v) => !Number.isFinite(v) || v < 0)) return null;
-  if (parts.length === 1) return new Array(n).fill(parts[0]);
+  if (text == null || String(text).trim() === '') return Array.from({ length: n }, () => ({ minus: 0, plus: 0 }));
+  const side = (t) => {
+    if (/^(-|–|—|libre|inf|∞)$/i.test(t)) return Infinity;
+    const v = t === '' ? NaN : Number(t.replace(',', '.'));
+    return Number.isFinite(v) && v >= 0 ? v : NaN;
+  };
+  const parts = String(text)
+    .trim()
+    .split(/[\s;]+/)
+    .map((token) => {
+      const sides = token.split('/');
+      if (sides.length > 2) return null;
+      const minus = side(sides[0]);
+      const plus = sides.length === 2 ? side(sides[1]) : minus;
+      return Number.isNaN(minus) || Number.isNaN(plus) ? null : { minus, plus };
+    });
+  if (parts.some((x) => !x)) return null;
+  if (parts.length === 1) return Array.from({ length: n }, () => ({ ...parts[0] }));
   return parts.length === n ? parts : null;
 }
 

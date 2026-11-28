@@ -132,8 +132,18 @@ Les supports sont saisis par familles, chacune avec ses réglages avancés :
   appui vertical bilatéral (étrier), avec ou sans guide latéral, blocage
   personnalisé par DDL globaux ;
 - **appuis simples** (tuyauterie posée), avec ou sans guide latéral ;
-- **supports à ressort** : variable (raideur + précharge) ou constant ;
+- **supports à ressort** : variable (raideur + précharge) ou constant, avec une
+  course vers le haut et une course vers le bas indépendantes ;
 - **dispositifs auto-bloquants**.
+
+**Jeux.** Chaque direction bloquée en translation peut recevoir un jeu avant
+contact, différent de chaque côté : « 5 » (5 mm des deux côtés), « 2/5 » (2 mm
+côté −, 5 mm côté +), « - » à la place d'une valeur pour un côté sans butée. Le
+côté + d'une direction est celui des coordonnées globales croissantes (le haut
+pour une direction verticale), quel que soit le sens de saisie du tube. Cette
+saisie couvre la butée à un seul sens (« 0/- » : au contact d'un côté, libre de
+l'autre), l'appui placé sous le tube (« 3/- » sur un étrier) et l'étrier à jeu
+haut (« 0/2 »).
 
 **Supports à contact et calcul linéaire.** Le solveur est linéaire : il ne
 cherche pas l'état des contacts. Chaque support à contact reçoit une hypothèse,
@@ -143,7 +153,8 @@ sous séisme ; un avertissement signale l'hypothèse mise en défaut :
 | Support | Hypothèse du calcul | Contrôle |
 |---|---|---|
 | Appui simple | bilatéral dans tous les cas | effort vers le haut (appui soulevé) ; effort sismique vertical supérieur à la charge portée |
-| Jeu sur une direction bloquée | direction libre en poids et en dilatation (jeu ouvert), bloquée en modal et en séisme (jeu fermé) | déplacement libre supérieur au jeu (jeu rattrapé) |
+| Jeu des deux côtés d'une direction bloquée | direction libre en poids et en dilatation (jeu ouvert), bloquée en modal et en séisme (jeu fermé) | déplacement libre supérieur au jeu du côté où il se fait (jeu rattrapé) |
+| Butée au contact d'un côté (jeu nul), libre ou à jeu de l'autre | bilatérale dans tous les cas, comme l'appui simple | effort dans le sens où la butée est libre |
 | Dispositif auto-bloquant | libre en poids et en dilatation, bloqué en modal et en séisme | aucun (comportement exact) ; le détail donne la course thermique |
 | Butées d'un support à ressort | ressort toujours actif, sans butée | déplacement vertical supérieur à la course haute ou basse, y compris sous séisme |
 
@@ -730,7 +741,7 @@ d ≥ d₂. Le problème reste linéaire par morceaux. Ce modèle couvre :
 | Support | d₁, d₂ | Raideurs |
 |---|---|---|
 | Appui simple (tuyauterie posée) | d₁ = 0 | k₁ rigide, les autres nulles : n'agit que contre la descente |
-| Jeu de part et d'autre | d₁ = −jeu, d₂ = +jeu | k₁ et k₄ rigides, k₂ = k₃ = 0 |
+| Jeu de part et d'autre | d₁ = −jeu côté −, d₂ = +jeu côté + | k₁ et k₄ rigides, k₂ = k₃ = 0 ; raideur nulle du côté sans butée |
 | Butées d'un support à ressort | courses basse et haute | k₂ = k₃ = raideur du ressort, k₁ et k₄ majorées de la butée |
 
 **Frottement.** Coefficient de Coulomb μ par support (réglages avancés des
@@ -902,6 +913,11 @@ insuffisant. Aucune des trois n'est rigoureuse.
 - Robustesse : le frottement a été éprouvé sur 3 200 lignes tirées au hasard
   (appuis, guides, butées, jeux, deux supports au même nœud, μ de 0,1 à 0,6),
   sans échec et en deux calculs complets par état en médiane.
+- Jeux différents de chaque côté (`tests/gaps.test.mjs`), sur la même console :
+  butée basse proche et butée haute éloignée, butée à un seul sens (identique à
+  l'appui simple), appui placé sous le tube, étrier à jeu haut, côtés − et +
+  indépendants du sens de saisie du tube, courses haute et basse d'un support à
+  ressort ; contrôles du solveur linéaire par côté.
 - Poids dans la configuration de service (`tests/sustained.test.mjs`) : console
   dont l'appui décolle (moment d'encastrement wL²/2 appui retiré, contre wL²/8 à
   froid), jeu fermé gardé actif, sens inverse signalé, aucun ajout quand le

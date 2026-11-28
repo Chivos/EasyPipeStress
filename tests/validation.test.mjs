@@ -905,7 +905,7 @@ test('Jeux et courses : contrôle après calcul linéaire (jeu rattrapé, butée
   assert.ok(g && g.limit === 2 && g.value > 7 && g.value < 9, JSON.stringify(g));
   assert.match(tight.warnings.join('\n'), /Jeu\(x\) rattrapé\(s\) — G \(nœud 3\)/);
   // direction à jeu : libre en statique (aucun effort), bloquée en dynamique
-  assert.equal(tight.mesh.springs.find((s) => s.gap > 0).dynamicOnly, true);
+  assert.equal(tight.mesh.springs.find((s) => s.gapped).dynamicOnly, true);
   assert.ok(Array.from(tight.cases[1].supportLoads.slice(6, 12)).every((v) => v === 0));
   const loose = run([sup('3', 'guide', { gap: '20', label: 'G' })]);
   assert.deepEqual(loose.contacts, []);

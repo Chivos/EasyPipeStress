@@ -13,7 +13,8 @@
 // C'est le modèle des supports non linéaires du logiciel de comparaison.
 //
 //   appui simple (tuyauterie posée)   d₁ = 0        k₁ rigide : n'agit que contre la descente
-//   jeu de part et d'autre            d₁ = −j, d₂ = +j   k₁ = k₄ rigides, k₂ = k₃ = 0
+//   jeu de part et d'autre            d₁ = −j₋, d₂ = +j₊   k₁ = k₄ rigides, k₂ = k₃ = 0
+//                                     (jeux différents de chaque côté ; un côté sans butée : raideur nulle)
 //   butées d'un support à ressort     courses basse et haute, k₁ = k₄ rigides
 //                                     (le ressort lui-même reste un ressort linéaire)
 //   blocage dans les deux sens        k₁ = k₂ = k₃ = k₄ : linéaire ; contact seulement
@@ -80,10 +81,11 @@ export function zoneOf(c, d) {
 /** Branche linéaire de la zone z : F(d) = k·d + f0. */
 export function branch(c, z) {
   const [k1, k2, k3, k4] = c.k;
-  if (z === 1) return { k: k1, f0: (k2 - k1) * c.d1 };
+  // un côté sans butée (d infini) n'est jamais atteint
+  if (z === 1) return { k: k1, f0: Number.isFinite(c.d1) ? (k2 - k1) * c.d1 : 0 };
   if (z === 2) return { k: k2, f0: 0 };
   if (z === 3) return { k: k3, f0: 0 };
-  return { k: k4, f0: (k3 - k4) * c.d2 };
+  return { k: k4, f0: Number.isFinite(c.d2) ? (k3 - k4) * c.d2 : 0 };
 }
 
 /** Effort de la tuyauterie sur le support pour le déplacement d (linéaire par morceaux, continu). */
@@ -109,9 +111,12 @@ export function buildContacts(mesh) {
     } else if (s.bearing) {
       // tuyauterie posée : l'appui ne retient pas vers le haut ; supposé en contact au départ
       contacts.push({ kind: 'rest', support: s.support, node: s.node, dir: s.dir, d1: 0, d2: Infinity, k: [s.k, 0, 0, 0], zone0: 1, mu });
-    } else if (s.gap > 0) {
-      // jeu de part et d'autre de la position de montage ; supposé ouvert au départ
-      contacts.push({ kind: 'gap', support: s.support, node: s.node, dir: s.dir, d1: -s.gap, d2: s.gap, k: [s.k, 0, 0, s.k], zone0: 3, mu });
+    } else if (s.gapped) {
+      // jeu de part et d'autre de la position de montage, éventuellement différent de chaque côté ;
+      // supposé ouvert au départ, ou au contact du côté où le jeu est nul
+      const d1 = s.gapMinus === Infinity ? -Infinity : -s.gapMinus;
+      const d2 = s.gapPlus;
+      contacts.push({ kind: 'gap', support: s.support, node: s.node, dir: s.dir, d1, d2, k: [Number.isFinite(d1) ? s.k : 0, 0, 0, Number.isFinite(d2) ? s.k : 0], zone0: s.gapMinus === 0 ? 1 : s.gapPlus === 0 ? 4 : 3, mu });
     } else if (!s.dynamicOnly) {
       // blocage dans les deux sens : ressort ordinaire, sauf s'il frotte (sa réaction donne la force de frottement)
       if (mu > 0) contacts.push({ kind: 'fixed', support: s.support, node: s.node, dir: s.dir, d1: 0, d2: 0, k: [s.k, s.k, s.k, s.k], zone0: 4, mu });

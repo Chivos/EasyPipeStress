@@ -354,7 +354,8 @@ test('exemple non linéaire (docs/validation) : état des contacts, frottement e
   const plain = runAnalysis(normalizeModel(nonlinearSupports({ friction: '' })));
   const [pc, ps] = plain.nonlinear.states;
   assert.deepEqual(pc.contacts.map((c) => c.status), ['contact', 'contact', 'open']);
-  assert.deepEqual(ps.contacts.map((c) => c.status), ['lifted', 'contact', 'closedMinus']);
+  // G1 : direction orientée vers +X, le tube vient en butée de ce côté
+  assert.deepEqual(ps.contacts.map((c) => c.status), ['lifted', 'contact', 'closedPlus']);
   near(kN(-contact(plain, pc, 'A1').force), 3.46, 1e-3, 'A1 à froid');
   near(kN(-contact(plain, pc, 'A2').force), 4.188, 1e-3, 'A2 à froid');
   near(contact(plain, ps, 'A1').d, 7.049, 1e-3, 'décollement de A1');
@@ -365,7 +366,7 @@ test('exemple non linéaire (docs/validation) : état des contacts, frottement e
   // avec frottement μ = 0,3 : fiche nl-appui-jeu-frottement-valeurs-attendues.md
   const r = runAnalysis(normalizeModel(EXAMPLES.find((e) => e.id === 'nonlinear').build()));
   const [cold, service] = r.nonlinear.states;
-  assert.deepEqual(service.contacts.map((c) => c.status), ['lifted', 'contact', 'closedMinus']);
+  assert.deepEqual(service.contacts.map((c) => c.status), ['lifted', 'contact', 'closedPlus']);
   const fr = (st, label) => st.friction.find((f) => r.mesh.supports[f.support].label === label);
   assert.deepEqual(cold.friction.map((f) => [f.active, f.slip]), [[true, false], [true, false], [false, false]]);
   assert.deepEqual(service.friction.map((f) => [f.active, f.slip]), [[false, false], [true, true], [true, true]]);
