@@ -468,38 +468,68 @@ export function contactStateText(c, st) {
       return `butée haute (${N(st.force)})`;
     case 'stopLow':
       return `butée basse (${N(st.force)})`;
+    case 'held':
+      return `actif (${N(st.force)})`;
     default:
       return `libre (${mm(st.d)})`;
   }
 }
 
-/** Lignes du tableau d'état des contacts : [support, nature, état par état calculé…]. */
+/** Libellé du frottement d'un support dans un état calculé : glissement (force à la limite) ou adhérence. */
+export function frictionStateText(f) {
+  const N = (v) => `${fmt(Math.abs(v), 0)} N`;
+  if (!f.active) return 'sans objet (support inactif)';
+  if (!(f.limit > 1e-6)) return 'nul (support déchargé)';
+  return f.slip ? `glisse (${N(f.force)}, ${fmt(f.delta, 2)} mm)` : `adhère (${N(f.force)} pour ${N(f.limit)} admis)`;
+}
+
+const CONTACT_KINDS = { rest: 'appui simple', gap: 'jeu', stop: 'butées du ressort', fixed: 'blocage' };
+const axisName = (d) => ['X', 'Y', 'Z'].find((_, i) => Math.abs(Math.abs(d[i]) - 1) < 1e-6) ?? 'biais';
+
+/**
+ * Lignes du tableau d'état des contacts : [support, nature, état par état calculé…],
+ * contacts puis frottement des supports frottants. `changed` (non énumérable dans le
+ * tableau rendu) signale les lignes à mettre en valeur.
+ */
 export function contactRows(r) {
-  const kinds = { rest: 'appui simple', gap: 'jeu', stop: 'butées du ressort' };
-  const axis = (d) => ['X', 'Y', 'Z'].find((_, i) => Math.abs(Math.abs(d[i]) - 1) < 1e-6) ?? 'biais';
-  return r.nonlinear.contacts.map((c, i) => {
-    const sup = r.mesh.supports[c.support];
-    return [`${sup.label} (${r.mesh.nodes[sup.node].label})`, c.kind === 'gap' ? `${kinds.gap} ${axis(c.dir)}` : kinds[c.kind], ...r.nonlinear.states.map((st) => contactStateText(c, st.contacts[i]))];
+  const { contacts, states } = r.nonlinear;
+  const name = (k) => `${r.mesh.supports[k].label} (${r.mesh.nodes[r.mesh.supports[k].node].label})`;
+  const rows = contacts.map((c, i) => {
+    const row = [name(c.support), c.kind === 'gap' || c.kind === 'fixed' ? `${CONTACT_KINDS[c.kind]} ${axisName(c.dir)}` : CONTACT_KINDS[c.kind], ...states.map((st) => contactStateText(c, st.contacts[i]))];
+    const st = states.map((x) => x.contacts[i].status);
+    row.changed = new Set(st).size > 1 || st.some((x) => ['lifted', 'closedPlus', 'closedMinus', 'stopHigh', 'stopLow'].includes(x));
+    return row;
   });
+  (states[0]?.friction ?? []).forEach((f0, j) => {
+    const row = [name(f0.support), `frottement μ = ${fmt(f0.mu, 2)}`, ...states.map((st) => frictionStateText(st.friction[j]))];
+    row.changed = states.some((st) => st.friction[j].active && st.friction[j].slip && st.friction[j].limit > 1e-6);
+    rows.push(row);
+  });
+  return rows;
 }
 
 /** Carte « État des contacts » du solveur non linéaire : un état par colonne. */
 function contactCard(r) {
   const { contacts, states } = r.nonlinear;
-  const changed = (i) => new Set(states.map((st) => st.contacts[i].status)).size > 1 || states.some((st) => ['lifted', 'closedPlus', 'closedMinus', 'stopHigh', 'stopLow'].includes(st.contacts[i].status));
+  const rubbing = (states[0]?.friction ?? []).length > 0;
   return h(
     'section',
     { class: 'card' },
     h('h3', {}, 'État des contacts — solveur non linéaire'),
-    h('p', { class: 'help' }, `Expérimental. États calculés : ${states.map((st) => `${st.name} (${st.iterations} itération${st.iterations > 1 ? 's' : ''})`).join(', ')}. Sans frottement ; séisme linéaire, tous supports actifs.`),
+    h(
+      'p',
+      { class: 'help' },
+      `Expérimental. États calculés : ${states.map((st) => `${st.name} (${st.iterations} itération${st.iterations > 1 ? 's' : ''})`).join(', ')}. ` +
+        (rubbing ? 'Frottement : force opposée au déplacement depuis la position de montage, μ fois la réaction du support quand il glisse ; séisme linéaire, tous supports actifs, sans frottement.' : 'Sans frottement ; séisme linéaire, tous supports actifs.'),
+    ),
     contacts.length
       ? h(
           'table',
           { class: 'grid compact' },
           h('thead', {}, h('tr', {}, th('Support'), th('Contact'), ...states.map((st) => th(st.name)))),
-          h('tbody', {}, contactRows(r).map((row, i) => h('tr', { class: changed(i) ? 'sel' : '' }, row.map((v) => h('td', {}, v))))),
+          h('tbody', {}, contactRows(r).map((row) => h('tr', { class: row.changed ? 'sel' : '' }, row.map((v) => h('td', {}, v))))),
         )
-      : h('p', { class: 'muted' }, 'Aucun support à contact (appui simple, jeu, butée de support à ressort) : résultats identiques à ceux du solveur linéaire.'),
+      : h('p', { class: 'muted' }, 'Aucun support à contact (appui simple, jeu, butée de support à ressort, frottement) : résultats identiques à ceux du solveur linéaire.'),
   );
 }
 
@@ -742,8 +772,10 @@ function contactText(r, k) {
     const mine = r.nonlinear.contacts.map((c, i) => ({ c, i })).filter(({ c }) => c.support === k);
     const snub = r.mesh.springs.some((s) => s.support === k && s.dynamicOnly && !(s.gap > 0));
     if (!mine.length) return snub ? ' Libre en poids et en dilatation, bloqué en séisme.' : '';
-    const kinds = { rest: 'appui simple', gap: 'jeu', stop: 'butées' };
-    return ` Solveur non linéaire — ${mine.map(({ c, i }) => `${kinds[c.kind]} : ${r.nonlinear.states.map((st) => `${contactStateText(c, st.contacts[i])} sous ${st.name}`).join(', ')}`).join(' ; ')}. Sous séisme, le support est compté actif.`;
+    const kinds = { ...CONTACT_KINDS, stop: 'butées' };
+    const j = (r.nonlinear.states[0]?.friction ?? []).findIndex((f) => f.support === k);
+    const rub = j >= 0 ? ` ; frottement μ = ${fmt(r.nonlinear.states[0].friction[j].mu, 2)} : ${r.nonlinear.states.map((st) => `${frictionStateText(st.friction[j])} sous ${st.name}`).join(', ')}` : '';
+    return ` Solveur non linéaire — ${mine.map(({ c, i }) => `${kinds[c.kind]}${c.kind === 'gap' || c.kind === 'fixed' ? ` ${axisName(c.dir)}` : ''} : ${r.nonlinear.states.map((st) => `${contactStateText(c, st.contacts[i])} sous ${st.name}`).join(', ')}`).join(' ; ')}${rub}. Sous séisme, le support est compté actif${j >= 0 ? ', sans frottement' : ''}.`;
   }
   const sup = r.mesh.supports[k];
   const springs = r.mesh.springs.filter((s) => s.support === k && s.dynamicOnly);

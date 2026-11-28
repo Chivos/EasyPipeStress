@@ -590,8 +590,10 @@ interpréter avec prudence (`src/diagnostics.js`), sans modifier les résultats 
 Les points en attente d'une décision ou d'un texte de code sont suivis dans
 [QUESTIONS.md](QUESTIONS.md).
 
-- Supports linéaires : décollement, jeux et butées sont contrôlés après calcul
-  et signalés (§ 1.6), sans recherche de l'état des contacts ; pas de frottement.
+- Solveur linéaire (par défaut) : décollement, jeux et butées sont contrôlés
+  après calcul et signalés (§ 1.6), sans recherche de l'état des contacts ; le
+  frottement est ignoré et signalé. Le solveur non linéaire expérimental (§ 7)
+  calcule l'état des contacts et le frottement.
 - Poids, analyse modale et séisme au module à froid Ec (seule la dilatation a
   l'option du module à chaud) : en service à haute température, les fréquences
   réelles sont plus basses d'environ ½·(1 − Eh/Ec), soit 5 % à 300 °C.
@@ -619,10 +621,10 @@ Les points en attente d'une décision ou d'un texte de code sont suivis dans
 
 > **Expérimental.** Second solveur, au choix dans l'onglet Projet, destiné aux
 > supports non linéaires. Le solveur linéaire décrit plus haut reste le solveur
-> par défaut et n'est pas modifié. Sont en place : le calcul statique par états
-> et la raideur par zones (appuis simples, jeux, butées des supports à ressort),
-> qui alimentent directement les équations des codes. Reste à faire : le
-> frottement.
+> par défaut et n'est pas modifié. Sont en place : le calcul statique par états,
+> la raideur par zones (appuis simples, jeux, butées des supports à ressort) et
+> le frottement, qui alimentent directement les équations des codes. Reste à
+> faire : la comparaison avec le logiciel de référence.
 
 Les principes sont alignés sur le calcul statique non linéaire du logiciel de
 comparaison (PIPESTRESS, aide en ligne, « Non-Linear Static Analysis » et cartes
@@ -703,29 +705,57 @@ d ≥ d₂. Le problème reste linéaire par morceaux. Ce modèle couvre :
 | Jeu de part et d'autre | d₁ = −jeu, d₂ = +jeu | k₁ et k₄ rigides, k₂ = k₃ = 0 |
 | Butées d'un support à ressort | courses basse et haute | k₂ = k₃ = raideur du ressort, k₁ et k₄ majorées de la butée |
 
-**Frottement.** Coefficient de Coulomb μ par support : une force opposée au
-déplacement transversal de la tuyauterie, d'intensité μ·|R|, R étant la réaction
-du support. Elle est obtenue par une raideur ajoutée dans le plan transversal à
-la direction du support, ajustée jusqu'à produire la bonne force ; force et
-déplacement sont alors colinéaires par construction. Un problème avec frottement
-peut avoir plusieurs solutions d'équilibre.
+**Frottement.** Coefficient de Coulomb μ par support (réglages avancés des
+supports ; vide : pas de frottement). Le frottement d'un support s'oppose au
+déplacement de la tuyauterie, mesuré depuis la position de montage, dans les
+directions que le support laisse libres. Il suit une loi à deux régimes, δ étant
+ce déplacement et L = μ·Σ|R| la limite de frottement, somme des réactions des
+directions actives du support :
 
-**Itérations.** À chaque itération, deux hypothèses par support : la zone où se
-trouve le déplacement, et la raideur transversale de frottement. Un calcul
-linéaire est fait sur ces hypothèses, puis elles sont contrôlées :
+- *adhérence* : la force vaut k_max·δ et reste inférieure à L ;
+- *glissement* : la force vaut L, dirigée suivant le déplacement.
+
+| Support | Directions libres | Limite L |
+|---|---|---|
+| Appui simple, étrier | plan horizontal | μ·\|R vertical\| |
+| Guide ou butée à une direction | plan transversal à la direction bloquée | μ·\|R\| |
+| Appui guidé (vertical et latéral) | axe du tube | μ·(\|R vertical\| + \|R latéral\|) |
+| Guide d'un tube vertical (deux directions) | axe du tube | μ·(\|R₁\| + \|R₂\|) |
+
+Seules les directions actives comptent : un appui décollé ne frotte pas ; un
+guide dont le jeu est ouvert non plus, et sa direction redevient libre. La force
+est produite par une raideur ajoutée dans les directions libres, ajustée jusqu'à
+donner la bonne force : force et déplacement sont colinéaires par construction.
+La raideur d'adhérence k_max vaut 1,75·10⁶ N/mm, valeur du logiciel de
+comparaison (10⁷ lb/in). Le frottement est sans objet pour un ancrage, un support
+à ressort ou un dispositif auto-bloquant.
+
+*Écart avec le logiciel de comparaison.* Chaque direction bloquée y porte son
+propre frottement, dans tout son plan transversal, y compris suivant une autre
+direction bloquée au même point. Pour un support à une direction, les deux
+modèles sont identiques. Pour un support à deux directions, l'application ne fait
+frotter que suivant l'axe laissé libre : le tube ne glisse pas à travers son
+guide, et l'adhérence d'une direction ne vient pas décharger l'autre. Deux
+supports distincts placés au même nœud gardent chacun leurs directions libres,
+comme dans le logiciel de comparaison.
+
+**Itérations.** À chaque itération, deux hypothèses : la zone où se trouve le
+déplacement de chaque contact, et la raideur de frottement de chaque support
+frottant. Un calcul linéaire est fait sur ces hypothèses, puis elles sont
+contrôlées :
 
 1. *zone* : le déplacement calculé est dans la zone supposée ;
 2. *frottement* : l'une des trois conditions suivantes, F_c étant la force
-   calculée et F_t = μ·|R| la force théorique :
-   - |F_c/F_t − 1| < ε₁ (0,001 par défaut dans le logiciel de comparaison) ;
-   - |F_c − F_t| < ε₂ ;
-   - raideur transversale au plafond et F_c ≤ F_t : le support ne glisse pas.
+   calculée et L la limite :
+   - |F_c/L − 1| < 10⁻⁶ (0,001 par défaut dans le logiciel de comparaison) ;
+   - |F_c − L| inférieur à 10⁻³ N ;
+   - raideur au plafond k_max et F_c ≤ L : le support adhère.
 
-Si une hypothèse est fausse, l'écart sert à la corriger pour l'itération
-suivante. Au-delà d'un nombre maximal d'itérations, le calcul échoue
-explicitement : aucun résultat non convergé n'est rendu.
+Si une hypothèse est fausse, elle est corrigée et le calcul repris. Au-delà d'un
+nombre maximal d'itérations, le calcul échoue explicitement : aucun résultat non
+convergé n'est rendu.
 
-**Mise en œuvre (sans frottement).** Dans une zone donnée, un contact apporte sa
+**Mise en œuvre des zones.** Dans une zone donnée, un contact apporte sa
 raideur et un terme de charge qui assure la continuité de l'effort ; chaque
 itération est donc un calcul linéaire ordinaire. Le contrôle de zone est fait sur
 l'effort : un contact est cohérent si l'effort de la branche supposée égale celui
@@ -734,8 +764,40 @@ de l'effort de contact le plus grand). Ce critère évite toute hésitation à l
 frontière d'une zone. Toutes les zones fausses sont corrigées à la fois ; si un
 état des contacts se répète (cycle), une seule correction est faite par
 itération, celle du contact le plus en défaut. Le calcul échoue explicitement
-après 60 itérations, si le cycle persiste, ou si la tuyauterie n'est plus retenue
-quand des supports cessent d'agir (les supports en cause sont nommés).
+après 60 itérations (200 avec frottement), si le cycle persiste, ou si la
+tuyauterie n'est plus retenue quand des supports cessent d'agir (les supports en
+cause sont nommés).
+
+**Mise en œuvre du frottement.** Quand les zones sont cohérentes mais pas le
+frottement, les raideurs de frottement sont recalculées d'un coup. Les zones
+étant fixées, la tuyauterie répond linéairement aux forces appliquées aux nœuds
+frottants : avec C la souplesse du système à ces nœuds, les déplacements valent
+w = w₀ − C·g, g étant les forces de frottement. La loi de frottement donnant g en
+fonction de w, il reste un petit système non linéaire, g = g(w₀ − C·g), de trois
+inconnues par nœud frottant. Il est résolu par la méthode de Newton, avec le
+jacobien exact :
+
+- départ : tous les supports frottants adhérents (problème linéaire) ; ceux dont
+  la force dépasse la limite passent ensuite en glissement ;
+- recherche linéaire sur le résidu de force ; le long d'un pas, les points où un
+  support glissant entre dans le domaine d'adhérence sont essayés aussi, la loi
+  changeant de pente à cet endroit ;
+- le résultat n'est qu'une proposition : le calcul complet suivant applique ces
+  raideurs et contrôle zones et frottement avec les critères ci-dessus.
+
+Un état demande ainsi deux à trois calculs complets dans les cas courants. Si le
+frottement modifie l'état des contacts (appui déchargé, jeu qui ne se ferme
+plus), les zones sont corrigées en gardant les raideurs de frottement comme
+départ, puis le frottement est repris.
+
+**États et frottement.** Chaque état est calculé depuis la position de montage,
+avec son propre frottement, comme dans le logiciel de comparaison : à froid les
+déplacements horizontaux sont faibles et les supports adhèrent le plus souvent ;
+en service ils glissent sous la dilatation. L'étendue de dilatation, différence
+de deux états, contient donc le frottement. Le retour à froid après un cycle, où
+le frottement s'inverse, n'est pas calculé. Un problème avec frottement peut
+avoir plusieurs solutions d'équilibre : celle rendue est celle que l'algorithme
+atteint en partant de l'adhérence.
 
 **Cas rendus au reste de l'application.** Pour que les équations des codes, les
 tableaux et les combinaisons gardent leur sens :
@@ -754,7 +816,9 @@ de l'ordre du newton sur le cas test collecteur. L'état des contacts affiché, 
 est celui de l'état de service calculé : effort nul sur un appui décollé.
 
 **Limites de cette version.** Un seul cas de poids propre actif ; les cas de
-forces nodales restent calculés en linéaire ; pas de frottement ; les
+forces nodales restent calculés en linéaire, sans frottement ; le frottement
+part de la position de montage dans chaque état (pas d'histoire du chargement,
+pas de retour à froid) ; le séisme et l'analyse modale l'ignorent ; les
 dispositifs auto-bloquants restent libres en statique.
 
 ### 7.5 Séisme : supports linéaires
@@ -798,8 +862,20 @@ insuffisant. Aucune des trois n'est rigoureuse.
   appui qui décolle quand l'encastrement monte, jeu ouvert ou rattrapé, butée
   d'un support à ressort ; équilibre vertical et état des contacts sur le cas
   test collecteur avec un appui posé qui décolle à chaud.
-- Reste à faire : comparaison avec le logiciel de référence sur un cas à jeux,
-  puis frottement (glissement).
+- Frottement, cas à solution analytique sur la même console
+  (`tests/friction.test.mjs`) : glissement axial sous dilatation (force μ·R,
+  dilatation freinée), adhérence puis glissement latéral, force colinéaire au
+  déplacement, appui décollé sans frottement, appui guidé (somme des réactions,
+  glissement suivant l'axe), guide à jeu, étrier. Sur les modèles complets : loi
+  de frottement et équilibre contrôlés pour tous les exemples avec μ de 0,05 à
+  1,5 ; résultats inchangés quand μ est nul ou absent.
+- Robustesse : le frottement a été éprouvé sur 3 200 lignes tirées au hasard
+  (appuis, guides, butées, jeux, deux supports au même nœud, μ de 0,1 à 0,6),
+  sans échec et en deux calculs complets par état en médiane.
+- Reste à faire : comparaison avec le logiciel de référence, sans puis avec
+  frottement. Les jeux de données et les valeurs attendues sont dans
+  [validation/](validation/README.md) ; le modèle jumeau est l'exemple livré
+  « Cas non linéaire ».
 
 ## Références
 

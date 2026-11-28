@@ -21,6 +21,11 @@ export function runAnalysis(model) {
   const ctx = { model, mesh, sys };
   // solveur non linéaire (expérimental) : poids et dilatation calculés par états
   const nonlinear = model.settings.solver === 'nonlinear' ? runNonlinearStatics(ctx) : null;
+  // frottement : pris en compte par le solveur non linéaire seulement
+  const rubbing = mesh.supports.filter((s) => s.mu > 0);
+  if (!nonlinear && rubbing.length) {
+    warnings.push(`Frottement saisi sur ${rubbing.length} support(s) (${rubbing.map((s) => `${s.label}, nœud ${mesh.nodes[s.node].label}`).join(' ; ')}) : ignoré par le solveur linéaire. Choisir le solveur non linéaire (onglet Projet) pour en tenir compte.`);
+  }
   for (const lc of model.loadCases) {
     if (lc.enabled === false) continue;
     const type = loadTypes.get(lc.type);

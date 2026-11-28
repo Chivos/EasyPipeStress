@@ -34,11 +34,11 @@ exportables/importables en JSON.
    blocages (ancrage, guide, butée, étrier, blocage personnalisé, déplacement
    imposé de piquage), appuis simples (tuyauterie posée), supports à ressort
    (variables, constants) et dispositifs auto-bloquants — avec réglages avancés
-   à la demande (raideur, jeux, courses) ; masses ponctuelles. Avec le solveur
-   linéaire (par défaut), appui soulevé, jeu rattrapé et butée atteinte sont
-   signalés. Un solveur non linéaire expérimental, au choix dans l'onglet
-   Projet, calcule l'état réel de ces contacts (poids et dilatation par états,
-   sans frottement ; séisme linéaire).
+   à la demande (raideur, jeux, courses, frottement) ; masses ponctuelles. Avec
+   le solveur linéaire (par défaut), appui soulevé, jeu rattrapé et butée
+   atteinte sont signalés. Un solveur non linéaire expérimental, au choix dans
+   l'onglet Projet, calcule l'état réel de ces contacts et le frottement des
+   supports (poids et dilatation par états ; séisme linéaire, sans frottement).
 3. **Chargements** : poids (fluide, calorifuge), pression, dilatation, séisme
    (niveaux B, C, D vérifiés avec un coefficient chacun sur le même séisme,
    spectre horizontal commun aux deux directions horizontales et
@@ -61,7 +61,8 @@ Le bouton **Exemple** propose plusieurs modèles : ligne DN150 inox entre trois
 piquages (té, robinet, masse, déplacement imposé), ligne DN100 × 3,6 inox,
 ligne DN200 acier carbone avec robinet, débitmètre, supports variables et
 support constant, cas test complet (collecteur DN200 avec té, réduction,
-robinet, supports variables, éq. (8) jouée) et cas de validation de la
+robinet, supports variables, éq. (8) jouée), cas non linéaire (appui simple qui
+décolle à chaud, jeu rattrapé, frottement) et cas de validation de la
 littérature : problème de Hovgaard (Code_Aster SSLL101 et SDLX02), Hovgaard à
 masses concentrées (NUREG/CR-1677), ligne BM3 (NUREG/CR-6645) et modes d'un
 coude mince (SDLL14).
@@ -101,8 +102,9 @@ src/
   fem/       beam3d.js      élément de poutre 3D Timoshenko
              system.js      assemblage, statique, réponses, analyse modale
              spectral.js    spectres, CQC/SRSS, combinaisons directionnelles
-             contact.js     supports à contact : raideur par zones
+             contact.js     supports à contact : raideur par zones, frottement
              nonlinear.js   résolution statique non linéaire (itération sur les zones)
+             friction.js    frottement : résolution condensée aux nœuds frottants
   loads/                    types de chargement (registre)
              weight.js  pressure.js  thermal.js  seismic.js
   codes/                    codes de vérification (registre)
@@ -114,6 +116,7 @@ src/
 tests/                      validation analytique et non-régression
 docs/THEORIE.md             formulation et références bibliographiques
 docs/QUESTIONS.md           questions ouvertes (décisions, textes manquants, évolutions)
+docs/validation/            cas de comparaison à supports non linéaires (jeux de données, valeurs attendues)
 ```
 
 Le cœur de calcul (`core`, `fem`, `loads`, `codes`, `analysis.js`) ne dépend pas

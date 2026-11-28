@@ -20,7 +20,7 @@ faire), **évolution** (travail non commencé).
   avertissement signale déjà une coupure placée dans la zone amplifiée du
   spectre.
 
-### 2. Module d'élasticité : modal et séisme — à vérifier, sans modification pour le moment
+### 2. Module d'élasticité : modal et séisme — à décider, sans modification pour le moment
 
 Le module à chaud est traité chargement par chargement. Seuls le modal et le
 séisme restent ouverts.
@@ -36,20 +36,23 @@ séisme restent ouverts.
 - **Enjeu** : il porte sur les fréquences propres, pas sur les contraintes de
   dilatation. À 300 °C elles sont environ 5 % plus basses au module à chaud
   (½·(1 − E_h/E_c)), ce qui déplace les modes sur le spectre.
-- **À faire avant de décider** : vérifier le réglage du modèle de comparaison
-  PIPESTRESS pour le modal. D'après son aide en ligne (carte FREQ, champ RF), le
-  modal est au module à chaud si la carte FREQ désigne un cas de référence, et au
-  module à froid si ce champ est omis : il suffit de lire la carte FREQ du
-  fichier d'entrée.
+- **Règle de PIPESTRESS** (aide en ligne, carte FREQ, champ RF) : le modal est
+  calculé au module du cas de référence désigné par la carte FREQ, et au module
+  à froid si ce champ est omis.
+- **Constat** : dans le fichier d'entrée du cas test collecteur, la carte FREQ
+  désigne le cas 1 (`RF=1`), dont les conditions (`OPER CA=1`) sont à 20 °C. Le
+  modal de comparaison était donc calculé avec le module à 20 °C, c'est-à-dire à
+  froid, comme celui de l'application.
 - **Indice** : sur le cas test collecteur DN200 (300 °C, E_h/E_c = 0,906), les
   modes 1 à 9 concordent à moins de 1 % avec le calcul de comparaison alors que
   l'application calcule le modal à froid. Un modal de référence au module à
-  chaud donnerait des fréquences environ 5 % plus basses : soit ce modal était à
-  froid, soit un autre écart compense.
+  chaud donnerait des fréquences environ 5 % plus basses : cohérent avec le
+  constat ci-dessus.
 - **Proposition** : option du projet décochée par défaut, pour ne pas modifier
   les cas validés.
 - **Décision** : aucune modification pour le moment ; le modal et le séisme
-  restent au module à froid tant que le réglage de PIPESTRESS n'est pas vérifié.
+  restent au module à froid. L'option reste à décider : elle demanderait, côté
+  PIPESTRESS, un cas de référence à la température de service sur la carte FREQ.
 
 ### 3. Mouvements sismiques différentiels d'ancrages — évolution
 
@@ -139,15 +142,25 @@ sur le calcul statique non linéaire de PIPESTRESS (aide en ligne).
 | Étendue de dilatation M_C | différence entre états, le poids étant inclus dans tous les cas de dilatation | — (c'est aussi la définition des codes) |
 | Part du poids M_A | cas « poids seul » en non linéaire, à froid | vérifier aussi M_A dans la configuration de service à contacts figés (ASME B31.3, annexe S, exemple 2) |
 | Supports sous séisme | supports non linéaires comptés actifs, avec leur raideur | état figé dans l'état de service, ou enveloppe de deux calculs (supports libres / actifs) |
-| Modèle et algorithme | raideur par zones (d₁, d₂, k₁ à k₄), frottement par raideur transversale ajustée, mêmes critères de convergence | — |
+| Modèle et algorithme | raideur par zones (d₁, d₂, k₁ à k₄), frottement par raideur ajustée dans les directions libres, mêmes critères de convergence (plus serrés) | — |
+| Frottement d'un support à deux directions | écart assumé : un frottement par support, suivant l'axe laissé libre, sous la somme des réactions | comme PIPESTRESS : chaque direction frotte dans tout son plan transversal, y compris suivant l'autre direction bloquée |
 
 - **Fait (lot A)** : choix du solveur dans l'onglet Projet, calcul statique par
   états, raideur par zones (appuis simples, jeux, butées des supports à ressort),
   état des contacts affiché. Les équations des codes sont alimentées par les
   états sans autre changement (le lot B prévu n'a plus d'objet).
-- **Reste à faire** : frottement ; comparaison avec PIPESTRESS sur un cas à jeux
-  ou à appui qui décolle ; un exemple livré dédié.
-- **Limites** : un seul cas de poids actif, forces nodales en linéaire.
+- **Fait (frottement)** : coefficient μ par support, adhérence ou glissement dans
+  chaque état, affiché avec l'état des contacts ; ignoré par le solveur linéaire,
+  qui le signale.
+- **Fait (exemple)** : exemple livré « Cas non linéaire – appui qui décolle, jeu
+  rattrapé, frottement », jumeau des jeux de données de comparaison de
+  [validation/](validation/README.md).
+- **Reste à faire** : comparaison avec PIPESTRESS sur ce cas, sans puis avec
+  frottement (jeux de données et valeurs attendues prêts) ; poids dans la
+  configuration de service (alternative de la ligne M_A ci-dessus).
+- **Limites** : un seul cas de poids actif, forces nodales en linéaire ;
+  frottement compté depuis la position de montage dans chaque état, sans retour
+  à froid ; séisme sans frottement.
 
 ## Validation
 

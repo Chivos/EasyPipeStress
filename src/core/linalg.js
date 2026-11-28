@@ -3,6 +3,7 @@
 //   bande des modèles de tuyauterie après renumérotation Cuthill-McKee inverse.
 // - Valeurs propres symétriques : tridiagonalisation de Householder + QL implicite
 //   (algorithmes tred2/tql2 d'EISPACK, d'après la version domaine public de JAMA).
+// - LU à pivot partiel : petits systèmes denses non symétriques (frottement condensé).
 
 export class SingularMatrixError extends Error {
   constructor(dof, message) {
@@ -62,6 +63,73 @@ export class ProfileCholesky {
       x[i] /= L[ri + i];
       const xi = x[i];
       for (let k = fc[i]; k < i; k++) x[k] -= L[ri + k] * xi;
+    }
+    return x;
+  }
+}
+
+/**
+ * Factorisation LU à pivot partiel d'une petite matrice dense quelconque
+ * (Float64Array n×n, ligne majeure, non modifiée). Lève SingularMatrixError si
+ * un pivot est nul.
+ */
+export class DenseLU {
+  constructor(A, n) {
+    const a = Float64Array.from(A);
+    const piv = new Int32Array(n);
+    for (let k = 0; k < n; k++) {
+      let p = k;
+      let max = Math.abs(a[k * n + k]);
+      for (let i = k + 1; i < n; i++) {
+        const v = Math.abs(a[i * n + k]);
+        if (v > max) {
+          max = v;
+          p = i;
+        }
+      }
+      if (!(max > 0) || !Number.isFinite(max)) throw new SingularMatrixError(k, `Système dense singulier (ligne ${k})`);
+      piv[k] = p;
+      if (p !== k) {
+        for (let j = 0; j < n; j++) {
+          const t = a[k * n + j];
+          a[k * n + j] = a[p * n + j];
+          a[p * n + j] = t;
+        }
+      }
+      const d = a[k * n + k];
+      for (let i = k + 1; i < n; i++) {
+        const f = a[i * n + k] / d;
+        if (f === 0) continue;
+        a[i * n + k] = f;
+        for (let j = k + 1; j < n; j++) a[i * n + j] -= f * a[k * n + j];
+      }
+    }
+    this.n = n;
+    this.a = a;
+    this.piv = piv;
+  }
+
+  /** Résout A·x = b (b non modifié). */
+  solve(b) {
+    const { n, a, piv } = this;
+    const x = Float64Array.from(b);
+    // les lignes entières ont été permutées à la factorisation : P·A = L·U, donc toutes les permutations d'abord
+    for (let k = 0; k < n; k++) {
+      const p = piv[k];
+      if (p !== k) {
+        const t = x[k];
+        x[k] = x[p];
+        x[p] = t;
+      }
+    }
+    for (let k = 0; k < n; k++) {
+      const xk = x[k];
+      if (xk !== 0) for (let i = k + 1; i < n; i++) x[i] -= a[i * n + k] * xk;
+    }
+    for (let i = n - 1; i >= 0; i--) {
+      let s = x[i];
+      for (let j = i + 1; j < n; j++) s -= a[i * n + j] * x[j];
+      x[i] = s / a[i * n + i];
     }
     return x;
   }

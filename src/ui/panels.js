@@ -36,8 +36,8 @@ export function renderProject(app) {
       label: 'Solveur',
       type: 'select',
       options: () => ['linear', 'nonlinear'],
-      optionLabel: (v) => (v === 'nonlinear' ? 'non linéaire — expérimental (appuis posés, jeux, butées)' : 'linéaire (par défaut)'),
-      title: 'Linéaire : les supports à contact reçoivent une hypothèse, contrôlée après calcul et signalée si elle est en défaut. Non linéaire (expérimental) : le poids et la dilatation sont calculés par états, avec recherche de l’état des contacts — appui simple qui décolle, jeu qui se ferme, butée d’un support à ressort. Le séisme reste linéaire, tous supports actifs. Sans frottement.',
+      optionLabel: (v) => (v === 'nonlinear' ? 'non linéaire — expérimental (appuis posés, jeux, butées, frottement)' : 'linéaire (par défaut)'),
+      title: 'Linéaire : les supports à contact reçoivent une hypothèse, contrôlée après calcul et signalée si elle est en défaut. Non linéaire (expérimental) : le poids et la dilatation sont calculés par états, avec recherche de l’état des contacts — appui simple qui décolle, jeu qui se ferme, butée d’un support à ressort. Le frottement des supports (coefficient μ, réglages avancés des supports) n’est pris en compte que par ce solveur. Le séisme reste linéaire, tous supports actifs, sans frottement.',
     },
     {
       key: 'thermalModulus',
