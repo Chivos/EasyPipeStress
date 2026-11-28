@@ -412,21 +412,25 @@ export class Viewer {
       }
       for (const sp of springs.filter((x) => !x.rot)) {
         const d = sp.dir;
+        // côtés où le support a une butée : un seul pour un appui simple (sous le tube) ou une
+        // butée à un seul sens, les deux sinon
+        const sides = sp.bearing ? [-1] : [-1, 1].filter((sg) => !sp.gapped || Number.isFinite(sg < 0 ? sp.gapMinus : sp.gapPlus));
         if (Math.abs(vec.dot(d, axis)) > 0.9) {
-          // blocage axial : deux flèches parallèles au tube, de part et d'autre du nœud,
+          // blocage axial : flèches parallèles au tube, de part et d'autre du nœud,
           // décalées hors du tube, pointes vers le plan du nœud
           let off = vec.sub(mesh.up, vec.scale(axis, vec.dot(mesh.up, axis)));
           if (vec.norm(off) < 1e-6) off = Math.abs(axis[0]) < 0.9 ? vec.cross(axis, [1, 0, 0]) : vec.cross(axis, [0, 1, 0]);
           off = vec.scale(vec.unit(off), R + 0.35 * od);
-          for (const sg of [-1, 1]) {
+          const along = vec.dot(d, axis) < 0 ? -1 : 1; // l'axe du tube peut être opposé à la direction du blocage
+          for (const side of sides) {
+            const sg = side * along;
             const tip = vec.add(vec.add(p, off), vec.scale(axis, sg * 0.15 * od));
             const tail = vec.add(tip, vec.scale(axis, sg * L));
             arrow(tail, tip, color, od);
           }
           continue;
         }
-        // appui simple (tuyauterie posée) : une seule flèche, sous le tube
-        for (const sg of sp.bearing ? [-1] : [-1, 1]) {
+        for (const sg of sides) {
           const tip = vec.add(p, vec.scale(d, sg * R));
           const tail = vec.add(tip, vec.scale(d, sg * L));
           arrow(tail, tip, color, od);
