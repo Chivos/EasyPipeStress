@@ -218,3 +218,72 @@ export function sdll14({ l = 2000 } = {}) {
   ];
   return ensureIds(m);
 }
+
+/**
+ * ASME B31.3-2012, annexe S : exemple 1 (ligne plane DN400 entre deux ancrages, § S301) et
+ * exemple 2 (même ligne doublée par symétrie, appui Y+ au nœud 50 qui décolle en service, § S302).
+ * Données des tableaux S301.3.1, S301.3.2 et S302.3 ; options de calcul du § S301.3 : raidissement
+ * des coudes par la pression, sections nominales pour les raideurs, sections diminuées de la
+ * surépaisseur pour S_L, module de référence à 21 °C.
+ */
+export function b313AppendixS({ example = 2 } = {}) {
+  const lift = example === 2;
+  const m = emptyModel();
+  m.meta.title = lift ? 'Validation – ASME B31.3, annexe S, exemple 2 (appui qui décolle)' : 'Validation – ASME B31.3, annexe S, exemple 1';
+  m.meta.notes =
+    'ASTM A106 Gr. B, DN400 × 9,53 mm, calorifuge 127 mm, eau ; ' +
+    (lift
+      ? 'cas de service 1 : 288 °C, 3 795 kPa. L’appui du nœud 50 décolle en service : la contrainte S_L est vérifiée aussi appui retiré (condition 3 du tableau S302.6.2.1), où elle dépasse S_h au nœud 20.'
+      : '260 °C, 3 450 kPa.');
+  Object.assign(m.settings, { vertical: 'Y', tRef: 20, thermalModulus: 'cold', allowances: true, bendInnerPoints: true, solver: lift ? 'nonlinear' : 'linear' });
+  m.code = { id: 'b31-3', params: { pressureCorrection: true, cycles: 7000 } };
+  // dilatation totale depuis 21 °C (tableau C-1, acier au carbone) : 3,62 in/100 ft à 500 °F et
+  // 4,11 in/100 ft à 550 °F, soit 3,0155 et 3,4236 mm/m ; coefficients moyens depuis 20 °C
+  m.materials = [
+    {
+      id: 'A106B',
+      name: 'ASTM A106 Gr. B',
+      density: 7833.4,
+      nu: 0.3,
+      table: [
+        { T: 20, E: 203400, alpha: 11.5, S: 138, Sy: 241 },
+        { T: 204, E: 203400, alpha: 12.2, S: 138, Sy: 241 },
+        { T: 260, E: 203400, alpha: 3015.5 / 240, S: 130.3, Sy: 241 },
+        { T: 288, E: 203400, alpha: 3423.6 / 268, S: 124.8, Sy: 241 },
+        { T: 316, E: 203400, alpha: 13.0, S: 119.3, Sy: 241 },
+      ],
+    },
+  ];
+  m.sections = [{ id: 'DN400', name: 'DN400 (NPS 16) Sch 30 (406,4 × 9,53)', od: 406.4, t: 9.53, millTol: 12.5, corrosion: 1.59, fluidDensity: 1000, insulThk: 127, insulDensity: 176 }];
+  const cond = { section: 'DN400', material: 'A106B', T1: lift ? 288 : 260, P1: lift ? 3.795 : 3.45 };
+  const half = [
+    ['10', '15', 6100, 0],
+    ['15', '20', 6100, 0],
+    ['20', '30', 3050, 0],
+    ['30', '40', 0, 6100],
+    ['40', '45', 3050, 0],
+    ['45', '50', 6100, 0],
+  ];
+  // exemple 2 : seconde moitié, symétrique de la première par rapport au nœud 50
+  const mirror = [
+    ['50', '145', 6100, 0],
+    ['145', '140', 3050, 0],
+    ['140', '130', 0, -6100],
+    ['130', '120', 3050, 0],
+    ['120', '115', 6100, 0],
+    ['115', '110', 6100, 0],
+  ];
+  for (const [n1, n2, dx, dy] of lift ? [...half, ...mirror] : half) m.components.push({ type: 'pipe', n1, n2, dx, dy, dz: 0, ...cond });
+  for (const node of lift ? ['30', '40', '140', '130'] : ['30', '40']) m.components.push({ type: 'bend', node, radiusType: '', radius: 609.6, t: '', divisions: '' });
+  m.components.push({ type: 'support', node: '10', kind: 'anchor', label: 'Ancrage 10' });
+  m.components.push({ type: 'support', node: '20', kind: 'clamp', label: 'Y 20' });
+  if (lift) {
+    m.components.push({ type: 'support', node: '50', kind: 'rest', label: 'Y+ 50' });
+    m.components.push({ type: 'support', node: '120', kind: 'clamp', label: 'Y 120' });
+    m.components.push({ type: 'support', node: '110', kind: 'anchor', label: 'Ancrage 110' });
+  } else {
+    m.components.push({ type: 'support', node: '50', kind: 'anchor', label: 'Ancrage 50' });
+  }
+  m.loadCases = m.loadCases.filter((c) => c.type !== 'seismic');
+  return ensureIds(m);
+}

@@ -75,12 +75,28 @@ export function runAnalysis(model) {
     }
     if (lc.type === 'seismic') warnings.push(...seismicDiagnostics(lc, r, mesh));
   }
+  // solveur non linéaire : poids recalculé dans chaque configuration de supportage de service qui
+  // diffère de l'état froid (contacts figés, effets thermiques exclus)
+  const configCases = [];
+  for (const cf of nonlinear?.configurations ?? []) {
+    const run = { signed: true, u: cf.u, elemForces: cf.elemForces, supportLoads: cf.supportLoads, info: { nonlinear: true, configuration: cf.states } };
+    const r = { ...run, ...localResponses(run, mesh) };
+    const c = { id: cf.id, label: `Poids propre — configuration de service ${cf.states.join(', ')}`, type: 'sustained', fe: true, weight: cf.weight, ...r, elemPlane: planeMoments(r.elemForces, mesh) };
+    cases.push(c);
+    configCases.push(c);
+  }
+  if (nonlinear?.warnings.length) warnings.push(...nonlinear.warnings);
   // état des contacts (appuis simples, jeux, courses) d'après le calcul linéaire
   const contacts = contactFindings({ mesh, cases, nonlinear: nonlinear ? { contacts: nonlinear.contacts, states: nonlinear.states } : null });
   warnings.push(...resultDiagnostics({ mesh, cases, contacts }));
   const modal = cases.find((c) => c.modal)?.modal ?? null;
   let check = code ? code.check({ model, mesh, cases }) : null;
   if (check?.warnings?.length) warnings.push(...check.warnings);
+  // les équations où le poids intervient sont vérifiées aussi dans chaque configuration de service
+  if (check && configCases.length) {
+    const rows = [...check.rows, ...configCases.flatMap((cf) => configurationRows(code, { model, mesh, cases }, check.rows, cf))];
+    check = { ...check, rows, summary: summarize(rows) };
+  }
   // code dont l'implémentation n'a pas pu être contrôlée sur le texte : rappel à chaque calcul
   if (code?.caveat) warnings.push(`${code.short ?? code.label} : ${code.caveat}`);
   // épaisseur minimale (pression seule) : option du projet, formule fournie par le code
@@ -92,7 +108,27 @@ export function runAnalysis(model) {
       warnings.push(`Le code « ${code.label} » ne fournit pas de formule d’épaisseur minimale : vérification non faite.`);
     }
   }
-  return { mesh, sys, dynSys: ctx.dynSys ?? sys, contacts, nonlinear: nonlinear ? { contacts: nonlinear.contacts, states: nonlinear.states } : null, cases, modal, check, code, warnings, elapsed: Date.now() - t0 };
+  const configurations = (nonlinear?.configurations ?? []).map(({ id, weight, states, thermal, changes }) => ({ id, weight, states, thermal, changes }));
+  return { mesh, sys, dynSys: ctx.dynSys ?? sys, contacts, nonlinear: nonlinear ? { contacts: nonlinear.contacts, states: nonlinear.states, configurations } : null, cases, modal, check, code, warnings, elapsed: Date.now() - t0 };
+}
+
+/**
+ * Lignes de vérification propres à une configuration de service : les équations du code sont
+ * rejouées avec le poids de cette configuration à la place du cas de poids, et seules les lignes
+ * qui en dépendent (contrainte ou admissible différents du calcul de base) sont gardées.
+ */
+function configurationRows(code, { model, mesh, cases }, baseRows, cf) {
+  const others = cases.filter((c) => c.type !== 'weight' && c.type !== 'sustained');
+  const alt = code.check({ model, mesh, cases: [{ ...cf, type: 'weight' }, ...others] });
+  const key = (r, name) => `${r.eq}|${r.ie}|${r.end}|${name}`;
+  const base = new Map(baseRows.map((r) => [key(r, r.case), r]));
+  const same = (a, b) => Math.abs(a - b) <= 1e-9 * Math.max(Math.abs(a), Math.abs(b), 1e-9);
+  return alt.rows
+    .filter((r) => {
+      const b = base.get(key(r, String(r.case).replace(cf.id, cf.weight)));
+      return !b || !same(r.stress, b.stress) || !same(r.allow, b.allow);
+    })
+    .map((r) => ({ ...r, configuration: cf.id }));
 }
 
 /** Combinaison algébrique de cas signés (ex. état de service W + T1). */
