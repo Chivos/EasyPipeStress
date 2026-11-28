@@ -8,8 +8,9 @@
 // (poids, dilatation, séisme, modal) et précharge P appliquée vers le haut dans
 // le cas poids propre ; l'effort repris vaut P − k·u (u déplacement vertical vers
 // le haut depuis la position de réglage). Supports constants : précharge P seule, sans raideur.
-// Évolutions prévues : supports non linéaires (jeux, unilatéraux, frottement),
-// amortisseurs (actifs en séisme seulement).
+// Supports à contact (appuis simples, jeux, butées, frottement) : pris tels quels
+// par le solveur linéaire, qui signale les contacts à revoir ; calculés par états
+// par le solveur non linéaire (fem/contact.js, nonlinear.js).
 
 import { vec } from '../core/linalg.js';
 
@@ -122,10 +123,20 @@ const F = {
   kind: (kinds) => ({ key: 'kind', label: 'Type', type: 'select', options: () => kinds, optionLabel: (k) => SUPPORT_KINDS[k]?.label ?? k, width: 170 }),
   stiffness: (title) => ({ key: 'stiffness', label: 'Raideur', unit: 'N/mm', type: 'number', width: 80, placeholder: 'rigide', title }),
   gap: (title) => ({ key: 'gap', label: 'Jeu', unit: 'mm', type: 'text', width: 80, placeholder: 'aucun', title }),
+  friction: {
+    key: 'friction',
+    label: 'Frottement μ',
+    type: 'number',
+    width: 80,
+    placeholder: 'aucun',
+    title:
+      'Coefficient de frottement de Coulomb entre la tuyauterie et le support (ordre de grandeur : 0,3 acier sur acier, 0,1 sur patin PTFE). ' +
+      'La force de frottement vaut μ fois la réaction du support et s’oppose au glissement. Pris en compte par le solveur non linéaire seulement (poids, dilatation) ; sans effet en séisme.',
+  },
 };
 const GAP_HELP =
   'Jeu avant contact, de part et d’autre : une valeur pour toutes les directions bloquées, ou une valeur par direction (dans l’ordre des directions du support, séparées par un espace). ' +
-  'Calcul linéaire : la direction est libre en poids et en dilatation (un avertissement signale un jeu rattrapé) et bloquée en séisme.';
+  'Solveur linéaire : la direction est libre en poids et en dilatation (un avertissement signale un jeu rattrapé) et bloquée en séisme. Solveur non linéaire : le jeu se ferme quand il est rattrapé.';
 
 /**
  * Familles de supports de l'onglet de saisie : chacune a ses types, ses colonnes
@@ -143,6 +154,7 @@ export const SUPPORT_FAMILIES = [
       { key: 'dofs', label: 'DDL (perso.)', type: 'text', width: 110, placeholder: 'DX DY RZ…', title: 'Pour le blocage personnalisé : DX DY DZ RX RY RZ' },
       F.stiffness('Raideur en translation (vide = rigide)'),
       F.gap(GAP_HELP),
+      F.friction,
       { key: 'imposed', label: 'Dépl. imposé thermique', unit: 'mm', type: 'text', width: 120, placeholder: 'dx dy dz', title: 'Déplacement imposé appliqué dans les cas thermiques (mouvement de piquage), composantes globales' },
     ],
   },
@@ -151,9 +163,9 @@ export const SUPPORT_FAMILIES = [
     label: 'Appuis simples (tuyauterie posée)',
     addLabel: 'appui simple',
     kinds: ['rest', 'restguide'],
-    help: 'La tuyauterie repose sur l’appui sans y être tenue. Le calcul est linéaire : un avertissement signale tout appui soulevé (poids, dilatation) ou qui décollerait sous séisme.',
+    help: 'La tuyauterie repose sur l’appui sans y être tenue. Solveur linéaire : un avertissement signale tout appui soulevé (poids, dilatation) ou qui décollerait sous séisme. Solveur non linéaire : l’appui décolle.',
     fields: [F.node, F.kind(['rest', 'restguide']), F.label],
-    advanced: [F.stiffness('Raideur en translation (vide = rigide)'), F.gap(`Jeu du guide latéral. ${GAP_HELP}`)],
+    advanced: [F.stiffness('Raideur en translation (vide = rigide)'), F.gap(`Jeu du guide latéral. ${GAP_HELP}`), F.friction],
   },
   {
     id: 'spring',
@@ -205,6 +217,7 @@ export const support = {
     { key: 'gap', label: 'Jeu', unit: 'mm', type: 'text', width: 80 },
     { key: 'travelUp', label: 'Course haut', unit: 'mm', type: 'number', width: 80 },
     { key: 'travelDown', label: 'Course bas', unit: 'mm', type: 'number', width: 80 },
+    { key: 'friction', label: 'Frottement μ', type: 'number', width: 80 },
     { key: 'imposed', label: 'Dépl. imposé thermique', unit: 'mm', type: 'text', width: 120 },
     F.label,
   ],
@@ -239,12 +252,21 @@ export const support = {
     if (gaps === null) ctx.warn(`Support au nœud ${comp.node} : jeu « ${comp.gap} » non compris (une valeur, ou ${gapped.length} valeur(s) séparées par un espace) ; jeu ignoré.`);
     else if (gaps.some((g) => g > 0) && comp.kind === 'anchor') ctx.warn(`Ancrage au nœud ${comp.node} : un jeu n’a pas de sens sur un ancrage ; jeu ignoré.`);
     const travel = (v) => (v === '' || v == null || !(+v >= 0) ? null : +v);
+    // frottement : sur les blocages en translation ; sans objet pour un ancrage, un support à ressort ou un auto-bloquant
+    let mu = 0;
+    if (comp.friction != null && String(comp.friction).trim() !== '') {
+      const v = +String(comp.friction).replace(',', '.');
+      if (!(v >= 0)) ctx.warn(`Support au nœud ${comp.node} : coefficient de frottement « ${comp.friction} » non compris ; frottement ignoré.`);
+      else if (v > 0 && (comp.kind === 'anchor' || kindDef.hanger || comp.kind === 'snubber')) ctx.warn(`Support au nœud ${comp.node} : le frottement est sans objet pour ce type de support (${kindDef.label}) ; frottement ignoré.`);
+      else mu = v;
+    }
     const supIdx = ctx.addSupport({
       comp: comp.id,
       node: idx,
       kind: comp.kind,
       label: comp.label || comp.kind,
       imposed,
+      ...(mu > 0 ? { mu } : {}),
       ...(kindDef.hanger ? { preload, dir: ctx.up, k: comp.kind === 'variable' ? kUser : 0, travelUp: travel(comp.travelUp), travelDown: travel(comp.travelDown) } : {}),
     });
     const rigid = rigidStiffness(ctx.elementsAt(idx));

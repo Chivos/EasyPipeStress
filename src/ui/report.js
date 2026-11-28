@@ -37,7 +37,7 @@ export function buildReport(state, snapshot) {
         ['Tolérance de fabrication et corrosion', m.settings.allowances ? 'prises en compte (épaisseur minimale)' : 'non prises en compte'],
         ['Épaisseur minimale (pression seule)', m.settings.checkThickness ? `vérifiée${r?.code?.thickness ? ` (${r.code.thickness.ref})` : ''}` : 'non vérifiée'],
         ['Supports', 'Linéaires bilatéraux, rigidité de pénalité 10¹⁰ N/mm / 10¹⁴ N·mm/rad'],
-        ['Solveur', m.settings.solver === 'nonlinear' ? 'Non linéaire (expérimental) : poids et dilatation calculés par états, avec recherche de l’état des contacts (appuis simples, jeux, butées) ; sans frottement ; séisme linéaire, tous supports actifs' : 'Linéaire'],
+        ['Solveur', m.settings.solver === 'nonlinear' ? `Non linéaire (expérimental) : poids et dilatation calculés par états, avec recherche de l’état des contacts (appuis simples, jeux, butées) ; ${m.components.some((c) => c.type === 'support' && +String(c.friction ?? '').replace(',', '.') > 0) ? 'frottement des supports (force opposée au déplacement depuis la position de montage)' : 'sans frottement'} ; séisme linéaire, tous supports actifs` : 'Linéaire'],
         ['Code', r?.code?.label ?? m.code.id],
         // paramètres déclarés par le code, avec leur libellé (les clés obsolètes
         // d'anciens projets ne sont pas reprises)

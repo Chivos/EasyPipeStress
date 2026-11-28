@@ -71,8 +71,10 @@ test('loi de contact par zones : continuité et pentes', () => {
   near(contactForce(rest, -1e-6), -1e3, 1e-12, 'appui en contact');
 });
 
-test('sans contact actif, le solveur non linéaire redonne le solveur linéaire (8 exemples)', () => {
-  for (const ex of EXAMPLES) {
+test('sans contact actif, le solveur non linéaire redonne le solveur linéaire (exemples au solveur linéaire)', () => {
+  const linear = EXAMPLES.filter((ex) => ex.build().settings.solver !== 'nonlinear');
+  assert.equal(linear.length, 8);
+  for (const ex of linear) {
     const a = normalizeModel(ex.build());
     const b = normalizeModel(ex.build());
     b.settings.solver = 'nonlinear';

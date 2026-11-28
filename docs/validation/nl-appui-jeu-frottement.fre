@@ -1,0 +1,60 @@
+IDEN JB=1 CD=8 IU=0 OU=0 GR=-Z VA=0 PL=/NL-APPUI-JEU-FROTTEMENT/
+TITL CV=10 MD=1 HS=1 PR=0
+* -------------------- CAS LINEAIRES DE REFERENCE
+* (dans les cas LCAS et en modal, les NRST agissent comme des RSTN :
+*  blocage dans les deux sens, sans jeu)
+FREQ RF=1 FR=100 MP=100 RP=0 TI=/ANALYSE MODALE/
+LCAS CA=1 TY=3 EQ=2 TI=/PP+P LINEAIRE/
+LCAS CA=2 TY=0 EQ=7 TI=/THERMIQUE LINEAIRE/
+* -------------------- CAS NON LINEAIRES (NRST CALCULES PAR ZONES)
+* cas 100 : poids seul a 20 C
+* cas 101 : poids + dilatation a 300 C (la temperature vient de OPER CA=101)
+NCAS CA=100 TY=3 EQ=2 TI=/PP SEUL A FROID - MA/
+NCAS CA=101 TY=3 EQ=2 TI=/PP + DILATATION 300C/
+* -------------------- COMBINAISONS
+* etendue de dilatation = difference entre les deux etats non lineaires
+CCAS CA=200 RF=100 ME=9 EQ=7 OP=6 C1=100 C2=101 TI=/ETENDUE 100-101 - MC/
+CSTR CA=400 RF=100 ME=0 EQ=8 OP=6 MA=100 MC=200 TI=/PP + P + ETENDUE/
+
+*----------------------------MATERIAL
+MATH CD=100 EX=2 TY=4 TX=350.00 TA=20.00 AL=/P265GH/
+MATD TE=20.00     EH=203.00 EX=11.20  SH=118.00 SY=265.00
+MATD TE=100.00    EH=198.00 EX=11.70  SH=118.00 SY=226.00
+MATD TE=150.00    EH=195.00 EX=12.10  SH=118.00 SY=213.00
+MATD TE=200.00    EH=191.00 EX=12.50  SH=118.00 SY=192.00
+MATD TE=250.00    EH=188.00 EX=12.90  SH=118.00 SY=171.00
+MATD TE=300.00    EH=184.00 EX=13.30  SH=118.00 SY=154.00
+MATD TE=350.00    EH=180.00 EX=13.60  SH=116.00 SY=141.00
+
+*----------------------------SECTION
+* DN200 219.1 x 8.18, acier seul 42.55 kg par m, plein d eau, sans calorifuge
+CROS CD=1 OD=219.1 WT=8.18 MA=42.55 SO=1
+*----------------------------DESIGN AND OPERATING DATA
+MATL CD=100
+DESN TE=300. PR=3
+OPER CA=1   TE=20.  PR=3
+OPER CA=2   TE=300. PR=3
+OPER CA=100 TE=20.  PR=3
+OPER CA=101 TE=300. PR=3
+*----------------------------ANCHOR COORDINATES
+COOR PT=10 AX=0. AY=0. AZ=0.
+*----------------------------PIPING GEOMETRY
+CROS CD=1
+
+ANCH PT=10
+TANG PT=20 DZ=3
+BRAD PT=21 RA=0.305
+TANG PT=30 DX=2.5
+* A1 : appui simple (1000 kN par mm), frottement 0.3
+NRST PT=30 DZ=1 SP=1000. D1=0. K1=1000. MU=0.3
+TANG PT=40 DX=3.5
+BRAD PT=41 RA=0.305
+TANG PT=50 DY=2
+* A2 : appui simple, frottement 0.3
+NRST PT=50 DZ=1 SP=1000. D1=0. K1=1000. MU=0.3
+* G1 : butee laterale suivant X, jeu de 5 mm de part et d autre, frottement 0.3
+NRST PT=50 DX=1 SP=1000. D1=-5. K1=1000. D2=5. K4=1000. MU=0.3
+TANG PT=60 DY=3
+ANCH PT=60
+
+ENDP

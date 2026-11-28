@@ -258,11 +258,48 @@ function fullBenchmark() {
 }
 const PRELOADS = { V1: 3490, V2: 2990 }; // réglées sur le poids repris (supports bloqués verticalement)
 
+/**
+ * Ligne DN200 à supports non linéaires : appui simple qui décolle à chaud, guide dont le jeu se
+ * ferme, frottement. Cas de comparaison avec un logiciel de référence (docs/validation) ;
+ * `friction` vide donne la variante sans frottement.
+ */
+export function nonlinearSupports({ friction = 0.3 } = {}) {
+  const m = emptyModel();
+  m.meta.title = 'Cas non linéaire – appui qui décolle, jeu rattrapé, frottement';
+  m.meta.notes =
+    'Solveur non linéaire (expérimental). P265GH, 300 °C, 3 MPa, eau, sans calorifuge. Supports de raideur 1000 kN/mm. ' +
+    'A1 décolle à chaud (la colonne montante se dilate), le jeu de 5 mm de G1 se ferme, A2 et G1 glissent. ' +
+    'Cas de comparaison avec un logiciel de référence : jeux de données et valeurs attendues dans docs/validation.';
+  m.settings.solver = 'nonlinear';
+  m.settings.bendInnerPoints = false;
+  m.sections = [{ id: 'DN200', name: 'DN200 (219,1 × 8,18)', od: 219.1, t: 8.18, millTol: 12.5, corrosion: 0, fluidDensity: 1000, insulThk: 0, insulDensity: 0 }];
+  const cond = { section: 'DN200', material: 'P265GH', T1: 300, P1: 3 };
+  const pipes = [
+    // colonne montante, puis deux tronçons horizontaux à angle droit
+    ['10', '20', 0, 0, 3000],
+    ['20', '30', 2500, 0, 0],
+    ['30', '40', 3500, 0, 0],
+    ['40', '50', 0, 2000, 0],
+    ['50', '60', 0, 3000, 0],
+  ];
+  for (const [n1, n2, dx, dy, dz] of pipes) m.components.push({ type: 'pipe', n1, n2, dx, dy, dz, ...cond });
+  for (const node of ['20', '40']) m.components.push({ type: 'bend', node, radiusType: '', radius: 305, t: '', divisions: '' });
+  const k = 1e6; // N/mm
+  m.components.push({ type: 'support', node: '10', kind: 'anchor', label: 'PF1' });
+  m.components.push({ type: 'support', node: '30', kind: 'rest', stiffness: k, friction, label: 'A1' });
+  // A2 et G1 : deux supports distincts au même nœud, chacun avec son frottement
+  m.components.push({ type: 'support', node: '50', kind: 'rest', stiffness: k, friction, label: 'A2' });
+  m.components.push({ type: 'support', node: '50', kind: 'guide', stiffness: k, gap: '5', friction, label: 'G1' });
+  m.components.push({ type: 'support', node: '60', kind: 'anchor', label: 'PF2' });
+  return ensureIds(m);
+}
+
 export const EXAMPLES = [
   { id: 'dn150', title: 'Ligne DN150 inox entre trois piquages', description: 'Trois coudes LR, un té forgé, un robinet, une masse ponctuelle, appui bilatéral guidé, déplacement imposé de piquage ; poids, pression, dilatation, séisme B/C/D.', build: exampleModel },
   { id: 'pipestress', title: 'Ligne DN100 × 3,6 inox – séisme niveau C', description: 'Trois coudes, un appui bilatéral guidé, deux points fixes (coudes vérifiés aux extrémités, Sc = 117 MPa). Poids, dilatation, modal et séisme niveau C (SMS).', build: pipestressBenchmark },
   { id: 'springs', title: 'Ligne DN200 acier carbone – supports à ressort', description: 'Pompe → échangeur : colonne montante, robinet de 350 kg, débitmètre de 60 kg, deux supports variables et un support constant réglés sur le poids.', build: springSupportedLine },
   { id: 'benchmark', title: 'Cas test – collecteur DN200 (té, réduction, robinet, supports variables)', description: 'Poids, dilatation à 300 °C (éq. (7) dépassée au té et aux coudes, éq. (8) jouée), séisme spectral niveau C ; points fixes, supports variables, appui bilatéral guidé, guide, butée axiale ; té forgé, réduction concentrique, robinet.', build: fullBenchmark },
+  { id: 'nonlinear', title: 'Cas non linéaire – appui qui décolle, jeu rattrapé, frottement', description: 'Solveur non linéaire (expérimental) : ligne DN200 à 300 °C, appui simple qui décolle quand la colonne montante se dilate, guide dont le jeu de 5 mm se ferme, frottement μ = 0,3 ; état des contacts dans chaque état calculé.', build: nonlinearSupports },
   { id: 'hovgaard', title: 'Validation – problème de Hovgaard (SSLL101, SDLX02)', description: 'Cas test Code_Aster SSLL101 (Kellogg 1956) : tuyauterie non plane à deux coudes, encastrée aux extrémités ; poids, dilatation et forces nodales (SSLL101), analyse modale et réponse spectrale (SDLX02) comparées aux valeurs de référence.', build: hovgaard },
   { id: 'nureg1677-1', title: 'Validation – Hovgaard à masses concentrées (NUREG/CR-1677, problème 1)', description: 'Benchmark NRC : tube sans masse, neuf masses ponctuelles, spectre tabulé en période, cinq modes en SRSS sans masse manquante ; fréquences, déplacements et réactions comparés au rapport.', build: nureg1677p1 },
   { id: 'bm3', title: 'Validation – ligne BM3 (NUREG/CR-6645)', description: 'Benchmark NRC : ligne à trois diamètres, dix coudes, trois ancrages et sept appuis élastiques ; spectre à 1 % suivant X, 14 modes en SRSS avec masse manquante ; fréquences et réactions comparées.', build: bm3 },
