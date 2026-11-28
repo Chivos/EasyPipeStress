@@ -39,6 +39,8 @@ exportables/importables en JSON.
    atteinte sont signalés. Un solveur non linéaire expérimental, au choix dans
    l'onglet Projet, calcule l'état réel de ces contacts et le frottement des
    supports (poids et dilatation par états ; séisme linéaire, sans frottement).
+   Quand un appui décolle ou qu'un jeu se ferme en service, il vérifie aussi les
+   équations du code avec le poids recalculé dans cette configuration.
 3. **Chargements** : poids (fluide, calorifuge), pression, dilatation, séisme
    (niveaux B, C, D vérifiés avec un coefficient chacun sur le même séisme,
    spectre horizontal commun aux deux directions horizontales et
@@ -64,8 +66,9 @@ support constant, cas test complet (collecteur DN200 avec té, réduction,
 robinet, supports variables, éq. (8) jouée), cas non linéaire (appui simple qui
 décolle à chaud, jeu rattrapé, frottement) et cas de validation de la
 littérature : problème de Hovgaard (Code_Aster SSLL101 et SDLX02), Hovgaard à
-masses concentrées (NUREG/CR-1677), ligne BM3 (NUREG/CR-6645) et modes d'un
-coude mince (SDLL14).
+masses concentrées (NUREG/CR-1677), ligne BM3 (NUREG/CR-6645), exemple 2 de
+l'annexe S de l'ASME B31.3 (appui qui décolle) et modes d'un coude mince
+(SDLL14).
 
 Ergonomie : les séparateurs entre le volet de saisie, la vue et le bandeau de
 résultats se déplacent à la souris (double-clic : taille par défaut). Dans les

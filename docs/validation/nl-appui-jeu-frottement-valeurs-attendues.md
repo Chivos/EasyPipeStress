@@ -103,16 +103,18 @@ L’étendue est le module de la différence des moments, composante par composa
 
 ## 4. Contraintes RCC-M (MPa)
 
-| Point | Éq. (6) | Éq. (7) EasyPipeStress | Éq. (7) sans le facteur E_froid/E_chaud |
-|---|---:|---:|---:|
-| 10 | 20.41 | 83.41 | 75.60 |
-| 20 | 21.80 | 63.77 | 57.80 |
-| 21 | 21.96 | 77.09 | 69.87 |
-| 30 | 26.31 | 8.62 | 7.81 |
-| 40 | 22.73 | 82.14 | 74.45 |
-| 41 | 20.84 | 60.76 | 55.08 |
-| 50 | 28.83 | 39.92 | 36.19 |
-| 60 | 21.49 | 17.16 | 15.55 |
+| Point | Éq. (6), cas 100 | Éq. (6), configuration de service W(T1) | Éq. (7) EasyPipeStress | Éq. (7) sans le facteur E_froid/E_chaud |
+|---|---:|---:|---:|---:|
+| 10 | 20.41 | 22.28 | 83.41 | 75.60 |
+| 20 | 21.80 | 29.27 | 63.77 | 57.80 |
+| 21 | 21.96 | 26.27 | 77.09 | 69.87 |
+| 30 | 26.31 | 28.03 | 8.62 | 7.81 |
+| 40 | 22.73 | 24.10 | 82.14 | 74.45 |
+| 41 | 20.84 | 22.68 | 60.76 | 55.08 |
+| 50 | 28.83 | 37.02 | 39.92 | 36.19 |
+| 60 | 21.49 | 25.63 | 17.16 | 15.55 |
+
+L’éq. (6) du cas 100 est celle du poids seul à froid, à comparer au logiciel de référence. La colonne suivante est une vérification propre à l’application : le poids recalculé avec les supports dans leur état de service (A1 retiré, G1 actif, sans frottement), sans équivalent direct dans le jeu de données.
 
 EasyPipeStress ramène l’étendue au module à froid : éq. (7) = i·M_C·(E_froid/E_chaud)/Z, avec E_froid/E_chaud = 203/184 = 1.1033. Si le cas 200 du logiciel de référence ne porte pas ce facteur (les cas 100 et 101 sont des cas de poids, pas des cas de dilatation), c’est la dernière colonne qui doit ressortir.
 Admissibles : S = 118 MPa pour l’éq. (6), S_A = 177 MPa pour l’éq. (7). L’éq. (8) n’est pas évaluée par l’application quand l’éq. (7) est satisfaite.

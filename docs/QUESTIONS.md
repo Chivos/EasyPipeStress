@@ -140,7 +140,7 @@ sur le calcul statique non linéaire de PIPESTRESS (aide en ligne).
 | Sujet | Choix retenu (comme PIPESTRESS) | Alternative notée |
 |---|---|---|
 | Étendue de dilatation M_C | différence entre états, le poids étant inclus dans tous les cas de dilatation | — (c'est aussi la définition des codes) |
-| Part du poids M_A | cas « poids seul » en non linéaire, à froid | vérifier aussi M_A dans la configuration de service à contacts figés (ASME B31.3, annexe S, exemple 2) |
+| Part du poids M_A | cas « poids seul » en non linéaire, à froid | en complément, **fait** : M_A vérifié aussi dans la configuration de service à contacts figés (ASME B31.3, annexe S, exemple 2), le plus sévère gouvernant |
 | Supports sous séisme | supports non linéaires comptés actifs, avec leur raideur | état figé dans l'état de service, ou enveloppe de deux calculs (supports libres / actifs) |
 | Modèle et algorithme | raideur par zones (d₁, d₂, k₁ à k₄), frottement par raideur ajustée dans les directions libres, mêmes critères de convergence (plus serrés) | — |
 | Frottement d'un support à deux directions | écart assumé : un frottement par support, suivant l'axe laissé libre, sous la somme des réactions | comme PIPESTRESS : chaque direction frotte dans tout son plan transversal, y compris suivant l'autre direction bloquée |
@@ -155,9 +155,14 @@ sur le calcul statique non linéaire de PIPESTRESS (aide en ligne).
 - **Fait (exemple)** : exemple livré « Cas non linéaire – appui qui décolle, jeu
   rattrapé, frottement », jumeau des jeux de données de comparaison de
   [validation/](validation/README.md).
-- **Reste à faire** : comparaison avec PIPESTRESS sur ce cas, sans puis avec
-  frottement (jeux de données et valeurs attendues prêts) ; poids dans la
-  configuration de service (alternative de la ligne M_A ci-dessus).
+- **Fait (poids en configuration de service)** : quand le supportage change
+  entre l'état froid et le service, le poids est recalculé contacts figés et les
+  équations où il intervient sont vérifiées aussi dans cette configuration
+  (cas W(T1), lignes W(T1)+P…). Validé sur l'exemple 2 de l'annexe S de l'ASME
+  B31.3-2012, livré comme exemple.
+- **Reste à faire** : comparaison avec PIPESTRESS sur le cas « appui qui décolle,
+  jeu rattrapé », sans puis avec frottement (jeux de données et valeurs attendues
+  prêts).
 - **Limites** : un seul cas de poids actif, forces nodales en linéaire ;
   frottement compté depuis la position de montage dans chaque état, sans retour
   à froid ; séisme sans frottement.

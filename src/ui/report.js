@@ -3,7 +3,7 @@
 import { fmt } from '../core/units.js';
 import { components } from '../components/index.js';
 import { SUPPORT_KINDS, SNUBBER_DIRS } from '../components/support.js';
-import { displayCases, modalSums, contactRows } from './results.js';
+import { displayCases, modalSums, contactRows, configurationTexts } from './results.js';
 import { spectrumFor, seismicLevels } from '../loads/seismic.js';
 import { codes } from '../codes/index.js';
 import { coveredText } from '../codes/common.js';
@@ -85,6 +85,11 @@ export function buildReport(state, snapshot) {
       parts.push(`<p class="meta">États calculés : ${esc(st.map((x) => `${x.name} (${x.iterations} itération${x.iterations > 1 ? 's' : ''})`).join(', '))}. Le cas de poids est l’état froid ; chaque cas de dilatation est la différence entre l’état de service et l’état « poids seul » au même module.</p>`);
       if (r.nonlinear.contacts.length) parts.push(table(['Support', 'Contact', ...st.map((x) => x.name)], contactRows(r)));
       else parts.push('<p>Aucun support à contact : résultats identiques à ceux du solveur linéaire.</p>');
+      const cfg = configurationTexts(r);
+      if (cfg.length) {
+        parts.push('<p class="meta">Le supportage change entre l’état froid et le service : les équations du code où le poids intervient sont vérifiées aussi avec le poids recalculé dans la configuration de service (contacts figés, effets thermiques exclus, sans frottement).</p>');
+        parts.push(`<ul>${cfg.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>`);
+      }
     }
     if (r.warnings.length) parts.push(`<ul class="warn">${r.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>`);
     if (r.modal) {

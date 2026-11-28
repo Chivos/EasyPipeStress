@@ -387,7 +387,8 @@ tableau H.2, tés extrudés et piquages forgés du tableau H.3, fluage σ₅
 de f_c (à intégrer dans la valeur saisie), amendements postérieurs à la version 1.
 
 **ASME B31.3-2012 (révision de l'édition 2010) — §302.3.5, §302.3.6, §319.4.4,
-§320 et Appendix D.** Module contrôlé sur le texte de cette édition. Les flexions
+§320 et Appendix D.** Module contrôlé sur le texte de cette édition, et sur les
+exemples chiffrés 1 et 2 de son annexe S (§ 5.2). Les flexions
 sont séparées dans le plan (M_i) et hors plan (M_o) du coude ou du té, avec des
 facteurs distincts i_i, i_o ; la torsion n'est pas intensifiée ; l'effort normal
 est pris en compte.
@@ -535,6 +536,8 @@ Vérifications numériques (tests automatiques) :
 | Hovgaard à masses concentrées (NUREG/CR-1677 vol. 1, problème 1) : tube sans masse, neuf masses ponctuelles, spectre tabulé en période (interpolation linéaire en période), facteurs 1 / 0,667 / 1, cinq modes en SRSS, sans masse manquante | rapport NRC (programme EPIPE, BNL 1980) | cinq fréquences < 0,05 % (28,54 contre 28,53 Hz…) ; facteurs de participation identiques à quatre chiffres ; déplacements et rotations < 0,2 % ; efforts et moments aux deux ancrages < 0,3 % |
 | Ligne BM3 (NUREG/CR-6645 ; Code_Aster SDLL149) : trois diamètres, dix coudes, trois ancrages, sept appuis élastiques, masses concentrées aux 38 nœuds du rapport ; spectre à 1 % suivant X, 14 modes en SRSS, masse manquante à 0,54 g | rapport NRC ; cibles du manuel de vérification ANSYS (valeur NRC × rapport publié, arrondies à 1 % environ) | 14 fréquences < 0,3 % ; 21 réactions d'appui < 2 % (critères NRC : 2 % et 10 %) ; masse volumique de la section 3 du rapport (1,2908·10⁻³ lb·s²/in⁴ ; avec la valeur d'ANSYS, 1,253·10⁻³, écarts jusqu'à 9 %) |
 | SDLL14 (guide VPCS AFNOR 1990 ; Code_Aster V2.02.014) : modes d'un coude mince à 90° (R = 1 m, tube 20 × 2), bras de 0, 0,6 et 2 m | PIPESTRESS et AFNOR (valeurs de la fiche Code_Aster) | quatre premières fréquences des trois configurations : < 0,25 % de PIPESTRESS, < 1,6 % de la solution analytique AFNOR (PIPESTRESS et Code_Aster en sont au même écart) |
+| ASME B31.3-2012, annexe S, exemple 1 : ligne plane DN400 × 9,53 entre deux ancrages, deux coudes LR, calorifuge, eau, 260 °C et 3 450 kPa, raidissement des coudes par la pression | tableaux S301.5.1, S301.5.2 et S301.6 du code | réactions du cas de service < 0,3 % (FY de l'ancrage 50 : 0,6 %) ; déplacements à 0,1 mm près ; S_L aux cinq points < 0,3 % (99,1 contre 99,2 MPa au nœud 20) ; masse totale 0,1 %. L'étendue S_E du tableau S301.7 est donnée sans la contrainte axiale, que l'éq. (17) de l'édition 2012 ajoute |
+| ASME B31.3-2012, annexe S, exemple 2 (solveur non linéaire) : même ligne doublée par symétrie, appui Y+ central, 288 °C et 3 795 kPa | tableaux S302.5.1 et S302.6.3.1 du code | appui du nœud 50 décollé en service (19 mm) ; réactions du cas de service < 0,3 % ; S_L appui retiré (condition 3) aux cinq points < 0,2 % : 129,8 contre 129,98 MPa au nœud 20, au-dessus de S_h = 124,5 MPa, alors que le calcul à froid donne 103,2 MPa |
 | Fréquence propre d'une console | 1,875²/2π·√(EI/mL⁴) | < 0,5 % |
 | Oscillateur simple, spectre plat | m·Sa·L | < 10⁻⁴ |
 | Masse manquante, modes tronqués | réponse statique rigide | < 10⁻⁶ |
@@ -565,7 +568,8 @@ tés. Les autres codes (`tests/codes.test.mjs`) sont contrôlés sur des cas
 calculables à la main : σ₁ et S_L d'une console sous poids et pression, flexions
 dans le plan / hors plan d'un coude, admissibles (1a)/(1b), f_a et rapport
 E_h/E_c, coefficients k, tableau C3.2.6-1 et méthode alternative du CODETI. Les cas de la littérature (`tests/reference.test.mjs`) sont rejoués à
-chaque exécution : NUREG/CR-1677 problème 1, ligne BM3, SDLL14.
+chaque exécution : NUREG/CR-1677 problème 1, ligne BM3, SDLL14 ; les exemples 1
+et 2 de l'annexe S de l'ASME B31.3-2012 le sont dans `tests/sustained.test.mjs`.
 
 ### 5.4 Avertissements de validité
 
@@ -670,7 +674,7 @@ et la définition même de l'étendue dans les codes :
 Un calcul de « dilatation seule », sans le poids, n'a pas de sens avec des
 contacts : sans le poids, les appuis n'ont pas le bon état.
 
-### 7.3 Part du poids : le poids seul, à froid
+### 7.3 Part du poids : état froid, et configuration de service
 
 Une pratique obtient la part du poids à chaud par soustraction : état de service
 moins un calcul de dilatation seule. Elle n'est pas retenue, parce que les deux
@@ -681,16 +685,40 @@ correspond à aucune structure réelle.
 linéaire (état froid). C'est le M_A de l'exemple de la documentation du logiciel
 de comparaison (PIPESTRESS), donc directement comparable.
 
-*Alternative non retenue, possible en complément* : vérifier aussi M_A dans la
-configuration de service, c'est-à-dire le poids appliqué à la tuyauterie dont
-les contacts sont figés dans l'état chaud (appui décollé retiré, jeu fermé
-actif), effets thermiques exclus, le plus défavorable gouvernant. C'est le
-principe de l'ASME B31.3-2012, annexe S, exemple 2 (« Anticipated sustained
-conditions considering pipe lift-off ») et du §320.1, qui demande la plus grande
-contrainte S_L pour chaque condition de service. Dans cet exemple, la
-configuration « appui retiré » gouverne et n'est pas satisfaite, alors que le
-calcul appui en place l'était : le choix retenu peut donc être moins sévère quand
-un appui décolle à chaud. Les constats de décollement restent signalés.
+**Complément : le poids dans la configuration de service.** Quand un appui
+décolle à chaud, le poids qu'il portait se reporte sur les autres supports, et le
+calcul à froid ne le voit pas. L'application vérifie donc aussi les équations du
+code avec le poids recalculé dans chaque configuration de supportage de service
+qui diffère de l'état froid :
+
+- la tuyauterie est celle de l'état froid, au module à froid ;
+- les contacts sont figés dans leur état de service : un contact actif (appui en
+  contact, jeu fermé, butée atteinte) devient un blocage ordinaire dans les deux
+  sens ; un contact inactif (appui décollé, jeu ouvert) est retiré ;
+- le chargement est le poids seul : pas de dilatation, pas de déplacement imposé,
+  pas de frottement (ce n'est pas un appui pour les charges permanentes).
+
+Ce cas, noté W(T1) pour l'état de service W+T1, apparaît parmi les cas de calcul
+(déplacements, efforts sur les supports, efforts internes). Toutes les équations
+où le poids intervient sont rejouées avec lui : charges permanentes, charges
+occasionnelles, somme poids + étendue. Leurs lignes portent le cas W(T1)+P… et
+la synthèse retient la configuration la plus sévère ; les lignes du calcul de
+base (W+P…) restent celles du logiciel de comparaison. Si le supportage est le
+même à froid et en service, rien n'est ajouté.
+
+C'est le principe de l'ASME B31.3-2012, §320.1 (« the greatest S_L for each
+operating condition ») et annexe S, exemple 2 (« Anticipated sustained
+conditions considering pipe lift-off »), dont la condition 3 « reflects the
+support scenario of the Operating Case 1, excludes thermal effects ». L'annexe
+précise que le même principe vaut pour les guides et butées à un seul sens ou à
+jeu. Les autres codes ne l'écrivent pas, mais la contrainte primaire due au
+poids doit être admise dans toute configuration que la ligne prend réellement :
+la vérification est faite pour tous.
+
+*Limite.* Un contact figé actif est bilatéral : si le poids seul le sollicite en
+sens inverse (jeu fermé par la dilatation, que le poids tend à rouvrir), il reste
+actif, ce qui allège le reste de la ligne. Ce cas est signalé par un
+avertissement.
 
 ### 7.4 Modèle de support et algorithme
 
@@ -872,6 +900,11 @@ insuffisant. Aucune des trois n'est rigoureuse.
 - Robustesse : le frottement a été éprouvé sur 3 200 lignes tirées au hasard
   (appuis, guides, butées, jeux, deux supports au même nœud, μ de 0,1 à 0,6),
   sans échec et en deux calculs complets par état en médiane.
+- Poids dans la configuration de service (`tests/sustained.test.mjs`) : console
+  dont l'appui décolle (moment d'encastrement wL²/2 appui retiré, contre wL²/8 à
+  froid), jeu fermé gardé actif, sens inverse signalé, aucun ajout quand le
+  supportage ne change pas ; exemple 2 de l'annexe S de l'ASME B31.3-2012
+  reproduit à 0,2 % (§ 5.2).
 - Reste à faire : comparaison avec le logiciel de référence, sans puis avec
   frottement. Les jeux de données et les valeurs attendues sont dans
   [validation/](validation/README.md) ; le modèle jumeau est l'exemple livré
@@ -890,6 +923,6 @@ insuffisant. Aucune des trois n'est rigoureuse.
 9. AFCEN, *RCC-M – Règles de conception et de construction des matériels mécaniques des îlots nucléaires REP*, Section I, sous-sections B, C, Annexe Z I.
 10. ASME Boiler & Pressure Vessel Code, Section III, Division 1, Subsections NB, NC (NB-3600, NC-3600) et Appendix N.
 12. EN 13480-3:2017 (F), version 1 (décembre 2017), *Tuyauteries industrielles métalliques – Partie 3 : conception et calcul*, article 12 et annexe H.
-13. ASME B31.3-2012 (révision de l'ASME B31.3-2010), *Process Piping*, §302.3, §304, §319, §320 et Appendix D.
+13. ASME B31.3-2012 (révision de l'ASME B31.3-2010), *Process Piping*, §302.3, §304, §319, §320, Appendix D et Appendix S (exemples 1 et 2).
 14. SNCT, *CODETI 2006 – Code de construction des tuyauteries industrielles*, Division 1, partie C, section C3 « Analyse et critères d'acceptation ».
 11. WRC Bulletin 300, *Technical position on damping values for piping*, 1984 ; NUREG-1061, 1985.

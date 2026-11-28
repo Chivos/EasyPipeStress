@@ -150,12 +150,14 @@ function sheet({ friction, name, title }) {
   p('', 'L’étendue est le module de la différence des moments, composante par composante (pas la différence des modules).', '');
 
   p('## 4. Contraintes RCC-M (MPa)', '');
-  p('| Point | Éq. (6) | Éq. (7) EasyPipeStress | Éq. (7) sans le facteur E_froid/E_chaud |', '|---|---:|---:|---:|');
+  const cfg = S.r.nonlinear.configurations[0].id;
+  p(`| Point | Éq. (6), cas 100 | Éq. (6), configuration de service ${cfg} | Éq. (7) EasyPipeStress | Éq. (7) sans le facteur E_froid/E_chaud |`, '|---|---:|---:|---:|---:|');
   for (const [ps, l] of POINTS) {
     const at = S.r.check.rows.filter((x) => x.node === l);
-    const max = (eq) => Math.max(...at.filter((x) => x.eq === eq).map((x) => x.stress));
-    p(`| ${ps} | ${n(max('6'), 2)} | ${n(max('7'), 2)} | ${n(max('7') / K_E, 2)} |`);
+    const max = (eq, configuration = null) => Math.max(...at.filter((x) => x.eq === eq && (x.configuration ?? null) === configuration).map((x) => x.stress));
+    p(`| ${ps} | ${n(max('6'), 2)} | ${n(max('6', cfg), 2)} | ${n(max('7'), 2)} | ${n(max('7') / K_E, 2)} |`);
   }
+  p('', `L’éq. (6) du cas 100 est celle du poids seul à froid, à comparer au logiciel de référence. La colonne suivante est une vérification propre à l’application : le poids recalculé avec les supports dans leur état de service (A1 retiré, G1 actif, sans frottement), sans équivalent direct dans le jeu de données.`);
   p('', `EasyPipeStress ramène l’étendue au module à froid : éq. (7) = i·M_C·(E_froid/E_chaud)/Z, avec E_froid/E_chaud = 203/184 = ${n(K_E, 4)}. Si le cas 200 du logiciel de référence ne porte pas ce facteur (les cas 100 et 101 sont des cas de poids, pas des cas de dilatation), c’est la dernière colonne qui doit ressortir.`);
   p('Admissibles : S = 118 MPa pour l’éq. (6), S_A = 177 MPa pour l’éq. (7). L’éq. (8) n’est pas évaluée par l’application quand l’éq. (7) est satisfaite.', '');
 

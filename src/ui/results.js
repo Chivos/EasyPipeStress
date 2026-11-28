@@ -508,6 +508,36 @@ export function contactRows(r) {
   return rows;
 }
 
+/**
+ * Configurations de service où le poids est vérifié à part (solveur non linéaire) : une phrase par
+ * configuration, avec les contacts dont l'état diffère de l'état froid.
+ */
+export function configurationTexts(r) {
+  const { contacts, configurations = [] } = r.nonlinear ?? {};
+  const name = (c) => `${r.mesh.supports[c.support].label}${c.kind === 'gap' || c.kind === 'fixed' ? ` ${axisName(c.dir)}` : ''}`;
+  const change = ({ contact, to }) => {
+    const c = contacts[contact];
+    switch (to) {
+      case 'lifted':
+        return `${name(c)} retiré (décollé)`;
+      case 'open':
+        return `${name(c)} retiré (jeu ouvert)`;
+      case 'closedPlus':
+      case 'closedMinus':
+        return `${name(c)} actif (jeu fermé)`;
+      case 'contact':
+        return `${name(c)} actif (en contact)`;
+      case 'stopHigh':
+        return `${name(c)} en butée haute`;
+      case 'stopLow':
+        return `${name(c)} en butée basse`;
+      default:
+        return `${name(c)} hors butée`;
+    }
+  };
+  return configurations.map((cf) => `${cf.id} : poids seul, supports dans leur état de ${cf.states.join(', ')} — ${cf.changes.map(change).join(', ')}`);
+}
+
 /** Carte « État des contacts » du solveur non linéaire : un état par colonne. */
 function contactCard(r) {
   const { contacts, states } = r.nonlinear;
@@ -530,6 +560,16 @@ function contactCard(r) {
           h('tbody', {}, contactRows(r).map((row) => h('tr', { class: row.changed ? 'sel' : '' }, row.map((v) => h('td', {}, v))))),
         )
       : h('p', { class: 'muted' }, 'Aucun support à contact (appui simple, jeu, butée de support à ressort, frottement) : résultats identiques à ceux du solveur linéaire.'),
+    ...(configurationTexts(r).length
+      ? [
+          h(
+            'p',
+            { class: 'help' },
+            'Le supportage change entre l’état froid et le service : les équations du code où le poids intervient sont vérifiées aussi avec le poids recalculé dans la configuration de service (contacts figés, effets thermiques exclus, sans frottement).',
+          ),
+          h('ul', { class: 'help' }, configurationTexts(r).map((t) => h('li', {}, t))),
+        ]
+      : []),
   );
 }
 
