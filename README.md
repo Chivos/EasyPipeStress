@@ -34,7 +34,8 @@ exportables/importables en JSON.
    blocages (ancrage, guide, butée, étrier, blocage personnalisé, déplacement
    imposé de piquage), appuis simples (tuyauterie posée), supports à ressort
    (variables, constants) et dispositifs auto-bloquants — avec réglages avancés
-   à la demande (raideur, jeux, courses, frottement) ; masses ponctuelles. Avec
+   à la demande (raideur, jeux différents de chaque côté, butées à un seul
+   sens, courses haute et basse, frottement) ; masses ponctuelles. Avec
    le solveur linéaire (par défaut), appui soulevé, jeu rattrapé et butée
    atteinte sont signalés. Un solveur non linéaire expérimental, au choix dans
    l'onglet Projet, calcule l'état réel de ces contacts et le frottement des

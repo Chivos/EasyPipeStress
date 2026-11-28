@@ -160,6 +160,11 @@ sur le calcul statique non linéaire de PIPESTRESS (aide en ligne).
   équations où il intervient sont vérifiées aussi dans cette configuration
   (cas W(T1), lignes W(T1)+P…). Validé sur l'exemple 2 de l'annexe S de l'ASME
   B31.3-2012, livré comme exemple.
+- **Fait (jeux par côté)** : jeu différent de chaque côté d'une direction
+  bloquée, butée à un seul sens, appui placé sous le tube ; les supports à
+  ressort avaient déjà une course haute et une course basse séparées. Les côtés
+  − et + suivent les axes globaux, comme D1 et D2 d'une carte NRST dont la
+  direction est donnée dans le sens positif.
 - **Reste à faire** : comparaison avec PIPESTRESS sur le cas « appui qui décolle,
   jeu rattrapé », sans puis avec frottement (jeux de données et valeurs attendues
   prêts).
